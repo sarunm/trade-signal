@@ -1,10 +1,10 @@
 from datetime import datetime, timezone
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from models.trade import Trade, OrderState, PaperMode
+from models.trade import Trade, Direction, OrderState, PaperMode
 from schemas.trade_event import TradeEventSchema
 
 
@@ -52,25 +52,23 @@ async def _compute_paper_tp(session: AsyncSession, event: TradeEventSchema) -> O
             Trade.is_paper == False,
             Trade.order_state == OrderState.filled,
             Trade.direction == event.direction,
+            Trade.symbol == event.symbol,
             Trade.profit > 0,
-            Trade.tp.isnot(None),
+            Trade.close_price.isnot(None),
             Trade.open_price.isnot(None),
         )
     )
     wins = result.scalars().all()
-    offsets = [
-        abs(float(t.tp) - float(t.open_price))
-        for t in wins
-        if t.tp and t.open_price
-    ]
+    offsets = [abs(t.close_price - t.open_price) for t in wins if t.close_price and t.open_price]
     if not offsets:
         return None
 
     avg_offset = sum(offsets) / len(offsets)
-    open_price = float(event.open_price)
-    if event.direction and event.direction.value == "buy":
-        return Decimal(str(round(open_price + avg_offset, 5)))
-    return Decimal(str(round(open_price - avg_offset, 5)))
+    quant = Decimal("0.00001")
+    open_price = event.open_price
+    if event.direction and event.direction == Direction.buy:
+        return (open_price + avg_offset).quantize(quant, rounding=ROUND_HALF_UP)
+    return (open_price - avg_offset).quantize(quant, rounding=ROUND_HALF_UP)
 
 
 async def _compute_paper_sl(session: AsyncSession, event: TradeEventSchema) -> Optional[Decimal]:
@@ -79,22 +77,20 @@ async def _compute_paper_sl(session: AsyncSession, event: TradeEventSchema) -> O
             Trade.is_paper == False,
             Trade.order_state == OrderState.filled,
             Trade.direction == event.direction,
+            Trade.symbol == event.symbol,
             Trade.profit < 0,
             Trade.close_price.isnot(None),
             Trade.open_price.isnot(None),
         )
     )
     losses = result.scalars().all()
-    offsets = [
-        abs(float(t.close_price) - float(t.open_price))
-        for t in losses
-        if t.close_price and t.open_price
-    ]
+    offsets = [abs(t.close_price - t.open_price) for t in losses if t.close_price and t.open_price]
     if not offsets:
         return None
 
     avg_offset = sum(offsets) / len(offsets)
-    open_price = float(event.open_price)
-    if event.direction and event.direction.value == "buy":
-        return Decimal(str(round(open_price - avg_offset, 5)))
-    return Decimal(str(round(open_price + avg_offset, 5)))
+    quant = Decimal("0.00001")
+    open_price = event.open_price
+    if event.direction and event.direction == Direction.buy:
+        return (open_price - avg_offset).quantize(quant, rounding=ROUND_HALF_UP)
+    return (open_price + avg_offset).quantize(quant, rounding=ROUND_HALF_UP)
