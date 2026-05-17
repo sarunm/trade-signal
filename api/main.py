@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from database import Base, engine
+import models  # noqa: F401 — registers all ORM models with Base.metadata
 
 
 @asynccontextmanager
