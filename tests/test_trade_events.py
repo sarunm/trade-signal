@@ -76,7 +76,9 @@ async def test_post_trade_event_saves_to_db(client, db_session):
     await client.post("/api/trade-events", json=DEAL_OPEN_PAYLOAD)
     from sqlalchemy import select
     from models.trade import Trade
-    result = await db_session.execute(select(Trade).where(Trade.ticket == 123456))
+    result = await db_session.execute(
+        select(Trade).where(Trade.ticket == 123456, Trade.is_paper == False)
+    )
     trade = result.scalar_one_or_none()
     assert trade is not None
     assert str(trade.symbol) == "XAUUSD"
@@ -89,7 +91,9 @@ async def test_post_trade_close_updates_existing(client, db_session):
     await client.post("/api/trade-events", json=DEAL_CLOSE_PAYLOAD)
     from sqlalchemy import select
     from models.trade import Trade
-    result = await db_session.execute(select(Trade).where(Trade.ticket == 123456))
+    result = await db_session.execute(
+        select(Trade).where(Trade.ticket == 123456, Trade.is_paper == False)
+    )
     trades = result.scalars().all()
     assert len(trades) == 1
     assert float(trades[0].profit) == 45.0
