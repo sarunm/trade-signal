@@ -10,18 +10,13 @@ from models.insight import Insight
 MIN_SAMPLE_SIZE = 10
 MIN_CONFIDENCE = 0.6
 
-SESSION_RANGES = {
-    "Asia":   (0, 7),
-    "London": (7, 16),
-    "NY":     (13, 22),
-}
-
 
 async def run_insight_engine(session: AsyncSession) -> None:
     result = await session.execute(
         select(Trade).where(
             Trade.is_paper == False,
             Trade.order_state == OrderState.filled,
+            Trade.open_time.isnot(None),
             Trade.close_time.isnot(None),
             Trade.profit.isnot(None),
         )
@@ -86,7 +81,7 @@ def _assign_session(hour: int) -> str:
         return "London"
     if 13 <= hour < 22:
         return "NY"
-    return "Asia"
+    return "Asia"  # hours 0-6 and 22-23: post-NY pre-Asia overlap treated as Asia
 
 
 async def _compute_session_bias(session: AsyncSession, df: pd.DataFrame) -> None:
