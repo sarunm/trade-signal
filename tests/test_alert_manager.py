@@ -1,0 +1,155 @@
+import pytest
+import uuid
+from datetime import datetime, timezone
+from decimal import Decimal
+from sqlalchemy import select
+from models.trade import Trade, Direction, OrderState
+from models.alert import Alert
+from services.alert_manager import check_trade_alerts, check_equity_buffer
+from schemas.trade_event import TradeEventSchema
+from schemas.price_tick import PriceTickSchema, AccountStateSchema, OHLCVSchema
+
+
+def _filled_buy(ticket: int, profit: float = None, close: bool = False) -> Trade:
+    t = Trade(
+        id=uuid.uuid4(),
+        ticket=ticket,
+        symbol="XAUUSD",
+        direction=Direction.buy,
+        order_state=OrderState.filled,
+        open_price=Decimal("1950.00"),
+        volume=Decimal("1.00"),
+        open_time=datetime.now(timezone.utc),
+        is_paper=False,
+    )
+    if close and profit is not None:
+        t.close_price = Decimal("1940.00") if profit < 0 else Decimal("1960.00")
+        t.close_time = datetime.now(timezone.utc)
+        t.profit = Decimal(str(profit))
+    return t
+
+
+def _event(ticket: int, order_state: str = "filled", direction: str = "buy",
+           profit: float = None, close_price: float = None) -> TradeEventSchema:
+    return TradeEventSchema(
+        transaction_type="DEAL_ADD",
+        ticket=ticket,
+        symbol="XAUUSD",
+        direction=direction,
+        order_type="market",
+        order_state=order_state,
+        open_price=Decimal("1950.00") if close_price is None else None,
+        close_price=Decimal(str(close_price)) if close_price else None,
+        close_time=datetime.now(timezone.utc) if close_price else None,
+        profit=Decimal(str(profit)) if profit is not None else None,
+        volume=Decimal("1.00"),
+        open_time=datetime.now(timezone.utc) if close_price is None else None,
+    )
+
+
+def _tick(free_margin: float, total_volume: float = 0.0) -> PriceTickSchema:
+    return PriceTickSchema(
+        timestamp=datetime.now(timezone.utc),
+        symbol="XAUUSD",
+        account=AccountStateSchema(
+            equity=Decimal("10500.00"),
+            balance=Decimal("10000.00"),
+            margin=Decimal("450.00"),
+            free_margin=Decimal(str(free_margin)),
+            floating_pl=Decimal("-500.00"),
+        ),
+        bars={
+            "H1": OHLCVSchema(open=Decimal("1950"), high=Decimal("1955"),
+                              low=Decimal("1945"), close=Decimal("1952"), volume=Decimal("1000")),
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_double_down_alert_fires(db_session):
+    """Alert when user adds to same-direction open position."""
+    existing = _filled_buy(ticket=1000)
+    db_session.add(existing)
+    await db_session.commit()
+
+    event = _event(ticket=1001, direction="buy")
+    await check_trade_alerts(db_session, event)
+
+    result = await db_session.execute(select(Alert).where(Alert.type == "double_down"))
+    alerts = result.scalars().all()
+    assert len(alerts) == 1
+    assert "buy" in alerts[0].message
+
+
+@pytest.mark.asyncio
+async def test_no_double_down_alert_on_first_trade(db_session):
+    """No alert when there are no existing open positions."""
+    event = _event(ticket=1001, direction="buy")
+    await check_trade_alerts(db_session, event)
+
+    result = await db_session.execute(select(Alert).where(Alert.type == "double_down"))
+    assert result.scalars().all() == []
+
+
+@pytest.mark.asyncio
+async def test_consecutive_loss_alert_fires(db_session):
+    """Alert after 3 consecutive losses."""
+    for i, ticket in enumerate([1001, 1002, 1003]):
+        t = _filled_buy(ticket=ticket, profit=-100.0, close=True)
+        db_session.add(t)
+    await db_session.commit()
+
+    # Close event for trade 1003 (already in DB)
+    event = _event(ticket=1003, close_price=1940.0, profit=-100.0)
+    await check_trade_alerts(db_session, event)
+
+    result = await db_session.execute(select(Alert).where(Alert.type == "consecutive_loss"))
+    alerts = result.scalars().all()
+    assert len(alerts) == 1
+    assert "3" in alerts[0].message
+
+
+@pytest.mark.asyncio
+async def test_no_consecutive_loss_alert_after_win(db_session):
+    """No alert when streak is broken by a win."""
+    for i, profit in enumerate([-100.0, 50.0, -100.0]):
+        t = _filled_buy(ticket=1000 + i, profit=profit, close=True)
+        db_session.add(t)
+    await db_session.commit()
+
+    event = _event(ticket=9999, close_price=1940.0, profit=-100.0)
+    await check_trade_alerts(db_session, event)
+
+    result = await db_session.execute(select(Alert).where(Alert.type == "consecutive_loss"))
+    assert result.scalars().all() == []
+
+
+@pytest.mark.asyncio
+async def test_equity_buffer_alert_fires(db_session):
+    """Alert when free_margin below required buffer for open lots."""
+    # 1 lot open: required = 1.0 * 10000 = 10000 USD
+    open_trade = _filled_buy(ticket=1001)
+    db_session.add(open_trade)
+    await db_session.commit()
+
+    tick = _tick(free_margin=5000.0)  # below 10000 required
+    await check_equity_buffer(db_session, tick)
+
+    result = await db_session.execute(select(Alert).where(Alert.type == "equity_buffer"))
+    alerts = result.scalars().all()
+    assert len(alerts) == 1
+    assert "5000" in alerts[0].message
+
+
+@pytest.mark.asyncio
+async def test_equity_buffer_no_alert_when_sufficient(db_session):
+    """No alert when free_margin exceeds required buffer."""
+    open_trade = _filled_buy(ticket=1001)
+    db_session.add(open_trade)
+    await db_session.commit()
+
+    tick = _tick(free_margin=15000.0)  # above 10000 required
+    await check_equity_buffer(db_session, tick)
+
+    result = await db_session.execute(select(Alert).where(Alert.type == "equity_buffer"))
+    assert result.scalars().all() == []
