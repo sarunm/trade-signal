@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
-from sqlalchemy import String, Numeric, Enum as SAEnum
+from sqlalchemy import String, Numeric, Enum as SAEnum, DateTime
 from sqlalchemy.orm import Mapped, mapped_column
 import enum
 
@@ -21,7 +21,7 @@ class Timeframe(str, enum.Enum):
 class PriceBar(Base):
     __tablename__ = "price_bars"
 
-    time: Mapped[datetime] = mapped_column(primary_key=True)
+    time: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
     symbol: Mapped[str] = mapped_column(String(20), primary_key=True)
     timeframe: Mapped[Timeframe] = mapped_column(SAEnum(Timeframe), primary_key=True)
     open: Mapped[Decimal] = mapped_column(Numeric(12, 5))

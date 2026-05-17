@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
-from sqlalchemy import String, Boolean, Numeric, BigInteger, Enum as SAEnum
+from sqlalchemy import String, Boolean, Numeric, BigInteger, Enum as SAEnum, DateTime
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
 import enum
@@ -47,9 +47,9 @@ class Trade(Base):
     order_type: Mapped[Optional[OrderType]] = mapped_column(SAEnum(OrderType), nullable=True)
     order_state: Mapped[Optional[OrderState]] = mapped_column(SAEnum(OrderState), nullable=True)
     pending_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 5), nullable=True)
-    open_time: Mapped[Optional[datetime]] = mapped_column(nullable=True)
-    fill_time: Mapped[Optional[datetime]] = mapped_column(nullable=True)
-    close_time: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    open_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    fill_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    close_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     open_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 5), nullable=True)
     close_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 5), nullable=True)
     volume: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
