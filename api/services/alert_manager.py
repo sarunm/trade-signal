@@ -8,12 +8,15 @@ from schemas.trade_event import TradeEventSchema
 from schemas.price_tick import PriceTickSchema
 
 CONSECUTIVE_LOSS_THRESHOLD = 3
+# XAUUSD: 1 std lot = 100 oz. Buffer = 100 oz * $100 adverse move = $10,000 per lot.
+# User requires free_margin >= total_open_lots * $10,000.
 EQUITY_BUFFER_POINTS = 10000
 
 
 async def check_trade_alerts(session: AsyncSession, event: TradeEventSchema) -> None:
     await _check_double_down(session, event)
     await _check_consecutive_loss(session, event)
+    await session.commit()
 
 
 async def check_equity_buffer(session: AsyncSession, tick: PriceTickSchema) -> None:
@@ -91,11 +94,10 @@ async def _check_double_down(session: AsyncSession, event: TradeEventSchema) -> 
         sent_at=datetime.now(timezone.utc),
         acknowledged=False,
     ))
-    await session.commit()
 
 
 async def _check_consecutive_loss(session: AsyncSession, event: TradeEventSchema) -> None:
-    if event.profit is None or float(event.profit) >= 0:
+    if event.profit is None or event.profit >= 0:
         return
 
     result = await session.execute(
@@ -111,10 +113,10 @@ async def _check_consecutive_loss(session: AsyncSession, event: TradeEventSchema
 
     if len(recent) < CONSECUTIVE_LOSS_THRESHOLD:
         return
-    if not all(float(t.profit) < 0 for t in recent):
+    if not all(t.profit < 0 for t in recent):
         return
 
-    total_loss = sum(float(t.profit) for t in recent)
+    total_loss = float(sum(t.profit for t in recent))
     session.add(Alert(
         type="consecutive_loss",
         message=(
@@ -129,4 +131,3 @@ async def _check_consecutive_loss(session: AsyncSession, event: TradeEventSchema
         sent_at=datetime.now(timezone.utc),
         acknowledged=False,
     ))
-    await session.commit()
