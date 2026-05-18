@@ -263,3 +263,39 @@ docker-compose.yml           — add frontend service
 - Mobile responsive layout (desktop-first only)
 - WebSocket / server-sent events (polling is sufficient)
 - Historical price chart in dashboard
+
+---
+
+## Known Issues & Prerequisites
+
+### EA Symbol Name Mismatch
+
+The EA currently has `InpSymbol = "XAUUSD"` as the default. Some brokers list gold under a different name: `GOLD`, `XAUUSDm`, `XAUUSD.m`, `XAUUSDmicro`, etc. If the symbol name in MT5 does not exactly match `InpSymbol`, the EA will silently send data with the wrong symbol and none of the queries in the API will match.
+
+**Before Phase 3 dashboard can show real data, this must be confirmed:**
+1. In MT5, open Market Watch, right-click gold → Properties → note the exact symbol name
+2. Set `InpSymbol` in EA inputs to that exact name before attaching the EA
+3. Verify data is arriving: `docker compose exec db psql -U tradesignal -d tradesignal -c "SELECT symbol, COUNT(*) FROM price_bars GROUP BY symbol;"`
+
+**Other possible causes if symbol name is correct:**
+- EA is attached to wrong chart (must be on XAUUSD/gold chart)
+- WebRequest not enabled in MT5: Tools → Options → Expert Advisors → Allow WebRequest for listed URLs → add `http://localhost:8000`
+- Docker stack not running when EA fires (`docker compose up -d` must be running)
+
+---
+
+## Future Phase (Phase 4) — EA Enhancements
+
+To be designed and implemented after Phase 3 is complete.
+
+### Auto Fibonacci / River System
+
+Add a Fibonacci auto-draw system to the EA, inspired by the River Trading System concept. High-level intent:
+
+- On each H4 (or configurable timeframe) bar close, automatically identify the most recent significant swing high and swing low
+- Draw Fibonacci retracement levels (23.6%, 38.2%, 50%, 61.8%, 78.6%) between those swing points
+- Optionally highlight the "River Zone" (50%–61.8% zone) as a key decision area
+- Send Fibonacci level data to the API so the dashboard can display proximity of current price to key levels
+- Potentially trigger an alert when price re-enters the River Zone after pulling back
+
+This is logged here for planning continuity. A separate spec will be written when this phase begins.
