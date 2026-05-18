@@ -10,6 +10,7 @@ from routers.price_tick import router as price_tick_router
 from routers.insights import router as insights_router
 from routers.alerts import router as alerts_router
 from routers.account import router as account_router
+from routers.trades import router as trades_router
 
 
 @asynccontextmanager
@@ -34,6 +35,7 @@ app.include_router(price_tick_router)
 app.include_router(insights_router)
 app.include_router(alerts_router)
 app.include_router(account_router)
+app.include_router(trades_router)
 
 
 @app.get("/health")
