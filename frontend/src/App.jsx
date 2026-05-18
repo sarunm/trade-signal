@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 import { usePolling } from './hooks/usePolling'
+import AccountBar from './components/AccountBar'
 
 const API = 'http://localhost:8000'
 
@@ -31,9 +32,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 p-4 space-y-4">
-      <div className="bg-gray-900 rounded-lg p-4 text-sm text-gray-400">
-        Account: {account.data ? JSON.stringify(account.data) : account.error ? 'error' : 'loading...'}
-      </div>
+      <AccountBar data={account.data} error={account.error} lastUpdated={account.lastUpdated} />
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-gray-900 rounded-lg p-4 text-sm text-gray-400">
           Alerts: {alerts.data?.length ?? '...'}
