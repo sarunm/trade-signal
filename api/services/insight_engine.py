@@ -132,6 +132,8 @@ async def _compute_pattern_win_rate(session: AsyncSession, trades: list) -> None
     records = []
     for trade in trades:
         hour_start = trade.open_time.replace(minute=0, second=0, microsecond=0)
+        if hour_start.tzinfo is None:
+            hour_start = hour_start.replace(tzinfo=timezone.utc)
         bar_res = await session.execute(
             select(PriceBar).where(
                 PriceBar.symbol == trade.symbol,
@@ -179,15 +181,18 @@ async def _compute_pattern_win_rate(session: AsyncSession, trades: list) -> None
         win_rate=("is_win", "mean"),
     ).reset_index()
 
-    old = await session.execute(
-        select(Insight).where(Insight.type == "pattern_win_rate", Insight.is_active == True)
-    )
-    for ins in old.scalars().all():
-        ins.is_active = False
+    deactivated = False
 
     for _, row in grouped.iterrows():
         if int(row["trades"]) < MIN_SAMPLE_SIZE or float(row["win_rate"]) < MIN_CONFIDENCE:
             continue
+        if not deactivated:
+            old = await session.execute(
+                select(Insight).where(Insight.type == "pattern_win_rate", Insight.is_active == True)
+            )
+            for ins in old.scalars().all():
+                ins.is_active = False
+            deactivated = True
         session.add(Insight(
             type="pattern_win_rate",
             description=(
