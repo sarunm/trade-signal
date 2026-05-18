@@ -25,12 +25,12 @@ export default function App() {
   const openTrades = usePolling(fetchOpen)
   const closedTrades = usePolling(fetchClosed)
 
-  async function acknowledgeAlert(id) {
+  const acknowledgeAlert = useCallback(async (id) => {
     try {
       const res = await fetch(`${API}/api/alerts/${id}/acknowledge`, { method: 'PATCH' })
       if (res.ok) alerts.refetch()
     } catch (_) {}
-  }
+  }, [alerts.refetch])
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 p-4 space-y-4">
