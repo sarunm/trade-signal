@@ -1,178 +1,205 @@
-# AGENTS.md - AI Agent Onboarding
+# AGENTS.md
 
-Read this file first. It reflects the current repo state, not just the original implementation plans.
+Read this file first. It is the authoritative state of the project — not the plan files.
 
-## What This Project Is
+---
 
-**Trade Signal Partner** is a local Docker-based trading partner system for XAUUSD/gold trading on MT5.
+## Role Split
 
-An MQL5 EA sends trade lifecycle events and real-time price bars to a FastAPI backend. The backend stores data in PostgreSQL/TimescaleDB, runs analysis and alert services, and serves data to a React dashboard.
+| Agent | Role |
+|-------|------|
+| **Claude** | Planner and reviewer. Writes tasks into `.agents/backlog.md`. Reviews completed work against acceptance criteria. Decides what comes next. |
+| **Codex** | Executor. Picks the top task from `.agents/backlog.md`, implements it, updates handoff, marks done. |
 
-## Current Repo Status
+**Claude does not implement unless the backlog is empty.**  
+**Codex does not decide what to build — it executes what Claude queued.**  
+**Any agent picking up a task must produce the same result.** Tasks are specified with enough detail that Claude or Codex executing them should reach identical acceptance criteria.
 
-This repo is no longer an empty scaffold.
+---
 
-- Plan 1 foundation pipeline exists: Docker Compose, FastAPI, async SQLAlchemy models, Alembic migrations, trade event ingestion, price tick ingestion, account snapshots, and the MQL5 bridge.
-- Plan 2 intelligence layer exists: insights, alerts, mirror paper trader, pattern detector, and service wiring.
-- Plan 3 dashboard work exists: React/Vite frontend, polling hook, account bar, alerts, insights, open positions, and closed trades components.
-- The plan files still have unchecked boxes in places. Treat them as historical implementation specs, not as the authoritative task cursor.
+## Session Start — Read in This Order
 
-Before starting work, inspect the current code and tests. Do not blindly "start from Task 1" in any plan file.
+1. `AGENTS.md` (this file)
+2. `.agents/active.md` — who owns what right now
+3. `.agents/handoff.md` — what changed last session
+4. `.agents/backlog.md` — next task to pick up (Codex)
+5. `.agents/decisions.md` — only when touching architecture or workflow
 
-## Shared Agent State
+---
 
-Claude and Codex use `.agents/` as the compact handoff layer. This is the source of truth for cross-agent continuity; do not rely on long chat transcripts when a short repo note will do.
+## Update Rules
 
-Read these files at the start of every session, in this order:
+| File | When to update |
+|------|---------------|
+| `.agents/backlog.md` | Claude adds tasks (top = next). Codex removes or strikes completed tasks. |
+| `.agents/active.md` | Any agent: update owner + status when starting or finishing a task. |
+| `.agents/handoff.md` | End of every session: what changed, what is not yet committed, what to verify. |
+| `.agents/decisions.md` | When a durable architectural decision is made — so it is never rediscovered. |
 
-1. `AGENTS.md`
-2. `.agents/active.md`
-3. `.agents/handoff.md`
-4. `.agents/decisions.md` only when the work touches architecture, workflow, or project direction
+Keep `.agents/` concise. Link to files and commit hashes; do not paste code or chat history.
 
-Update these files when useful:
+---
 
-- `.agents/active.md`: current owner, current goal, status, and next step.
-- `.agents/handoff.md`: short end-of-session summary for the next agent.
-- `.agents/decisions.md`: durable decisions that should not be rediscovered.
+## What Is Built (as of 2026-05-18)
 
-Keep `.agents/` concise. Prefer links to files, commit hashes, and command outputs over pasted code or chat history.
+### MT5 Bridge — `ea/TradeSignalBridge.mq5` (v1.03)
 
-## Where To Find Context
+- Sends trade lifecycle events (`OnTradeTransaction`) → `POST /api/trade-events`
+- Sends OHLCV bars + account snapshot every 60s (`OnTimer`) → `POST /api/price-tick`
+- Sends live bid/ask every 1s (`OnTick`, throttled by `InpMarketTickSec`) → `POST /api/market-tick`
+- Startup sync: `SyncOpenPositions()` + `SyncHistoryDeals(InpSyncDays=30)` on `OnInit()`
+- Closing deals use `DEAL_POSITION_ID` as ticket (so upsert merges with the opening row)
+- Health check on init; logs HTTP errors and symbol mismatches
+- Key inputs: `InpServerURL=http://127.0.0.1:8000`, `InpSymbol=GOLD`, `InpSyncDays=30`, `InpMarketTickSec=1`
 
-| Document | Purpose |
-|----------|---------|
-| `CLAUDE.md` | Commands, architecture, conventions |
-| `docs/superpowers/specs/2026-05-17-trade-signal-partner-design.md` | Original full system design spec |
-| `docs/superpowers/specs/2026-05-18-dashboard-design.md` | Dashboard design context |
-| `docs/superpowers/plans/2026-05-17-plan1-foundation-data-pipeline.md` | Historical Plan 1 implementation detail |
-| `docs/superpowers/plans/2026-05-17-plan2-intelligence-layer.md` | Historical Plan 2 implementation detail |
-| `docs/superpowers/plans/2026-05-18-plan3-dashboard.md` | Historical Plan 3 implementation detail |
+### Backend — `api/` (FastAPI + PostgreSQL/TimescaleDB)
 
-## Architecture Snapshot
+**API surface:**
 
-```text
-MT5 / MQL5 EA
-  -> POST /api/trade-events
-  -> POST /api/price-tick
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/health` | Liveness check |
+| POST | `/api/trade-events` | Ingest trade lifecycle events from EA |
+| POST | `/api/price-tick` | Ingest OHLCV bars + account snapshot |
+| POST | `/api/market-tick` | Ingest live bid/ask for paper exit checks |
+| GET | `/api/account` | Latest account snapshot |
+| GET | `/api/trades?state=open\|closed&limit=N` | Trades for dashboard |
+| GET | `/api/insights` | Active insights |
+| GET | `/api/alerts` | Unacknowledged alerts |
+| PATCH | `/api/alerts/{id}/acknowledge` | Acknowledge an alert |
 
-FastAPI backend, port 8000
-  -> PostgreSQL/TimescaleDB
-  -> insight, alert, pattern, mirror-trader services
+**Services:**
 
-React dashboard, port 3000
-  -> polls backend read APIs
+| Service | What it does |
+|---------|-------------|
+| `trade_logger` | Upserts trade events by `(ticket, symbol, is_paper)` |
+| `price_handler` | Stores OHLCV bars and account snapshots |
+| `mirror_trader` | On each new real filled trade: creates a paper mirror trade with computed TP/SL from session-aware history |
+| `paper_exit_manager` | On each market tick: closes open paper trades when bid/ask reaches their TP or SL |
+| `alert_manager` | Fires `equity_buffer`, `double_down`, `consecutive_loss` alerts |
+| `pattern_detector` | Detects Pin Bar and Engulfing patterns on H1/H4; creates pattern alerts |
+| `insight_engine` | Computes `time_bias`, `session_bias`, `pattern_win_rate`, `early_exit_rate` insights |
+
+**Data model:**
+
+| Table | Purpose |
+|-------|---------|
+| `trades` | All trade rows — real and paper. Key fields: `ticket`, `symbol`, `direction`, `is_paper`, `paper_mode`, `order_state`, `open_price`, `close_price`, `sl`, `tp`, `profit`, `paper_exit_strategy`, `paper_exit_reason` |
+| `price_bars` | OHLCV for M5/M15/M30/H1/H4/D1/W1 — TimescaleDB hypertable |
+| `account_snapshots` | equity/balance/margin/free_margin snapshot per tick |
+| `insights` | Auto-discovered patterns (`is_active` flag, `type`, `confidence`, `sample_size`) |
+| `alerts` | Triggered warnings (`acknowledged` flag, `type`, `trigger_data`) |
+
+**Migrations:** `alembic/versions/` — 001 initial schema, 002 insights/alerts, 003 paper exit metadata.
+
+### Frontend — `frontend/` (React + Vite + TailwindCSS)
+
+Single-page dashboard, polls every 30s. Components:
+
+| Component | Shows |
+|-----------|-------|
+| `AccountBar` | Equity, Balance, Margin, Free Margin, Float P/L in ฿. "Updated Xs ago." |
+| `AlertsPanel` | Pattern alerts grouped by TF (largest first, max 3 per group). ↑/↓ direction arrows. Ack button. |
+| `InsightsPanel` | Active insights sorted by confidence. Color-coded by type badge. |
+| `OpenPositions` | Real positions paired with paper mirror: entry price, Paper SL/TP, paper exit rule. |
+| `ClosedTrades` | Real vs paper P/L diff. Entry price, exit price, exit reason. |
+
+---
+
+## What Is Planned (backlog)
+
+See `.agents/backlog.md` for the live queue. High-level directions not yet started:
+
+- **Pattern-aware paper exits** — use entry pattern context (pin bar / engulfing direction) to set TP/SL rather than pure historical offset average.
+- **Pydantic v2 config style** — migrate class-based `Config` to `model_config = ConfigDict(...)` to clear the deprecation warning.
+- **Insight: session-loss streak** — detect when consecutive losses cluster in one trading session.
+- **Dashboard: P/L chart** — sparkline of cumulative real P/L over time (needs `account_snapshots` query endpoint).
+
+---
+
+## Engineering Rules
+
+These apply to every agent equally. A task is not done until all rules are satisfied.
+
+1. **Async everywhere.** FastAPI endpoints and SQLAlchemy DB calls use `async/await`. Never mix sync DB calls into async handlers.
+2. **Schemas vs models.** Pydantic schemas live in `api/schemas/`. ORM models live in `api/models/`. Never mix.
+3. **Thin routers.** Route handlers parse the request and call a service. Business logic belongs in `api/services/`.
+4. **Upsert by `(ticket, symbol, is_paper)`.** Real trades must never duplicate. Paper mirror trades use the same ticket but `is_paper=True`, `paper_mode="mirror"`.
+5. **Closing deals use position ticket.** DEAL_ENTRY_OUT events must be sent with `DEAL_POSITION_ID` as the ticket so they upsert onto the opening deal row — not create a new orphan row.
+6. **No comments unless WHY is non-obvious.** Do not explain what the code does. One short line max.
+7. **TDD.** Write a failing test first. Implement minimal code to pass. Run full suite before handing off.
+8. **No over-building.** Implement exactly what the task specifies. No extra flags, abstractions, or backwards-compat shims.
+9. **Commit after each task** with `feat:` / `fix:` / `refactor:` prefix.
+10. **Check git status before editing.** Do not overwrite uncommitted user changes.
+
+---
+
+## How to Verify a Task is Complete (Claude Review Checklist)
+
+After Codex marks a task done, Claude reviews using this checklist:
+
 ```
+[ ] All acceptance criteria in the task are met (read them literally, not loosely)
+[ ] pytest tests/ -v passes — no new failures, no skipped tests added to hide failures
+[ ] cd frontend && npm run build passes (if any frontend files changed)
+[ ] No engineering rules violated (see above)
+[ ] .agents/handoff.md updated with what changed and what to verify
+[ ] Commit exists with correct prefix and describes the change accurately
+```
+
+If any box is unchecked → task is not done. Claude adds a note to the backlog task and sends it back.
+
+---
+
+## Running the Stack
+
+```bash
+# Start everything
+docker compose up --build -d
+
+# Backend tests (from repo root)
+pytest tests/ -v
+
+# Frontend build check
+cd frontend && npm run build
+
+# Apply migrations
+cd api && alembic upgrade head
+
+# Check DB
+docker compose exec db psql -U tradesignal -d tradesignal -c "\dt"
+
+# Tail API logs
+docker compose logs -f api
+```
+
+**Current baseline (2026-05-18):** `pytest tests/ -v` → 64 passed, 1 Pydantic deprecation warning. `npm run build` → passes.
+
+---
 
 ## Key Directories
 
-```text
+```
 api/
-  main.py                 FastAPI app, CORS, router registration
-  database.py             async engine/session setup
-  models/                 SQLAlchemy ORM models
-  schemas/                Pydantic request/response schemas
-  routers/                FastAPI route handlers
-  services/               trade logging, price handling, insights, alerts, patterns, mirror trader
-  alembic/                database migrations
+  main.py          FastAPI app, CORS, router registration
+  database.py      async engine/session setup
+  models/          SQLAlchemy ORM models
+  schemas/         Pydantic request/response schemas
+  routers/         FastAPI route handlers
+  services/        business logic
+  alembic/         DB migrations
 
 ea/
   TradeSignalBridge.mq5   MT5 bridge EA
 
 frontend/
-  src/                    React dashboard source
+  src/             React dashboard source
 
-tests/
-  pytest suite for backend behavior
+tests/             pytest suite for backend behaviour
+
+docs/
+  superpowers/specs/   Design specs (historical reference)
+  superpowers/plans/   Implementation plans (historical — treat as reference, not task cursor)
+
+.agents/           Cross-agent state (backlog, active, handoff, decisions)
 ```
-
-## Implemented API Surface
-
-- `GET /health`
-- `POST /api/trade-events`
-- `POST /api/price-tick`
-- `GET /api/account`
-- `GET /api/trades?state=open|closed&limit=...`
-- `GET /api/insights`
-- `GET /api/alerts`
-- `PATCH /api/alerts/{alert_id}/acknowledge`
-
-## Running Tests
-
-Backend tests run from the repo root and use an in-memory SQLite database.
-
-```bash
-pytest tests/ -v
-```
-
-If dependencies are missing:
-
-```bash
-cd api
-pip install -r requirements.txt
-cd ..
-pytest tests/ -v
-```
-
-Frontend build:
-
-```bash
-cd frontend
-npm install
-npm run build
-```
-
-## Running The Full Stack
-
-```bash
-docker compose up --build -d
-curl http://localhost:8000/health
-```
-
-Services:
-
-- Backend: `http://localhost:8000`
-- Dashboard: `http://localhost:3000`
-- Database: PostgreSQL/TimescaleDB on local port `5432`
-
-Useful database commands:
-
-```bash
-cd api && alembic upgrade head
-docker compose exec db psql -U tradesignal -d tradesignal -c "\dt"
-```
-
-## Engineering Rules
-
-1. Preserve async behavior: FastAPI endpoints and SQLAlchemy DB calls should use `async/await`.
-2. Keep Pydantic schemas in `api/schemas/` and ORM models in `api/models/`.
-3. Keep route handlers thin; put business logic in `api/services/`.
-4. Real trades must upsert by `(ticket, symbol, is_paper=False)` and must not duplicate a trade row.
-5. Paper/mirror trades use the same ticket as the real trade but `is_paper=True` and `paper_mode="mirror"`.
-6. Use focused tests for behavior changes and run the full backend suite before handing off.
-7. Do not overwrite existing user changes. Check `git status --short` before editing.
-
-## Working On New Tasks
-
-Use the plan files for intended behavior and code shape, but verify against the current implementation first.
-
-Recommended workflow:
-
-1. Read `.agents/active.md` and `.agents/handoff.md`.
-2. Check `git status --short`.
-3. Read the relevant existing files and tests.
-4. Run the targeted test or full suite to establish the baseline.
-5. Add or update a failing test for the requested behavior when practical.
-6. Implement the smallest coherent change that fits existing patterns.
-7. Run targeted tests, then `pytest tests/ -v`.
-8. For frontend changes, also run `npm run build` in `frontend/`.
-9. Update `.agents/handoff.md` before handing off or ending a substantial task.
-
-## Current Verified Baseline
-
-As of 2026-05-18:
-
-- `pytest tests/ -v`: 56 passed, 1 Pydantic deprecation warning.
-- `cd frontend && npm run build`: passed.
-
-The Pydantic warning is from class-based config style and is not currently failing the suite.

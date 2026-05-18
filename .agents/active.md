@@ -1,23 +1,18 @@
 # Active Agent State
 
 Updated: 2026-05-18
-Current owner: codex
+Current owner: claude
 Branch: main
-Last commit: 8fa3bb7 docs: update agent onboarding for current repo state
+Last commit: f08034d docs: add shared agent handoff state
 
 ## Current Goal
 
-Create a lightweight shared handoff system so Claude and Codex can switch work with minimal token cost.
-
-## Current Task
-
-- Add `.agents/` shared state files.
-- Update `AGENTS.md` so future agents read and maintain this state before using longer docs.
+Completed: rewrote AGENTS.md, backlog, and handoff to reflect current system state.
 
 ## Status
 
-Ready for review.
+Idle — handing off to Codex.
 
 ## Next Step
 
-Review the shared state docs and commit the change if accepted.
+Codex: pick up top task from `.agents/backlog.md` (commit pending changes).
