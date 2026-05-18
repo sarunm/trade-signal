@@ -28,5 +28,5 @@ async def test_get_account_returns_latest(client, db_session):
     response = await client.get("/api/account")
     assert response.status_code == 200
     data = response.json()
-    assert float(data["equity"]) == 2000.00
+    assert float(data["equity"]) == pytest.approx(2000.00)
     assert "timestamp" in data
