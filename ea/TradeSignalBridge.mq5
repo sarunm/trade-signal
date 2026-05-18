@@ -3,14 +3,14 @@
 //| Sends trade events and price bars to Trade Signal Partner API    |
 //+------------------------------------------------------------------+
 #property copyright "Trade Signal Partner"
-#property version   "1.00"
+#property version   "1.01"
 #property strict
 
 input string InpServerURL  = "http://localhost:8000";
 input string InpSymbol     = "XAUUSD";
 input int    InpTimerSec   = 60;
 
-//--- HTTP helper
+//--- HTTP POST — logs status code and response body on non-200
 bool PostJSON(const string endpoint, const string body)
 {
    string url     = InpServerURL + endpoint;
@@ -20,10 +20,34 @@ bool PostJSON(const string endpoint, const string body)
    StringToCharArray(body, post, 0, StringLen(body));
    int res = WebRequest("POST", url, headers, 5000, post, result, result_headers);
    if(res == -1) {
-      Print("WebRequest error: ", GetLastError(), " URL: ", url);
+      Print("WebRequest error: ", GetLastError(), " URL: ", url,
+            " (Is Docker running? Is WebRequest allowed for ", InpServerURL, "?)");
+      return false;
+   }
+   if(res != 200) {
+      string response = CharArrayToString(result);
+      Print("API HTTP ", res, " on ", endpoint, " — ", response);
       return false;
    }
    return true;
+}
+
+//--- Health check — call on init to verify API reachability
+void CheckHealth()
+{
+   char   post[], result[];
+   string result_headers;
+   string url = InpServerURL + "/health";
+   int res = WebRequest("GET", url, "", 5000, post, result, result_headers);
+   if(res == -1)
+      Print("Health check FAILED — cannot reach ", url,
+            ". Error code: ", GetLastError(),
+            ". Check: (1) Docker running? (2) WebRequest allowed for ", InpServerURL,
+            " in Tools → Options → Expert Advisors.");
+   else if(res == 200)
+      Print("Health check OK — API reachable at ", url);
+   else
+      Print("Health check unexpected HTTP ", res, " from ", url);
 }
 
 //--- Format decimal safely
@@ -97,7 +121,8 @@ int OnInit()
 {
    // Tools → Options → Expert Advisors → Allow WebRequest for: http://localhost:8000
    EventSetTimer(InpTimerSec);
-   Print("TradeSignalBridge v1.00 started. Sending to: ", InpServerURL);
+   Print("TradeSignalBridge v1.01 started. Sending to: ", InpServerURL, " | Symbol: ", InpSymbol);
+   CheckHealth();
    return(INIT_SUCCEEDED);
 }
 
@@ -111,7 +136,12 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
                         const MqlTradeRequest    &request,
                         const MqlTradeResult     &result)
 {
-   if(trans.symbol != InpSymbol) return;
+   if(trans.symbol != InpSymbol) {
+      if(trans.type == TRADE_TRANSACTION_DEAL_ADD || trans.type == TRADE_TRANSACTION_ORDER_ADD)
+         Print("Skipping transaction for symbol '", trans.symbol,
+               "' (InpSymbol='", InpSymbol, "'). If this is your gold symbol, update InpSymbol.");
+      return;
+   }
 
    string trans_type  = "";
    string order_state = "filled";
