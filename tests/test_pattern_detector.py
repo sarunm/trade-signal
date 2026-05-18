@@ -93,6 +93,7 @@ async def test_run_pattern_detector_creates_alert_for_pin_bar(db_session):
     assert alerts[0].trigger_data["pattern"] == "pin_bar"
     assert alerts[0].trigger_data["direction"] == "bullish"
     assert alerts[0].trigger_data["timeframe"] == "H1"
+    assert alerts[0].trigger_data["symbol"] == "XAUUSD"
 
 
 @pytest.mark.asyncio
@@ -106,7 +107,7 @@ async def test_run_pattern_detector_deduplicates_within_4_hours(db_session):
     db_session.add(Alert(
         type="pattern_alert",
         message="Pin Bar (bullish) detected on H1",
-        trigger_data={"pattern": "pin_bar", "direction": "bullish", "timeframe": "H1"},
+        trigger_data={"pattern": "pin_bar", "direction": "bullish", "timeframe": "H1", "symbol": "XAUUSD"},
         sent_at=datetime.now(timezone.utc) - timedelta(hours=1),
         acknowledged=False,
     ))
@@ -116,7 +117,8 @@ async def test_run_pattern_detector_deduplicates_within_4_hours(db_session):
 
     result = await db_session.execute(select(Alert).where(Alert.type == "pattern_alert"))
     alerts = result.scalars().all()
-    assert len(alerts) == 1  # no new alert created
+    assert len(alerts) == 1  # no new alert created — H1 pin bar suppressed by 4h dedup
+    assert alerts[0].trigger_data["timeframe"] == "H1"  # the original seeded alert, not a new one
 
 
 @pytest.mark.asyncio

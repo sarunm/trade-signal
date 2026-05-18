@@ -62,10 +62,16 @@ async def _check_timeframe(session: AsyncSession, symbol: str, tf: Timeframe) ->
         return
     bars = [{"open": r.open, "high": r.high, "low": r.low, "close": r.close} for r in rows]
 
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=PATTERN_ALERT_COOLDOWN_HOURS)
+    recent_result = await session.execute(
+        select(Alert).where(Alert.type == "pattern_alert", Alert.sent_at >= cutoff)
+    )
+    recent_alerts = recent_result.scalars().all()
+
     for pattern_name, direction in [("pin_bar", detect_pin_bar(bars)), ("engulfing", detect_engulfing(bars))]:
         if direction is None:
             continue
-        if await _is_duplicate(session, tf.value, pattern_name, direction):
+        if _is_duplicate(recent_alerts, symbol, tf.value, pattern_name, direction):
             continue
         session.add(Alert(
             type="pattern_alert",
@@ -74,6 +80,7 @@ async def _check_timeframe(session: AsyncSession, symbol: str, tf: Timeframe) ->
                 "pattern": pattern_name,
                 "direction": direction,
                 "timeframe": tf.value,
+                "symbol": symbol,
                 "open": str(rows[-1].open),
                 "high": str(rows[-1].high),
                 "low": str(rows[-1].low),
@@ -84,15 +91,12 @@ async def _check_timeframe(session: AsyncSession, symbol: str, tf: Timeframe) ->
         ))
 
 
-async def _is_duplicate(session: AsyncSession, timeframe: str, pattern: str, direction: str) -> bool:
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=PATTERN_ALERT_COOLDOWN_HOURS)
-    result = await session.execute(
-        select(Alert).where(Alert.type == "pattern_alert", Alert.sent_at >= cutoff)
-    )
-    for alert in result.scalars().all():
+def _is_duplicate(recent_alerts: list, symbol: str, timeframe: str, pattern: str, direction: str) -> bool:
+    for alert in recent_alerts:
         td = alert.trigger_data or {}
         if (td.get("pattern") == pattern and
                 td.get("direction") == direction and
-                td.get("timeframe") == timeframe):
+                td.get("timeframe") == timeframe and
+                td.get("symbol") == symbol):
             return True
     return False
