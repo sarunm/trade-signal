@@ -19,6 +19,25 @@ This repo is no longer an empty scaffold.
 
 Before starting work, inspect the current code and tests. Do not blindly "start from Task 1" in any plan file.
 
+## Shared Agent State
+
+Claude and Codex use `.agents/` as the compact handoff layer. This is the source of truth for cross-agent continuity; do not rely on long chat transcripts when a short repo note will do.
+
+Read these files at the start of every session, in this order:
+
+1. `AGENTS.md`
+2. `.agents/active.md`
+3. `.agents/handoff.md`
+4. `.agents/decisions.md` only when the work touches architecture, workflow, or project direction
+
+Update these files when useful:
+
+- `.agents/active.md`: current owner, current goal, status, and next step.
+- `.agents/handoff.md`: short end-of-session summary for the next agent.
+- `.agents/decisions.md`: durable decisions that should not be rediscovered.
+
+Keep `.agents/` concise. Prefer links to files, commit hashes, and command outputs over pasted code or chat history.
+
 ## Where To Find Context
 
 | Document | Purpose |
@@ -139,12 +158,15 @@ Use the plan files for intended behavior and code shape, but verify against the 
 
 Recommended workflow:
 
-1. Read the relevant existing files and tests.
-2. Run the targeted test or full suite to establish the baseline.
-3. Add or update a failing test for the requested behavior when practical.
-4. Implement the smallest coherent change that fits existing patterns.
-5. Run targeted tests, then `pytest tests/ -v`.
-6. For frontend changes, also run `npm run build` in `frontend/`.
+1. Read `.agents/active.md` and `.agents/handoff.md`.
+2. Check `git status --short`.
+3. Read the relevant existing files and tests.
+4. Run the targeted test or full suite to establish the baseline.
+5. Add or update a failing test for the requested behavior when practical.
+6. Implement the smallest coherent change that fits existing patterns.
+7. Run targeted tests, then `pytest tests/ -v`.
+8. For frontend changes, also run `npm run build` in `frontend/`.
+9. Update `.agents/handoff.md` before handing off or ending a substantial task.
 
 ## Current Verified Baseline
 
