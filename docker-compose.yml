@@ -27,5 +27,15 @@ services:
     volumes:
       - ./api:/app
 
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
 volumes:
   pgdata:
