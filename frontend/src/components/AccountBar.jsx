@@ -9,6 +9,7 @@ export default function AccountBar({ data, error, lastUpdated }) {
   const [secs, setSecs] = useState(0)
 
   useEffect(() => {
+    setSecs(0)
     const id = setInterval(() => {
       setSecs(lastUpdated ? Math.floor((new Date() - lastUpdated) / 1000) : 0)
     }, 1000)
@@ -40,7 +41,7 @@ export default function AccountBar({ data, error, lastUpdated }) {
                 ? floatPL >= 0 ? 'text-green-400' : 'text-red-400'
                 : 'text-white'
             }`}>
-              ${value}
+              {value === '—' ? value : `$${value}`}
             </p>
           </div>
         ))}
