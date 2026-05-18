@@ -3,12 +3,13 @@
 //| Sends trade events and price bars to Trade Signal Partner API    |
 //+------------------------------------------------------------------+
 #property copyright "Trade Signal Partner"
-#property version   "1.01"
+#property version   "1.02"
 #property strict
 
 input string InpServerURL  = "http://127.0.0.1:8000";
 input string InpSymbol     = "GOLD";
 input int    InpTimerSec   = 60;
+input int    InpSyncDays   = 30;   // days of closed deal history to sync on startup
 
 //--- HTTP POST — logs status code and response body on non-200
 bool PostJSON(const string endpoint, const string body)
@@ -32,7 +33,7 @@ bool PostJSON(const string endpoint, const string body)
    return true;
 }
 
-//--- Health check — call on init to verify API reachability
+//--- Health check — verifies API reachability
 void CheckHealth()
 {
    char   post[], result[];
@@ -48,6 +49,165 @@ void CheckHealth()
       Print("Health check OK — API reachable at ", url);
    else
       Print("Health check unexpected HTTP ", res, " from ", url);
+}
+
+//--- Sync all currently open positions for InpSymbol
+void SyncOpenPositions()
+{
+   int total = PositionsTotal();
+   if(total == 0) {
+      Print("SyncOpenPositions: no open positions");
+      return;
+   }
+   int synced = 0;
+   for(int i = 0; i < total; i++) {
+      ulong ticket = PositionGetTicket(i);
+      if(ticket == 0 || PositionGetString(POSITION_SYMBOL) != InpSymbol) continue;
+
+      ENUM_POSITION_TYPE pos_type = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
+      string direction  = (pos_type == POSITION_TYPE_BUY) ? "buy" : "sell";
+      double open_price = PositionGetDouble(POSITION_PRICE_OPEN);
+      double sl         = PositionGetDouble(POSITION_SL);
+      double tp         = PositionGetDouble(POSITION_TP);
+      double volume     = PositionGetDouble(POSITION_VOLUME);
+      double profit     = PositionGetDouble(POSITION_PROFIT);
+      double swap       = PositionGetDouble(POSITION_SWAP);
+      datetime open_time = (datetime)PositionGetInteger(POSITION_TIME);
+
+      string body = StringFormat(
+         "{"
+         "\"transaction_type\":\"DEAL_ADD\","
+         "\"ticket\":%I64u,"
+         "\"symbol\":\"%s\","
+         "\"direction\":\"%s\","
+         "\"order_type\":\"market\","
+         "\"order_state\":\"filled\","
+         "\"pending_price\":null,"
+         "\"open_price\":%s,"
+         "\"close_price\":null,"
+         "\"volume\":%.2f,"
+         "\"tp\":%s,"
+         "\"sl\":%s,"
+         "\"open_time\":\"%s\","
+         "\"fill_time\":\"%s\","
+         "\"close_time\":null,"
+         "\"profit\":%.2f,"
+         "\"swap\":%.2f,"
+         "\"commission\":0.00"
+         "}",
+         ticket, InpSymbol, direction,
+         F(open_price), volume,
+         NullOrStr(tp), NullOrStr(sl),
+         ISOTime(open_time), ISOTime(open_time),
+         profit, swap
+      );
+      if(PostJSON("/api/trade-events", body)) synced++;
+   }
+   Print("SyncOpenPositions: synced ", synced, "/", total, " open positions for ", InpSymbol);
+}
+
+//--- Sync closed deal history for InpSymbol (last days_back days)
+void SyncHistoryDeals(int days_back)
+{
+   datetime from = TimeCurrent() - (datetime)(days_back * 86400);
+   if(!HistorySelect(from, TimeCurrent())) {
+      Print("SyncHistoryDeals: HistorySelect failed");
+      return;
+   }
+   int total = HistoryDealsTotal();
+   if(total == 0) {
+      Print("SyncHistoryDeals: no history in last ", days_back, " days");
+      return;
+   }
+   int synced = 0;
+   for(int i = 0; i < total; i++) {
+      ulong deal_ticket = HistoryDealGetTicket(i);
+      if(deal_ticket == 0) continue;
+      if(HistoryDealGetString(deal_ticket, DEAL_SYMBOL) != InpSymbol) continue;
+
+      long deal_entry = HistoryDealGetInteger(deal_ticket, DEAL_ENTRY);
+      if(deal_entry != DEAL_ENTRY_IN && deal_entry != DEAL_ENTRY_OUT) continue;
+
+      ENUM_DEAL_TYPE deal_type = (ENUM_DEAL_TYPE)HistoryDealGetInteger(deal_ticket, DEAL_TYPE);
+      string direction  = (deal_type == DEAL_TYPE_BUY) ? "buy" : "sell";
+      double deal_price = HistoryDealGetDouble(deal_ticket, DEAL_PRICE);
+      double volume     = HistoryDealGetDouble(deal_ticket, DEAL_VOLUME);
+      double profit     = HistoryDealGetDouble(deal_ticket, DEAL_PROFIT);
+      double swap       = HistoryDealGetDouble(deal_ticket, DEAL_SWAP);
+      double commission = HistoryDealGetDouble(deal_ticket, DEAL_COMMISSION);
+      datetime deal_time = (datetime)HistoryDealGetInteger(deal_ticket, DEAL_TIME);
+
+      // SL/TP live on the order, not the deal
+      ulong order_ticket = (ulong)HistoryDealGetInteger(deal_ticket, DEAL_ORDER);
+      double sl = 0, tp = 0;
+      datetime open_time = deal_time;
+      if(order_ticket > 0 && HistoryOrderSelect(order_ticket)) {
+         sl        = HistoryOrderGetDouble(order_ticket, ORDER_SL);
+         tp        = HistoryOrderGetDouble(order_ticket, ORDER_TP);
+         open_time = (datetime)HistoryOrderGetInteger(order_ticket, ORDER_TIME_SETUP);
+      }
+
+      string body;
+      if(deal_entry == DEAL_ENTRY_IN) {
+         body = StringFormat(
+            "{"
+            "\"transaction_type\":\"DEAL_ADD\","
+            "\"ticket\":%I64u,"
+            "\"symbol\":\"%s\","
+            "\"direction\":\"%s\","
+            "\"order_type\":\"market\","
+            "\"order_state\":\"filled\","
+            "\"pending_price\":null,"
+            "\"open_price\":%s,"
+            "\"close_price\":null,"
+            "\"volume\":%.2f,"
+            "\"tp\":%s,"
+            "\"sl\":%s,"
+            "\"open_time\":\"%s\","
+            "\"fill_time\":\"%s\","
+            "\"close_time\":null,"
+            "\"profit\":%.2f,"
+            "\"swap\":%.2f,"
+            "\"commission\":%.2f"
+            "}",
+            deal_ticket, InpSymbol, direction,
+            F(deal_price), volume,
+            NullOrStr(tp), NullOrStr(sl),
+            ISOTime(open_time), ISOTime(deal_time),
+            profit, swap, commission
+         );
+      } else {
+         body = StringFormat(
+            "{"
+            "\"transaction_type\":\"DEAL_ADD\","
+            "\"ticket\":%I64u,"
+            "\"symbol\":\"%s\","
+            "\"direction\":\"%s\","
+            "\"order_type\":\"market\","
+            "\"order_state\":\"filled\","
+            "\"pending_price\":null,"
+            "\"open_price\":null,"
+            "\"close_price\":%s,"
+            "\"volume\":%.2f,"
+            "\"tp\":%s,"
+            "\"sl\":%s,"
+            "\"open_time\":null,"
+            "\"fill_time\":null,"
+            "\"close_time\":\"%s\","
+            "\"profit\":%.2f,"
+            "\"swap\":%.2f,"
+            "\"commission\":%.2f"
+            "}",
+            deal_ticket, InpSymbol, direction,
+            F(deal_price), volume,
+            NullOrStr(tp), NullOrStr(sl),
+            ISOTime(deal_time),
+            profit, swap, commission
+         );
+      }
+      if(PostJSON("/api/trade-events", body)) synced++;
+   }
+   Print("SyncHistoryDeals: synced ", synced, "/", total, " deals (last ", days_back, " days)");
 }
 
 //--- Format decimal safely
@@ -119,10 +279,12 @@ string NullOrTime(datetime t) { return (t == 0)   ? "null" : ("\"" + ISOTime(t) 
 
 int OnInit()
 {
-   // Tools → Options → Expert Advisors → Allow WebRequest for: http://localhost:8000
+   // Tools → Options → Expert Advisors → Allow WebRequest for: http://127.0.0.1:8000
    EventSetTimer(InpTimerSec);
-   Print("TradeSignalBridge v1.01 started. Sending to: ", InpServerURL, " | Symbol: ", InpSymbol);
+   Print("TradeSignalBridge v1.02 started. Sending to: ", InpServerURL, " | Symbol: ", InpSymbol);
    CheckHealth();
+   SyncOpenPositions();
+   SyncHistoryDeals(InpSyncDays);
    return(INIT_SUCCEEDED);
 }
 
