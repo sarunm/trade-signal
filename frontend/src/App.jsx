@@ -3,6 +3,8 @@ import { usePolling } from './hooks/usePolling'
 import AccountBar from './components/AccountBar'
 import AlertsPanel from './components/AlertsPanel'
 import InsightsPanel from './components/InsightsPanel'
+import OpenPositions from './components/OpenPositions'
+import ClosedTrades from './components/ClosedTrades'
 
 const API = 'http://localhost:8000'
 
@@ -39,12 +41,8 @@ export default function App() {
         <AlertsPanel data={alerts.data} error={alerts.error} onAcknowledge={acknowledgeAlert} />
         <InsightsPanel data={insights.data} error={insights.error} />
       </div>
-      <div className="bg-gray-900 rounded-lg p-4 text-sm text-gray-400">
-        Open trades: {openTrades.data?.length ?? '...'}
-      </div>
-      <div className="bg-gray-900 rounded-lg p-4 text-sm text-gray-400">
-        Closed trades: {closedTrades.data?.length ?? '...'}
-      </div>
+      <OpenPositions data={openTrades.data} error={openTrades.error} />
+      <ClosedTrades data={closedTrades.data} error={closedTrades.error} />
     </div>
   )
 }
