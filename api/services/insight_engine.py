@@ -1,11 +1,13 @@
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import pandas as pd
 
 from models.trade import Trade, OrderState
 from models.insight import Insight
+from models.price_bar import PriceBar, Timeframe
+from services.pattern_detector import detect_pin_bar, detect_engulfing
 
 MIN_SAMPLE_SIZE = 10
 MIN_CONFIDENCE = 0.6
@@ -35,6 +37,7 @@ async def run_insight_engine(session: AsyncSession) -> None:
 
     await _compute_time_bias(session, df)
     await _compute_session_bias(session, df)
+    await _compute_pattern_win_rate(session, trades)
     await session.commit()
 
 
@@ -123,3 +126,83 @@ async def _compute_session_bias(session: AsyncSession, df: pd.DataFrame) -> None
         is_active=True,
         data=data,
     ))
+
+
+async def _compute_pattern_win_rate(session: AsyncSession, trades: list) -> None:
+    records = []
+    for trade in trades:
+        hour_start = trade.open_time.replace(minute=0, second=0, microsecond=0)
+        bar_res = await session.execute(
+            select(PriceBar).where(
+                PriceBar.symbol == trade.symbol,
+                PriceBar.timeframe == Timeframe.H1,
+                PriceBar.time >= hour_start,
+                PriceBar.time < hour_start + timedelta(hours=1),
+            ).order_by(PriceBar.time.desc()).limit(1)
+        )
+        bar = bar_res.scalar_one_or_none()
+        if bar is None:
+            continue
+
+        prev_res = await session.execute(
+            select(PriceBar).where(
+                PriceBar.symbol == trade.symbol,
+                PriceBar.timeframe == Timeframe.H1,
+                PriceBar.time >= hour_start - timedelta(hours=1),
+                PriceBar.time < hour_start,
+            ).order_by(PriceBar.time.desc()).limit(1)
+        )
+        prev_bar = prev_res.scalar_one_or_none()
+
+        bar_dict = {"open": bar.open, "high": bar.high, "low": bar.low, "close": bar.close}
+        bars = []
+        if prev_bar:
+            bars.append({"open": prev_bar.open, "high": prev_bar.high,
+                         "low": prev_bar.low, "close": prev_bar.close})
+        bars.append(bar_dict)
+
+        pin_dir = detect_pin_bar(bars)
+        eng_dir = detect_engulfing(bars)
+        if pin_dir:
+            records.append({"pattern": "pin_bar", "direction": pin_dir,
+                            "is_win": float(trade.profit) > 0})
+        elif eng_dir:
+            records.append({"pattern": "engulfing", "direction": eng_dir,
+                            "is_win": float(trade.profit) > 0})
+
+    if not records:
+        return
+
+    df = pd.DataFrame(records)
+    grouped = df.groupby(["pattern", "direction"]).agg(
+        trades=("is_win", "count"),
+        win_rate=("is_win", "mean"),
+    ).reset_index()
+
+    old = await session.execute(
+        select(Insight).where(Insight.type == "pattern_win_rate", Insight.is_active == True)
+    )
+    for ins in old.scalars().all():
+        ins.is_active = False
+
+    for _, row in grouped.iterrows():
+        if int(row["trades"]) < MIN_SAMPLE_SIZE or float(row["win_rate"]) < MIN_CONFIDENCE:
+            continue
+        session.add(Insight(
+            type="pattern_win_rate",
+            description=(
+                f"Trades opened after a {row['direction']} "
+                f"{row['pattern']} on H1 "
+                f"have a {float(row['win_rate']):.0%} win rate ({int(row['trades'])} trades)"
+            ),
+            confidence=float(row["win_rate"]),
+            sample_size=int(row["trades"]),
+            discovered_at=datetime.now(timezone.utc),
+            is_active=True,
+            data={
+                "pattern": row["pattern"],
+                "direction": row["direction"],
+                "timeframe": "H1",
+                "win_rate": float(row["win_rate"]),
+            },
+        ))
