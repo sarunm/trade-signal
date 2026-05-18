@@ -23,8 +23,10 @@ export default function App() {
   const closedTrades = usePolling(fetchClosed)
 
   async function acknowledgeAlert(id) {
-    await fetch(`${API}/api/alerts/${id}/acknowledge`, { method: 'PATCH' })
-    alerts.refetch()
+    try {
+      const res = await fetch(`${API}/api/alerts/${id}/acknowledge`, { method: 'PATCH' })
+      if (res.ok) alerts.refetch()
+    } catch (_) {}
   }
 
   return (
