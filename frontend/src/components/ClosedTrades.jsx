@@ -41,7 +41,7 @@ export default function ClosedTrades({ data, error }) {
               const paperPL = paper?.profit != null ? Number(paper.profit) : null
               const diff = realPL != null && paperPL != null ? paperPL - realPL : null
               return (
-                <tr key={t.id} className="border-b border-gray-800 last:border-0">
+                <tr key={t.ticket} className="border-b border-gray-800 last:border-0">
                   <td className="py-2 pr-4 font-mono text-gray-300">{t.ticket}</td>
                   <td className={`py-2 pr-4 font-semibold ${t.direction === 'buy' ? 'text-green-400' : 'text-red-400'}`}>
                     {t.direction?.toUpperCase() ?? '—'}
