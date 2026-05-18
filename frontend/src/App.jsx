@@ -3,6 +3,7 @@ import { usePolling } from './hooks/usePolling'
 import AccountBar from './components/AccountBar'
 import AlertsPanel from './components/AlertsPanel'
 import InsightsPanel from './components/InsightsPanel'
+import FibPanel from './components/FibPanel'
 import OpenPositions from './components/OpenPositions'
 import ClosedTrades from './components/ClosedTrades'
 
@@ -20,12 +21,14 @@ export default function App() {
   const fetchInsights = useCallback(() => get('/api/insights'), [])
   const fetchOpen = useCallback(() => get('/api/trades?state=open'), [])
   const fetchClosed = useCallback(() => get('/api/trades?state=closed&limit=20'), [])
+  const fetchFib = useCallback(() => get('/api/fib-levels'), [])
 
   const account = usePolling(fetchAccount)
   const alerts = usePolling(fetchAlerts)
   const insights = usePolling(fetchInsights)
   const openTrades = usePolling(fetchOpen)
   const closedTrades = usePolling(fetchClosed)
+  const fib = usePolling(fetchFib)
 
   const acknowledgeAlert = useCallback(async (id) => {
     try {
@@ -37,9 +40,10 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 p-4 space-y-4">
       <AccountBar data={account.data} error={account.error} lastUpdated={account.lastUpdated} />
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <AlertsPanel data={alerts.data} error={alerts.error} onAcknowledge={acknowledgeAlert} />
         <InsightsPanel data={insights.data} error={insights.error} />
+        <FibPanel data={fib.data?.[0]} accountData={account.data} error={fib.error} />
       </div>
       <OpenPositions data={openTrades.data} error={openTrades.error} />
       <ClosedTrades data={closedTrades.data} error={closedTrades.error} />
