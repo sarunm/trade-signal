@@ -6,8 +6,8 @@
 #property version   "1.01"
 #property strict
 
-input string InpServerURL  = "http://localhost:8000";
-input string InpSymbol     = "XAUUSD";
+input string InpServerURL  = "http://127.0.0.1:8000";
+input string InpSymbol     = "GOLD";
 input int    InpTimerSec   = 60;
 
 //--- HTTP POST — logs status code and response body on non-200
