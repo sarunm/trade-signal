@@ -133,10 +133,6 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
          trans_type  = "DEAL_ADD";
          order_state = "filled";
          break;
-      case TRADE_TRANSACTION_POSITION_UPDATE:
-         trans_type  = "POSITION_UPDATE";
-         order_state = "filled";
-         break;
       default:
          return;
    }
@@ -145,11 +141,11 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
    double profit = 0, swap = 0, commission = 0, pending_price = 0;
    datetime open_time = 0, fill_time = 0, close_time = 0;
    ENUM_ORDER_TYPE order_type_enum = ORDER_TYPE_BUY;
-   long ticket = trans.order;
+   ulong ticket = trans.order;
 
    if(trans.type == TRADE_TRANSACTION_DEAL_ADD && trans.deal > 0) {
       if(HistoryDealSelect(trans.deal)) {
-         ticket      = (long)HistoryDealGetInteger(trans.deal, DEAL_TICKET);
+         ticket      = (ulong)HistoryDealGetInteger(trans.deal, DEAL_TICKET);
          open_price  = HistoryDealGetDouble(trans.deal, DEAL_PRICE);
          volume      = HistoryDealGetDouble(trans.deal, DEAL_VOLUME);
          profit      = HistoryDealGetDouble(trans.deal, DEAL_PROFIT);
@@ -178,7 +174,7 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
    string body = StringFormat(
       "{"
       "\"transaction_type\":\"%s\","
-      "\"ticket\":%I64d,"
+      "\"ticket\":%I64u,"
       "\"symbol\":\"%s\","
       "\"direction\":\"%s\","
       "\"order_type\":\"%s\","
@@ -244,7 +240,7 @@ void OnTimer()
       AccountInfoDouble(ACCOUNT_EQUITY),
       AccountInfoDouble(ACCOUNT_BALANCE),
       AccountInfoDouble(ACCOUNT_MARGIN),
-      AccountInfoDouble(ACCOUNT_FREEMARGIN),
+      AccountInfoDouble(ACCOUNT_MARGIN_FREE),
       AccountInfoDouble(ACCOUNT_EQUITY) - AccountInfoDouble(ACCOUNT_BALANCE),
       bars_json
    );
