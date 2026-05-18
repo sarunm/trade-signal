@@ -3,6 +3,15 @@ function fmt(v, d = 5) {
   return Number(v).toFixed(d)
 }
 
+function fmtStrategy(v) {
+  if (!v) return '—'
+  return v
+    .replaceAll('tp:', 'TP ')
+    .replaceAll(';sl:', ' / SL ')
+    .replaceAll('_avg', '')
+    .replaceAll('_', ' ')
+}
+
 export default function OpenPositions({ data, error }) {
   const trades = data ?? []
   const real = trades.filter(t => !t.is_paper)
@@ -29,7 +38,8 @@ export default function OpenPositions({ data, error }) {
               <th className="pb-2 pr-4">Real Entry</th>
               <th className="pb-2 pr-4">Paper Entry</th>
               <th className="pb-2 pr-4">Paper SL</th>
-              <th className="pb-2">Paper TP</th>
+              <th className="pb-2 pr-4">Paper TP</th>
+              <th className="pb-2">Rule</th>
             </tr>
           </thead>
           <tbody>
@@ -44,7 +54,8 @@ export default function OpenPositions({ data, error }) {
                   <td className="py-2 pr-4 font-mono">{fmt(t.open_price)}</td>
                   <td className="py-2 pr-4 font-mono">{fmt(paper?.open_price)}</td>
                   <td className="py-2 pr-4 font-mono text-red-400">{fmt(paper?.sl)}</td>
-                  <td className="py-2 font-mono text-green-400">{fmt(paper?.tp)}</td>
+                  <td className="py-2 pr-4 font-mono text-green-400">{fmt(paper?.tp)}</td>
+                  <td className="py-2 text-xs text-gray-400">{fmtStrategy(paper?.paper_exit_strategy)}</td>
                 </tr>
               )
             })}

@@ -2,6 +2,7 @@ const TYPE_COLORS = {
   time_bias: 'bg-purple-900 text-purple-200',
   session_bias: 'bg-indigo-900 text-indigo-200',
   pattern_win_rate: 'bg-teal-900 text-teal-200',
+  early_exit_rate: 'bg-amber-900 text-amber-200',
 }
 
 export default function InsightsPanel({ data, error }) {

@@ -38,6 +38,7 @@ async def run_insight_engine(session: AsyncSession) -> None:
     await _compute_time_bias(session, df)
     await _compute_session_bias(session, df)
     await _compute_pattern_win_rate(session, trades)
+    await _compute_early_exit_rate(session, trades)
     await session.commit()
 
 
@@ -211,3 +212,57 @@ async def _compute_pattern_win_rate(session: AsyncSession, trades: list) -> None
                 "win_rate": float(row["win_rate"]),
             },
         ))
+
+
+async def _compute_early_exit_rate(session: AsyncSession, trades: list) -> None:
+    tickets = [t.ticket for t in trades]
+    paper_res = await session.execute(
+        select(Trade).where(
+            Trade.is_paper == True,
+            Trade.ticket.in_(tickets),
+            Trade.order_state == OrderState.filled,
+            Trade.profit.isnot(None),
+        )
+    )
+    paper_by_ticket = {t.ticket: t for t in paper_res.scalars().all()}
+
+    winning_real = [t for t in trades if float(t.profit) > 0]
+    if len(winning_real) < MIN_SAMPLE_SIZE:
+        return
+
+    early_exits = [
+        t for t in winning_real
+        if t.ticket in paper_by_ticket
+        and float(paper_by_ticket[t.ticket].profit) > float(t.profit)
+    ]
+    rate = len(early_exits) / len(winning_real)
+    if rate < MIN_CONFIDENCE:
+        return
+
+    avg_left = sum(
+        float(paper_by_ticket[t.ticket].profit) - float(t.profit)
+        for t in early_exits
+    ) / len(early_exits)
+
+    old = await session.execute(
+        select(Insight).where(Insight.type == "early_exit_rate", Insight.is_active == True)
+    )
+    for ins in old.scalars().all():
+        ins.is_active = False
+
+    session.add(Insight(
+        type="early_exit_rate",
+        description=(
+            f"{rate:.0%} ของเทรดที่ชนะถูกปิดก่อน Paper TP "
+            f"เฉลี่ยเหลือทิ้ง ฿{avg_left:.0f} ต่อเทรด ({len(winning_real)} เทรด)"
+        ),
+        confidence=rate,
+        sample_size=len(winning_real),
+        discovered_at=datetime.now(timezone.utc),
+        is_active=True,
+        data={
+            "early_exit_count": len(early_exits),
+            "winning_trades": len(winning_real),
+            "avg_profit_left": avg_left,
+        },
+    ))

@@ -3,13 +3,16 @@
 //| Sends trade events and price bars to Trade Signal Partner API    |
 //+------------------------------------------------------------------+
 #property copyright "Trade Signal Partner"
-#property version   "1.02"
+#property version   "1.03"
 #property strict
 
 input string InpServerURL  = "http://127.0.0.1:8000";
 input string InpSymbol     = "GOLD";
 input int    InpTimerSec   = 60;
+input int    InpMarketTickSec = 1;    // throttle bid/ask posts for paper exits
 input int    InpSyncDays   = 30;   // days of closed deal history to sync on startup
+
+datetime g_last_market_tick_sent = 0;
 
 //--- HTTP POST — logs status code and response body on non-200
 bool PostJSON(const string endpoint, const string body)
@@ -25,7 +28,7 @@ bool PostJSON(const string endpoint, const string body)
             " (Is Docker running? Is WebRequest allowed for ", InpServerURL, "?)");
       return false;
    }
-   if(res != 200) {
+   if(res < 200 || res >= 300) {
       string response = CharArrayToString(result);
       Print("API HTTP ", res, " on ", endpoint, " — ", response);
       return false;
@@ -177,6 +180,9 @@ void SyncHistoryDeals(int days_back)
             profit, swap, commission
          );
       } else {
+         // Use position ticket so this upserts onto the opening deal row (merges close data)
+         ulong position_ticket = (ulong)HistoryDealGetInteger(deal_ticket, DEAL_POSITION_ID);
+         ulong close_ticket = (position_ticket > 0) ? position_ticket : deal_ticket;
          body = StringFormat(
             "{"
             "\"transaction_type\":\"DEAL_ADD\","
@@ -198,7 +204,7 @@ void SyncHistoryDeals(int days_back)
             "\"swap\":%.2f,"
             "\"commission\":%.2f"
             "}",
-            deal_ticket, InpSymbol, direction,
+            close_ticket, InpSymbol, direction,
             F(deal_price), volume,
             NullOrStr(tp), NullOrStr(sl),
             ISOTime(deal_time),
@@ -285,12 +291,21 @@ int OnInit()
    CheckHealth();
    SyncOpenPositions();
    SyncHistoryDeals(InpSyncDays);
+   ComputeFibLevels();
    return(INIT_SUCCEEDED);
 }
 
 void OnDeinit(const int reason)
 {
    EventKillTimer();
+   // Remove all fib lines drawn by this EA
+   for(int i = ObjectsTotal(0) - 1; i >= 0; i--)
+   {
+      string name = ObjectName(0, i);
+      if(StringFind(name, "TSB_FIB_") == 0)
+         ObjectDelete(0, name);
+   }
+   ChartRedraw(0);
    Print("TradeSignalBridge stopped.");
 }
 
@@ -349,6 +364,9 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
             close_price = open_price;
             close_time  = fill_time;
             open_price  = 0;
+            // Use position ticket so close event upserts onto the opening row
+            ulong position_id = (ulong)HistoryDealGetInteger(trans.deal, DEAL_POSITION_ID);
+            if(position_id > 0) ticket = position_id;
          }
       }
    }
@@ -403,7 +421,31 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
    PostJSON("/api/trade-events", body);
 }
 
-void OnTimer()
+void SendMarketTick()
+{
+   string now = "\"" + ISOTime(TimeCurrent()) + "\"";
+   double bid = SymbolInfoDouble(InpSymbol, SYMBOL_BID);
+   double ask = SymbolInfoDouble(InpSymbol, SYMBOL_ASK);
+   if(bid <= 0 || ask <= 0) return;
+
+   string body = StringFormat(
+      "{"
+      "\"timestamp\":%s,"
+      "\"symbol\":\"%s\","
+      "\"bid\":%s,"
+      "\"ask\":%s"
+      "}",
+      now,
+      InpSymbol,
+      F(bid),
+      F(ask)
+   );
+
+   if(PostJSON("/api/market-tick", body))
+      g_last_market_tick_sent = TimeCurrent();
+}
+
+void SendPriceTick()
 {
    string now = "\"" + ISOTime(TimeCurrent()) + "\"";
 
@@ -438,4 +480,101 @@ void OnTimer()
    );
 
    PostJSON("/api/price-tick", body);
+}
+
+void OnTick()
+{
+   if(TimeCurrent() - g_last_market_tick_sent < InpMarketTickSec) return;
+   SendMarketTick();
+}
+
+void ComputeFibLevels()
+{
+   // ROM Fibonacci Pivot Points: PP = (prev_day_H + prev_day_L + prev_day_C) / 3
+   // R/S levels extend from PP by (prev_day_range * ratio)
+   double ph[1], pl[1], pc[1];
+   if(CopyHigh(InpSymbol, PERIOD_D1, 1, 1, ph)  < 1 ||
+      CopyLow(InpSymbol,  PERIOD_D1, 1, 1, pl)  < 1 ||
+      CopyClose(InpSymbol, PERIOD_D1, 1, 1, pc) < 1)
+   {
+      Print("ComputeFibLevels: D1 data not ready");
+      return;
+   }
+
+   double phigh = ph[0], plow = pl[0], pclose = pc[0];
+   double range = phigh - plow;
+   if(range <= 0) { Print("ComputeFibLevels: zero range"); return; }
+
+   double PP = (phigh + plow + pclose) / 3.0;
+   string direction = (pclose > (phigh + plow) / 2.0) ? "bullish" : "bearish";
+   Print("ComputeFibLevels: PP=", F(PP), " H=", F(phigh), " L=", F(plow), " C=", F(pclose));
+
+   // ROM ratios: 0.235, 0.382, 0.5, 0.618, 0.728, 1.0, 1.235, 1.328, 1.5, 1.618
+   double ratios[] = {0.235, 0.382, 0.5, 0.618, 0.728, 1.0, 1.235, 1.328, 1.5, 1.618};
+   string lbls[]   = {"0.235","0.382","0.5","0.618","0.728","1.000","1.235","1.328","1.500","1.618"};
+
+   // levels includes PP (key "0.000") + R1..R10; extensions has S1..S10
+   string lvl_json = StringFormat("\"0.000\":%s", F(PP));
+   string ext_json = "";
+   for(int i = 0; i < ArraySize(ratios); i++)
+   {
+      lvl_json += StringFormat(",\"%s\":%s", lbls[i], F(PP + range * ratios[i]));
+      if(ext_json != "") ext_json += ",";
+      ext_json += StringFormat("\"%s\":%s", lbls[i], F(PP - range * ratios[i]));
+   }
+
+   string body = StringFormat(
+      "{\"symbol\":\"%s\",\"timeframe\":\"D1\","
+      "\"swing_high\":%s,\"swing_low\":%s,\"direction\":\"%s\","
+      "\"levels\":{%s},\"extensions\":{%s},\"computed_at\":\"%s\"}",
+      InpSymbol, F(phigh), F(plow), direction,
+      lvl_json, ext_json, ISOTime(TimeCurrent())
+   );
+   PostJSON("/api/fib-levels", body);
+   DrawFibLines(PP, range, ratios, lbls);
+}
+
+void DrawFibLine(string name, double price, color clr, ENUM_LINE_STYLE style, int width, string tooltip)
+{
+   if(ObjectFind(0, name) >= 0)
+      ObjectDelete(0, name);
+   ObjectCreate(0, name, OBJ_HLINE, 0, 0, price);
+   ObjectSetInteger(0, name, OBJPROP_COLOR, clr);
+   ObjectSetInteger(0, name, OBJPROP_STYLE, style);
+   ObjectSetInteger(0, name, OBJPROP_WIDTH, width);
+   ObjectSetString(0, name, OBJPROP_TOOLTIP, tooltip);
+   ObjectSetInteger(0, name, OBJPROP_BACK, false);
+}
+
+void DrawFibLines(double PP, double range, double &ratios[], string &lbls[])
+{
+   for(int i = ObjectsTotal(0) - 1; i >= 0; i--)
+   {
+      string name = ObjectName(0, i);
+      if(StringFind(name, "TSB_FIB_") == 0)
+         ObjectDelete(0, name);
+   }
+
+   // PP center — gray dashed
+   DrawFibLine("TSB_FIB_PP", PP, clrSilver, STYLE_DASH, 1, "ROM PP: " + F(PP));
+
+   // R levels (above PP) — green
+   for(int i = 0; i < ArraySize(ratios); i++)
+      DrawFibLine("TSB_FIB_R_" + lbls[i], PP + range * ratios[i],
+                  clrMediumSeaGreen, STYLE_SOLID, 1,
+                  "ROM R" + lbls[i] + ": " + F(PP + range * ratios[i]));
+
+   // S levels (below PP) — red
+   for(int i = 0; i < ArraySize(ratios); i++)
+      DrawFibLine("TSB_FIB_S_" + lbls[i], PP - range * ratios[i],
+                  clrTomato, STYLE_SOLID, 1,
+                  "ROM S" + lbls[i] + ": " + F(PP - range * ratios[i]));
+
+   ChartRedraw(0);
+}
+
+void OnTimer()
+{
+   SendPriceTick();
+   ComputeFibLevels();
 }

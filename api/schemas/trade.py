@@ -14,6 +14,8 @@ class TradeResponse(BaseModel):
     order_state: Optional[str] = None
     is_paper: bool
     paper_mode: Optional[str] = None
+    paper_exit_strategy: Optional[str] = None
+    paper_exit_reason: Optional[str] = None
     open_price: Optional[Decimal] = None
     close_price: Optional[Decimal] = None
     tp: Optional[Decimal] = None

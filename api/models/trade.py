@@ -60,3 +60,5 @@ class Trade(Base):
     commission: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
     is_paper: Mapped[bool] = mapped_column(Boolean, default=False)
     paper_mode: Mapped[Optional[PaperMode]] = mapped_column(SAEnum(PaperMode), nullable=True)
+    paper_exit_strategy: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    paper_exit_reason: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)

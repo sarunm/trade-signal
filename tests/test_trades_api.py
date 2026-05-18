@@ -53,12 +53,19 @@ async def test_list_closed_trades(client, db_session):
 @pytest.mark.asyncio
 async def test_list_trades_returns_both_real_and_paper(client, db_session):
     db_session.add(make_trade(1001, is_paper=False))
-    db_session.add(make_trade(1001, is_paper=True))
+    paper = make_trade(1001, is_paper=True)
+    paper.paper_exit_strategy = "tp:session_direction_avg;sl:direction_avg"
+    paper.paper_exit_reason = "tp"
+    db_session.add(paper)
     await db_session.commit()
 
     response = await client.get("/api/trades?state=open")
     assert response.status_code == 200
-    assert len(response.json()) == 2
+    data = response.json()
+    assert len(data) == 2
+    paper_row = next(row for row in data if row["is_paper"])
+    assert paper_row["paper_exit_strategy"] == "tp:session_direction_avg;sl:direction_avg"
+    assert paper_row["paper_exit_reason"] == "tp"
 
 
 @pytest.mark.asyncio

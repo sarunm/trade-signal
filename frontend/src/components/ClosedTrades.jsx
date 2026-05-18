@@ -1,3 +1,8 @@
+function fmt(v, d = 5) {
+  if (v == null) return '—'
+  return Number(v).toFixed(d)
+}
+
 function fmtPL(v) {
   if (v == null) return '—'
   const n = Number(v)
@@ -7,6 +12,10 @@ function fmtPL(v) {
 function plColor(v) {
   if (v == null) return 'text-gray-500'
   return Number(v) >= 0 ? 'text-green-400' : 'text-red-400'
+}
+
+function fmtExit(reason) {
+  return reason ? reason.toUpperCase() : '—'
 }
 
 export default function ClosedTrades({ data, error }) {
@@ -29,8 +38,11 @@ export default function ClosedTrades({ data, error }) {
             <tr className="text-xs text-gray-500 text-left border-b border-gray-800">
               <th className="pb-2 pr-4">Ticket</th>
               <th className="pb-2 pr-4">Dir</th>
+              <th className="pb-2 pr-4">Entry</th>
+              <th className="pb-2 pr-4">Exit Price</th>
               <th className="pb-2 pr-4">Real P/L</th>
               <th className="pb-2 pr-4">Paper P/L</th>
+              <th className="pb-2 pr-4">Exit</th>
               <th className="pb-2">Diff</th>
             </tr>
           </thead>
@@ -46,8 +58,11 @@ export default function ClosedTrades({ data, error }) {
                   <td className={`py-2 pr-4 font-semibold ${t.direction === 'buy' ? 'text-green-400' : 'text-red-400'}`}>
                     {t.direction?.toUpperCase() ?? '—'}
                   </td>
+                  <td className="py-2 pr-4 font-mono text-gray-400">{fmt(t.open_price)}</td>
+                  <td className="py-2 pr-4 font-mono text-gray-400">{fmt(t.close_price)}</td>
                   <td className={`py-2 pr-4 font-mono ${plColor(realPL)}`}>{fmtPL(realPL)}</td>
                   <td className={`py-2 pr-4 font-mono ${plColor(paperPL)}`}>{fmtPL(paperPL)}</td>
+                  <td className="py-2 pr-4 font-semibold text-gray-300">{fmtExit(paper?.paper_exit_reason)}</td>
                   <td className={`py-2 font-mono ${plColor(diff)}`}>{fmtPL(diff)}</td>
                 </tr>
               )
