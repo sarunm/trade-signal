@@ -153,3 +153,93 @@ async def test_equity_buffer_no_alert_when_sufficient(db_session):
 
     result = await db_session.execute(select(Alert).where(Alert.type == "equity_buffer"))
     assert result.scalars().all() == []
+
+
+# ── large_adverse_move ────────────────────────────────────────────────────────
+
+from schemas.market_tick import MarketTickSchema
+from services.alert_manager import check_large_adverse_move
+
+
+def _market_tick(bid: float, ask: float, symbol: str = "XAUUSD") -> MarketTickSchema:
+    return MarketTickSchema(
+        timestamp=datetime.now(timezone.utc),
+        symbol=symbol,
+        bid=Decimal(str(bid)),
+        ask=Decimal(str(ask)),
+    )
+
+
+@pytest.mark.asyncio
+async def test_large_adverse_move_alert_fires_for_buy(db_session):
+    """Alert fires when buy trade has bid 200+ pts below entry."""
+    trade = _filled_buy(ticket=2001)
+    trade.open_price = Decimal("2000.00")
+    db_session.add(trade)
+    await db_session.commit()
+
+    tick = _market_tick(bid=1799.00, ask=1799.20)  # 201 pts adverse
+    await check_large_adverse_move(db_session, tick)
+
+    result = await db_session.execute(select(Alert).where(Alert.type == "large_adverse_move"))
+    alerts = result.scalars().all()
+    assert len(alerts) == 1
+    assert "2001" in alerts[0].message
+    assert alerts[0].trigger_data["direction"] == "buy"
+
+
+@pytest.mark.asyncio
+async def test_large_adverse_move_alert_fires_for_sell(db_session):
+    """Alert fires when sell trade has ask 200+ pts above entry."""
+    trade = Trade(
+        id=uuid.uuid4(),
+        ticket=2002,
+        symbol="XAUUSD",
+        direction=Direction.sell,
+        order_state=OrderState.filled,
+        open_price=Decimal("2000.00"),
+        volume=Decimal("1.00"),
+        open_time=datetime.now(timezone.utc),
+        is_paper=False,
+    )
+    db_session.add(trade)
+    await db_session.commit()
+
+    tick = _market_tick(bid=2200.80, ask=2201.00)  # 201 pts adverse for sell
+    await check_large_adverse_move(db_session, tick)
+
+    result = await db_session.execute(select(Alert).where(Alert.type == "large_adverse_move"))
+    alerts = result.scalars().all()
+    assert len(alerts) == 1
+    assert alerts[0].trigger_data["direction"] == "sell"
+
+
+@pytest.mark.asyncio
+async def test_large_adverse_move_no_alert_when_small_move(db_session):
+    """No alert when adverse move is under threshold."""
+    trade = _filled_buy(ticket=2003)
+    trade.open_price = Decimal("2000.00")
+    db_session.add(trade)
+    await db_session.commit()
+
+    tick = _market_tick(bid=1850.00, ask=1850.20)  # only 150 pts adverse
+    await check_large_adverse_move(db_session, tick)
+
+    result = await db_session.execute(select(Alert).where(Alert.type == "large_adverse_move"))
+    assert result.scalars().all() == []
+
+
+@pytest.mark.asyncio
+async def test_large_adverse_move_no_duplicate_within_cooldown(db_session):
+    """Only one alert fires per ticket within the cooldown window."""
+    trade = _filled_buy(ticket=2004)
+    trade.open_price = Decimal("2000.00")
+    db_session.add(trade)
+    await db_session.commit()
+
+    tick = _market_tick(bid=1799.00, ask=1799.20)
+    await check_large_adverse_move(db_session, tick)
+    await check_large_adverse_move(db_session, tick)  # second call same tick
+
+    result = await db_session.execute(select(Alert).where(Alert.type == "large_adverse_move"))
+    assert len(result.scalars().all()) == 1

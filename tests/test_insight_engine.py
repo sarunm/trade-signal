@@ -5,6 +5,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from models.trade import Trade, Direction, OrderState
 from models.insight import Insight
+from models.price_bar import PriceBar, Timeframe
 from services.insight_engine import run_insight_engine
 
 
@@ -117,4 +118,81 @@ async def test_skips_paper_trades(db_session):
     await run_insight_engine(db_session)
 
     result = await db_session.execute(select(Insight))
+    assert result.scalars().all() == []
+
+
+# ── large_adverse_recovery ────────────────────────────────────────────────────
+
+def _make_trade_with_adverse_bar(
+    i: int, profit: float, open_price: float, min_low: float
+) -> tuple[Trade, PriceBar]:
+    t = datetime(2026, 5, 17, 10, 0, 0, tzinfo=timezone.utc) + timedelta(hours=i)
+    close_p = open_price + 5.0 if profit > 0 else open_price - 5.0
+    trade = Trade(
+        id=uuid.uuid4(),
+        ticket=90000 + i,
+        symbol="XAUUSD",
+        direction=Direction.buy,
+        order_state=OrderState.filled,
+        open_price=Decimal(str(open_price)),
+        close_price=Decimal(str(close_p)),
+        open_time=t,
+        close_time=t + timedelta(hours=1),
+        profit=Decimal(str(profit)),
+        volume=Decimal("0.10"),
+        is_paper=False,
+    )
+    bar = PriceBar(
+        time=t,
+        symbol="XAUUSD",
+        timeframe=Timeframe.H1,
+        open=Decimal(str(open_price)),
+        high=Decimal(str(open_price + 2)),
+        low=Decimal(str(min_low)),
+        close=Decimal(str(open_price - 1)),
+        volume=Decimal("500"),
+    )
+    return trade, bar
+
+
+@pytest.mark.asyncio
+async def test_large_adverse_recovery_insight_created(db_session):
+    """Insight created when 10+ trades had 200+ pt adverse move."""
+    # 3 wins, 7 losses → 30% win rate when large adverse move occurred
+    for i in range(3):
+        t, b = _make_trade_with_adverse_bar(i, profit=50.0, open_price=2000.0, min_low=1790.0)
+        db_session.add(t)
+        db_session.add(b)
+    for i in range(3, 10):
+        t, b = _make_trade_with_adverse_bar(i, profit=-100.0, open_price=2000.0, min_low=1790.0)
+        db_session.add(t)
+        db_session.add(b)
+    await db_session.commit()
+
+    await run_insight_engine(db_session)
+
+    result = await db_session.execute(
+        select(Insight).where(Insight.type == "large_adverse_recovery")
+    )
+    insights = result.scalars().all()
+    assert len(insights) == 1
+    assert insights[0].sample_size == 10
+    assert insights[0].data["win_rate"] == pytest.approx(0.3)
+    assert insights[0].is_active is True
+
+
+@pytest.mark.asyncio
+async def test_large_adverse_recovery_no_insight_when_move_too_small(db_session):
+    """No insight when price bar low is within threshold (< 200 pts adverse)."""
+    for i in range(10):
+        t, b = _make_trade_with_adverse_bar(i, profit=-100.0, open_price=2000.0, min_low=1850.0)
+        db_session.add(t)
+        db_session.add(b)
+    await db_session.commit()
+
+    await run_insight_engine(db_session)
+
+    result = await db_session.execute(
+        select(Insight).where(Insight.type == "large_adverse_recovery")
+    )
     assert result.scalars().all() == []

@@ -1,16 +1,18 @@
 import json
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 import pandas as pd
 
-from models.trade import Trade, OrderState
+from models.trade import Trade, OrderState, Direction
 from models.insight import Insight
 from models.price_bar import PriceBar, Timeframe
 from services.pattern_detector import detect_pin_bar, detect_engulfing
 
 MIN_SAMPLE_SIZE = 10
 MIN_CONFIDENCE = 0.6
+# XAUUSD: 1 point = 0.01 price unit → 200 pts = 20,000 pips
+LARGE_ADVERSE_THRESHOLD_PTS = 200.0
 
 
 async def run_insight_engine(session: AsyncSession) -> None:
@@ -39,6 +41,7 @@ async def run_insight_engine(session: AsyncSession) -> None:
     await _compute_session_bias(session, df)
     await _compute_pattern_win_rate(session, trades)
     await _compute_early_exit_rate(session, trades)
+    await _compute_large_adverse_recovery(session, trades)
     await session.commit()
 
 
@@ -264,5 +267,77 @@ async def _compute_early_exit_rate(session: AsyncSession, trades: list) -> None:
             "early_exit_count": len(early_exits),
             "winning_trades": len(winning_real),
             "avg_profit_left": avg_left,
+        },
+    ))
+
+
+async def _compute_large_adverse_recovery(session: AsyncSession, trades: list) -> None:
+    records = []
+    for trade in trades:
+        if trade.open_price is None or trade.open_time is None or trade.close_time is None:
+            continue
+
+        open_p = float(trade.open_price)
+        if trade.direction == Direction.buy:
+            bar_res = await session.execute(
+                select(func.min(PriceBar.low)).where(
+                    PriceBar.symbol == trade.symbol,
+                    PriceBar.timeframe == Timeframe.H1,
+                    PriceBar.time >= trade.open_time,
+                    PriceBar.time <= trade.close_time,
+                )
+            )
+            extreme = bar_res.scalar()
+            if extreme is None:
+                continue
+            adverse = open_p - float(extreme)
+        else:
+            bar_res = await session.execute(
+                select(func.max(PriceBar.high)).where(
+                    PriceBar.symbol == trade.symbol,
+                    PriceBar.timeframe == Timeframe.H1,
+                    PriceBar.time >= trade.open_time,
+                    PriceBar.time <= trade.close_time,
+                )
+            )
+            extreme = bar_res.scalar()
+            if extreme is None:
+                continue
+            adverse = float(extreme) - open_p
+
+        if adverse >= LARGE_ADVERSE_THRESHOLD_PTS:
+            records.append({"is_win": float(trade.profit) > 0, "adverse": adverse})
+
+    if len(records) < MIN_SAMPLE_SIZE:
+        return
+
+    total = len(records)
+    wins = sum(1 for r in records if r["is_win"])
+    win_rate = wins / total
+    avg_adverse = sum(r["adverse"] for r in records) / total
+
+    old = await session.execute(
+        select(Insight).where(Insight.type == "large_adverse_recovery", Insight.is_active == True)
+    )
+    for ins in old.scalars().all():
+        ins.is_active = False
+
+    outcome = "ส่วนใหญ่รอดได้" if win_rate >= 0.5 else "ส่วนใหญ่ขาดทุน"
+    session.add(Insight(
+        type="large_adverse_recovery",
+        description=(
+            f"เมื่อราคาวิ่งมา >{LARGE_ADVERSE_THRESHOLD_PTS:.0f} pts ต้านออเดอร์ "
+            f"คุณชนะ {win_rate:.0%} ({total} เทรด) — {outcome}"
+        ),
+        confidence=win_rate if win_rate >= 0.5 else 1.0 - win_rate,
+        sample_size=total,
+        discovered_at=datetime.now(timezone.utc),
+        is_active=True,
+        data={
+            "threshold_pts": LARGE_ADVERSE_THRESHOLD_PTS,
+            "sample": total,
+            "wins": wins,
+            "win_rate": win_rate,
+            "avg_adverse_pts": avg_adverse,
         },
     ))
