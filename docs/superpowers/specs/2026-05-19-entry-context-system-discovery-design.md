@@ -30,9 +30,10 @@ Phase 3 (separate spec): ML classifier trained on Phase 1 labeled data (needs 20
 |---|---|---|---|
 | `setup_pattern` | VARCHAR(30) | Manual tag | Chart pattern user identified at entry |
 | `trade_bias` | VARCHAR(10) | Manual tag | User's directional conviction |
-| `near_fib_level` | VARCHAR(10) | Auto on ENTRY_IN | Closest ROM Fib level label (e.g. `S2`, `PP`, `R1`) |
+| `near_fib_level` | VARCHAR(10) | Auto on ENTRY_IN | Closest ROM Fib level label (e.g. `S0.235`, `PP`, `R1.000`) |
 | `fib_distance_pts` | NUMERIC(8,2) | Auto on ENTRY_IN | Points between open_price and nearest Fib level |
-| `h1_candle` | VARCHAR(30) | Auto on ENTRY_IN | Candle pattern on H1 at entry (e.g. `pin_bar_bullish`) |
+| `entry_candle` | VARCHAR(30) | Auto on ENTRY_IN | Candle pattern found across TFs (e.g. `pin_bar_bullish`) |
+| `entry_candle_tf` | VARCHAR(5) | Auto on ENTRY_IN | TF where pattern was detected (e.g. `H4`, `H1`, `M30`, `M15`) |
 | `is_rescue` | BOOLEAN | Auto on ENTRY_IN | True if ≥1 open real trade in same symbol+direction exists |
 | `post_close_run_pts` | NUMERIC(8,2) | Auto post-close | Max favorable move in 8h after close (H1 bars) |
 
@@ -41,7 +42,9 @@ Phase 3 (separate spec): ML classifier trained on Phase 1 labeled data (needs 20
 
 **`trade_bias` valid values:** `bullish`, `bearish`, `null` (not tagged)
 
-**`h1_candle` valid values:** `pin_bar_bullish`, `pin_bar_bearish`, `engulfing_bullish`, `engulfing_bearish`, `doji`, `none`
+**`entry_candle` valid values:** `pin_bar_bullish`, `pin_bar_bearish`, `engulfing_bullish`, `engulfing_bearish`, `doji`, `none`
+
+**`entry_candle_tf` valid values:** `H4`, `H1`, `M30`, `M15`, `null` (when entry_candle is `none`)
 
 ### 1.2 Migration: `005_add_entry_context.py`
 
@@ -52,13 +55,15 @@ def upgrade():
     op.add_column("trades", sa.Column("trade_bias", sa.String(10), nullable=True))
     op.add_column("trades", sa.Column("near_fib_level", sa.String(10), nullable=True))
     op.add_column("trades", sa.Column("fib_distance_pts", sa.Numeric(8, 2), nullable=True))
-    op.add_column("trades", sa.Column("h1_candle", sa.String(30), nullable=True))
+    op.add_column("trades", sa.Column("entry_candle", sa.String(30), nullable=True))
+    op.add_column("trades", sa.Column("entry_candle_tf", sa.String(5), nullable=True))
     op.add_column("trades", sa.Column("is_rescue", sa.Boolean, nullable=True))
     op.add_column("trades", sa.Column("post_close_run_pts", sa.Numeric(8, 2), nullable=True))
 
 def downgrade():
     for col in ["setup_pattern", "trade_bias", "near_fib_level",
-                "fib_distance_pts", "h1_candle", "is_rescue", "post_close_run_pts"]:
+                "fib_distance_pts", "entry_candle", "entry_candle_tf",
+                "is_rescue", "post_close_run_pts"]:
         op.drop_column("trades", col)
 ```
 
@@ -72,9 +77,9 @@ Called by `trade_logger.py` immediately after a real trade ENTRY_IN is saved.
 
 ```python
 async def fill_entry_context(session: AsyncSession, trade: Trade) -> None:
-    """Fills near_fib_level, fib_distance_pts, h1_candle, is_rescue. No commit — caller commits."""
+    """Fills near_fib_level, fib_distance_pts, entry_candle, entry_candle_tf, is_rescue. No commit — caller commits."""
     await _fill_fib_proximity(session, trade)
-    await _fill_h1_candle(session, trade)
+    await _fill_entry_candle(session, trade)
     await _fill_is_rescue(session, trade)
 ```
 
@@ -88,19 +93,23 @@ async def fill_entry_context(session: AsyncSession, trade: Trade) -> None:
 
 Label mapping: keys from `levels` dict → prefix `R` (e.g. key `"0.235"` → label `"R0.235"`, `"1.618"` → `"R1.618"`), except `"0.000"` → `"PP"`. Keys from `extensions` dict → prefix `S` (e.g. `"0.235"` → `"S0.235"`, `"1.618"` → `"S1.618"`). Store the full label string, e.g. `"S0.235"`, `"R1.000"`, `"PP"` — not abbreviated.
 
-#### `_fill_h1_candle(session, trade)`
+#### `_fill_entry_candle(session, trade)`
 
-1. If `trade.open_time` is None → skip
-2. Compute `hour_start = trade.open_time.replace(minute=0, second=0, microsecond=0)`
-3. Query latest H1 bar where `symbol = trade.symbol AND timeframe = H1 AND time >= hour_start AND time < hour_start + 1h`
-4. Query previous H1 bar where `time >= hour_start - 1h AND time < hour_start`
-5. If no current bar → skip
+Scans timeframes in priority order `[H4, H1, M30, M15]`. Uses the first TF where a recognisable pattern is found.
+
+For each TF in priority order:
+1. If `trade.open_time` is None → skip all
+2. Compute `bar_start = trade.open_time` floored to the TF period (e.g. H4 → floor to 4-hour boundary)
+3. Query current bar: `symbol = trade.symbol AND timeframe = TF AND time >= bar_start AND time < bar_start + TF_duration`
+4. Query previous bar: immediately preceding the current bar
+5. If no current bar for this TF → try next TF
 6. Build `bars = [prev_bar_dict, current_bar_dict]` (skip prev if not found)
-7. Run `detect_pin_bar(bars)` → if returns `'bullish'` → `"pin_bar_bullish"`, `'bearish'` → `"pin_bar_bearish"`
-8. Else run `detect_engulfing(bars)` → `"engulfing_bullish"` / `"engulfing_bearish"`
-9. Else if current bar open == current bar close → `"doji"`
-10. Else → `"none"`
-11. Set `trade.h1_candle = result`
+7. Run `detect_pin_bar(bars)` → `"pin_bar_bullish"` / `"pin_bar_bearish"`
+8. Else `detect_engulfing(bars)` → `"engulfing_bullish"` / `"engulfing_bearish"`
+9. Else if `open == close` → `"doji"`
+10. If pattern found (not doji counts as pattern only for pin/engulfing): set `trade.entry_candle = pattern`, `trade.entry_candle_tf = TF` → stop scanning
+
+If no pattern found on any TF: `trade.entry_candle = "none"`, `trade.entry_candle_tf = null`
 
 #### `_fill_is_rescue(session, trade)`
 
@@ -155,7 +164,8 @@ setup_pattern: Optional[str]
 trade_bias: Optional[str]
 near_fib_level: Optional[str]
 fib_distance_pts: Optional[Decimal]
-h1_candle: Optional[str]
+entry_candle: Optional[str]
+entry_candle_tf: Optional[str]
 is_rescue: Optional[bool]
 post_close_run_pts: Optional[Decimal]
 ```
@@ -357,8 +367,9 @@ Both panels get a paging control:
 
 - `test_fill_fib_proximity_finds_nearest_level` — trade open_price near S2, verify near_fib_level=S2
 - `test_fill_fib_proximity_skips_when_no_fib_data` — no fib_levels row, fields stay null
-- `test_fill_h1_candle_detects_pin_bar` — H1 bar is a bullish pin bar, h1_candle="pin_bar_bullish"
-- `test_fill_h1_candle_returns_none_when_no_bar` — no H1 bar at entry time, h1_candle=null
+- `test_fill_entry_candle_detects_pin_bar_on_h4` — H4 bar is bullish pin bar → entry_candle="pin_bar_bullish", entry_candle_tf="H4"
+- `test_fill_entry_candle_falls_back_to_h1_when_no_h4` — no H4 bar, H1 has engulfing → entry_candle_tf="H1"
+- `test_fill_entry_candle_returns_none_when_no_pattern_any_tf` — no pattern on any TF → entry_candle="none", entry_candle_tf=null
 - `test_fill_is_rescue_true_when_same_direction_open` — existing open buy, new buy entry → is_rescue=True
 - `test_fill_is_rescue_false_when_no_existing` — no open trades → is_rescue=False
 - `test_entry_context_auto_filled_on_trade_event` — POST /api/trade-events ENTRY_IN, check near_fib_level is set
@@ -399,8 +410,8 @@ Both panels get a paging control:
 | Create | `api/services/entry_context.py` |
 | Create | `api/alembic/versions/005_add_entry_context.py` |
 | Create | `tests/test_entry_context.py` |
-| Modify | `api/models/trade.py` — 7 new columns |
-| Modify | `api/schemas/trade.py` — 7 new optional fields in TradeResponse |
+| Modify | `api/models/trade.py` — 8 new columns |
+| Modify | `api/schemas/trade.py` — 8 new optional fields in TradeResponse |
 | Modify | `api/services/trade_logger.py` — call fill_entry_context on ENTRY_IN |
 | Modify | `api/services/insight_engine.py` — 5 new functions + call them |
 | Modify | `api/services/alert_manager.py` — 2 new alert checks |
