@@ -5,7 +5,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from models.trade import Trade, Direction, OrderState
 from models.alert import Alert
-from services.alert_manager import check_trade_alerts, check_equity_buffer
+from services.alert_manager import check_trade_alerts, check_equity_buffer, check_insight_alerts
 from schemas.trade_event import TradeEventSchema
 from schemas.price_tick import PriceTickSchema, AccountStateSchema, OHLCVSchema
 
@@ -243,3 +243,135 @@ async def test_large_adverse_move_no_duplicate_within_cooldown(db_session):
 
     result = await db_session.execute(select(Alert).where(Alert.type == "large_adverse_move"))
     assert len(result.scalars().all()) == 1
+
+
+@pytest.mark.asyncio
+async def test_low_winrate_setup_alert_fires(db_session):
+    """Alert fires when setup+bias combo has < 40% win rate with 5+ trades."""
+    trades = []
+    for i in range(5):
+        trade = Trade(
+            id=uuid.uuid4(),
+            ticket=8000 + i,
+            symbol="XAUUSD",
+            direction=Direction.buy,
+            order_state=OrderState.filled,
+            open_price=Decimal("2000.00"),
+            open_time=datetime(2026, 5, 19, 10, i, tzinfo=timezone.utc),
+            close_time=datetime(2026, 5, 19, 11, i, tzinfo=timezone.utc),
+            profit=Decimal("-100.00"),
+            is_paper=False,
+            setup_pattern="double_top",
+            trade_bias="bullish",
+        )
+        db_session.add(trade)
+        trades.append(trade)
+    await db_session.commit()
+
+    await check_insight_alerts(db_session, trades, trades)
+
+    result = await db_session.execute(
+        select(Alert).where(Alert.type == "low_winrate_setup")
+    )
+    alerts = result.scalars().all()
+    assert len(alerts) == 1
+    assert "double_top" in alerts[0].message
+
+
+@pytest.mark.asyncio
+async def test_low_winrate_setup_no_alert_when_good_winrate(db_session):
+    """No alert when win rate is >= 40%."""
+    for i in range(5):
+        profit = Decimal("200.00") if i < 4 else Decimal("-100.00")
+        trade = Trade(
+            id=uuid.uuid4(),
+            ticket=8100 + i,
+            symbol="XAUUSD",
+            direction=Direction.buy,
+            order_state=OrderState.filled,
+            open_price=Decimal("2000.00"),
+            open_time=datetime(2026, 5, 19, 10, i, tzinfo=timezone.utc),
+            close_time=datetime(2026, 5, 19, 11, i, tzinfo=timezone.utc),
+            profit=profit,
+            is_paper=False,
+            setup_pattern="double_bottom",
+            trade_bias="bullish",
+        )
+        db_session.add(trade)
+    await db_session.commit()
+
+    tagged = (await db_session.execute(
+        select(Trade).where(Trade.setup_pattern.isnot(None))
+    )).scalars().all()
+
+    await check_insight_alerts(db_session, tagged, tagged)
+
+    result = await db_session.execute(
+        select(Alert).where(Alert.type == "low_winrate_setup")
+    )
+    assert result.scalars().all() == []
+
+
+@pytest.mark.asyncio
+async def test_rescue_ineffective_alert_fires(db_session):
+    """Alert fires when rescue win_rate < 35% and delta > 20pp vs initial."""
+    # 5 initial trades: 80% win rate
+    for i in range(4):
+        trade = Trade(
+            id=uuid.uuid4(),
+            ticket=9000 + i,
+            symbol="XAUUSD",
+            direction=Direction.buy,
+            order_state=OrderState.filled,
+            open_price=Decimal("2000.00"),
+            open_time=datetime(2026, 5, 19, 10, i, tzinfo=timezone.utc),
+            close_time=datetime(2026, 5, 19, 11, i, tzinfo=timezone.utc),
+            profit=Decimal("200.00"),
+            is_paper=False,
+            is_rescue=False,
+        )
+        db_session.add(trade)
+    trade = Trade(
+        id=uuid.uuid4(),
+        ticket=9004,
+        symbol="XAUUSD",
+        direction=Direction.buy,
+        order_state=OrderState.filled,
+        open_price=Decimal("2000.00"),
+        open_time=datetime(2026, 5, 19, 10, 4, tzinfo=timezone.utc),
+        close_time=datetime(2026, 5, 19, 11, 4, tzinfo=timezone.utc),
+        profit=Decimal("-100.00"),
+        is_paper=False,
+        is_rescue=False,
+    )
+    db_session.add(trade)
+
+    # 5 rescue trades: 0% win rate
+    for i in range(5):
+        trade = Trade(
+            id=uuid.uuid4(),
+            ticket=9100 + i,
+            symbol="XAUUSD",
+            direction=Direction.buy,
+            order_state=OrderState.filled,
+            open_price=Decimal("2000.00"),
+            open_time=datetime(2026, 5, 19, 12, i, tzinfo=timezone.utc),
+            close_time=datetime(2026, 5, 19, 13, i, tzinfo=timezone.utc),
+            profit=Decimal("-100.00"),
+            is_paper=False,
+            is_rescue=True,
+        )
+        db_session.add(trade)
+
+    await db_session.commit()
+
+    all_trades = (await db_session.execute(
+        select(Trade).where(Trade.is_paper == False)
+    )).scalars().all()
+    await check_insight_alerts(db_session, all_trades, all_trades)
+
+    result = await db_session.execute(
+        select(Alert).where(Alert.type == "rescue_ineffective")
+    )
+    alerts = result.scalars().all()
+    assert len(alerts) == 1

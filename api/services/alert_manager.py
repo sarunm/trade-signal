@@ -15,6 +15,10 @@ EQUITY_BUFFER_POINTS = 10000
 # XAUUSD: 1 point = 0.01 price unit → 200 pts = 20,000 pips (user's threshold)
 LARGE_ADVERSE_MOVE_PTS = 200.0
 LARGE_ADVERSE_MOVE_COOLDOWN_MINUTES = 10
+ALERT_COOLDOWN_HOURS = 24
+LOW_WINRATE_THRESHOLD = 0.40
+RESCUE_WINRATE_THRESHOLD = 0.35
+RESCUE_DELTA_THRESHOLD = 0.20
 
 
 async def check_trade_alerts(session: AsyncSession, event: TradeEventSchema) -> None:
@@ -58,6 +62,106 @@ async def check_equity_buffer(session: AsyncSession, tick: PriceTickSchema) -> N
         acknowledged=False,
     ))
     await session.commit()
+
+
+async def check_insight_alerts(session: AsyncSession, tagged: list, trades: list) -> None:
+    await _check_low_winrate_setup(session, tagged)
+    await _check_rescue_ineffective(session, trades)
+    await session.commit()
+
+
+async def _check_low_winrate_setup(session: AsyncSession, tagged: list) -> None:
+    trades_with_profit = [t for t in tagged if t.profit is not None]
+    if not trades_with_profit:
+        return
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=ALERT_COOLDOWN_HOURS)
+    recent_res = await session.execute(
+        select(Alert).where(
+            Alert.type == "low_winrate_setup",
+            Alert.sent_at >= cutoff,
+        )
+    )
+    recently_alerted = {
+        (a.trigger_data.get("pattern"), a.trigger_data.get("bias"))
+        for a in recent_res.scalars().all()
+        if a.trigger_data
+    }
+
+    from collections import defaultdict
+    groups: dict = defaultdict(list)
+    for trade in trades_with_profit:
+        groups[(trade.setup_pattern, trade.trade_bias)].append(float(trade.profit))
+
+    for (pattern, bias), profits in groups.items():
+        if len(profits) < 5:
+            continue
+        win_rate = sum(1 for profit in profits if profit > 0) / len(profits)
+        if win_rate >= LOW_WINRATE_THRESHOLD:
+            continue
+        if (pattern, bias) in recently_alerted:
+            continue
+
+        session.add(Alert(
+            type="low_winrate_setup",
+            message=(
+                f"{pattern} + {bias or 'any'}: ชนะแค่ {win_rate:.0%} "
+                f"({len(profits)} เทรด) - setup นี้ประวัติไม่ดี พิจารณาใหม่"
+            ),
+            trigger_data={
+                "pattern": pattern,
+                "bias": bias,
+                "win_rate": win_rate,
+                "count": len(profits),
+            },
+            sent_at=datetime.now(timezone.utc),
+            acknowledged=False,
+        ))
+
+
+async def _check_rescue_ineffective(session: AsyncSession, trades: list) -> None:
+    trades_with_data = [
+        t for t in trades
+        if t.profit is not None and t.is_rescue is not None
+    ]
+    rescue = [t for t in trades_with_data if t.is_rescue]
+    initial = [t for t in trades_with_data if not t.is_rescue]
+
+    if len(rescue) < 5 or len(initial) < 5:
+        return
+
+    rescue_wr = sum(1 for t in rescue if float(t.profit) > 0) / len(rescue)
+    initial_wr = sum(1 for t in initial if float(t.profit) > 0) / len(initial)
+
+    if rescue_wr >= RESCUE_WINRATE_THRESHOLD:
+        return
+    if (initial_wr - rescue_wr) <= RESCUE_DELTA_THRESHOLD:
+        return
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=ALERT_COOLDOWN_HOURS)
+    existing = await session.execute(
+        select(Alert).where(
+            Alert.type == "rescue_ineffective",
+            Alert.sent_at >= cutoff,
+        )
+    )
+    if existing.scalar_one_or_none() is not None:
+        return
+
+    session.add(Alert(
+        type="rescue_ineffective",
+        message=(
+            f"ไม้แก้ชนะแค่ {rescue_wr:.0%} vs ไม้เดิม {initial_wr:.0%}"
+            f" - ข้อมูลบอกว่าตัดขาดทุนแล้วเริ่มใหม่ดีกว่า"
+        ),
+        trigger_data={
+            "rescue_win_rate": rescue_wr,
+            "initial_win_rate": initial_wr,
+            "rescue_count": len(rescue),
+        },
+        sent_at=datetime.now(timezone.utc),
+        acknowledged=False,
+    ))
 
 
 async def _check_double_down(session: AsyncSession, event: TradeEventSchema) -> None:

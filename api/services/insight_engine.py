@@ -52,6 +52,9 @@ async def run_insight_engine(session: AsyncSession) -> None:
     await _compute_post_close_run(session, trades)
     await session.commit()
 
+    from services.alert_manager import check_insight_alerts
+    await check_insight_alerts(session, tagged, trades)
+
 
 async def _compute_time_bias(session: AsyncSession, df: pd.DataFrame) -> None:
     hourly = df.groupby("hour").agg(
