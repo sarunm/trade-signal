@@ -36,7 +36,7 @@ function AlertRow({ alert, onAcknowledge, muted }) {
   )
 }
 
-export default function AlertsPanel({ data, error, onAcknowledge }) {
+export default function AlertsPanel({ data, error, onAcknowledge, onAcknowledgeAll }) {
   const alerts = data ?? []
   const unacked = alerts.filter(a => !a.acknowledged)
   const acked = alerts.filter(a => a.acknowledged)
@@ -61,6 +61,14 @@ export default function AlertsPanel({ data, error, onAcknowledge }) {
           <span className="bg-red-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
             {unacked.length}
           </span>
+        )}
+        {unacked.length > 0 && onAcknowledgeAll && (
+          <button
+            onClick={onAcknowledgeAll}
+            className="text-xs text-gray-500 hover:text-white ml-auto px-2 py-0.5 border border-gray-700 rounded"
+          >
+            Ack All
+          </button>
         )}
         {error && <span className="text-xs text-red-400 ml-auto">Stale</span>}
       </div>
