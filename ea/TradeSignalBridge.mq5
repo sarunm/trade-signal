@@ -150,6 +150,10 @@ void SyncHistoryDeals(int days_back)
          open_time = (datetime)HistoryOrderGetInteger(order_ticket, ORDER_TIME_SETUP);
       }
 
+      // Always use DEAL_POSITION_ID as canonical ticket so ENTRY_IN and ENTRY_OUT upsert onto the same row
+      ulong position_id_in = (ulong)HistoryDealGetInteger(deal_ticket, DEAL_POSITION_ID);
+      ulong canonical_ticket = (position_id_in > 0) ? position_id_in : deal_ticket;
+
       string body;
       if(deal_entry == DEAL_ENTRY_IN) {
          body = StringFormat(
@@ -173,7 +177,7 @@ void SyncHistoryDeals(int days_back)
             "\"swap\":%.2f,"
             "\"commission\":%.2f"
             "}",
-            deal_ticket, InpSymbol, direction,
+            canonical_ticket, InpSymbol, direction,
             F(deal_price), volume,
             NullOrStr(tp), NullOrStr(sl),
             ISOTime(open_time), ISOTime(deal_time),
@@ -352,7 +356,10 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
 
    if(trans.type == TRADE_TRANSACTION_DEAL_ADD && trans.deal > 0) {
       if(HistoryDealSelect(trans.deal)) {
-         ticket      = (ulong)HistoryDealGetInteger(trans.deal, DEAL_TICKET);
+         // Always use DEAL_POSITION_ID as canonical ticket — both ENTRY_IN and ENTRY_OUT
+         // upsert onto the same row regardless of whether deal_ticket == position_id
+         ulong position_id = (ulong)HistoryDealGetInteger(trans.deal, DEAL_POSITION_ID);
+         ticket      = (position_id > 0) ? position_id : (ulong)HistoryDealGetInteger(trans.deal, DEAL_TICKET);
          open_price  = HistoryDealGetDouble(trans.deal, DEAL_PRICE);
          volume      = HistoryDealGetDouble(trans.deal, DEAL_VOLUME);
          profit      = HistoryDealGetDouble(trans.deal, DEAL_PROFIT);
@@ -364,9 +371,6 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
             close_price = open_price;
             close_time  = fill_time;
             open_price  = 0;
-            // Use position ticket so close event upserts onto the opening row
-            ulong position_id = (ulong)HistoryDealGetInteger(trans.deal, DEAL_POSITION_ID);
-            if(position_id > 0) ticket = position_id;
          }
       }
    }

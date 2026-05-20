@@ -18,7 +18,7 @@ function isNear(price, level, range) {
 function LevelRow({ label, value, currentPrice, range, colorClass }) {
   const near = isNear(currentPrice, value, range)
   return (
-    <div className={`grid grid-cols-[4.5rem_1fr] items-center rounded px-2 py-0.5 text-xs ${near ? 'bg-yellow-900/70 text-yellow-100' : colorClass}`}>
+    <div className={`grid grid-cols-[4.5rem_1fr] items-center rounded px-2 py-0.5 text-xs ${near ? 'bg-yellow-500/30 text-yellow-100 animate-pulse' : colorClass}`}>
       <span className="text-gray-500">{label}</span>
       <span className="text-right font-mono">{fmt(value)}</span>
     </div>
@@ -68,7 +68,7 @@ export default function FibPanel({ data, error, accountData }) {
             currentPrice={price} range={range} colorClass="text-green-400" />
         ))}
 
-        <div className={`grid grid-cols-[4.5rem_1fr] items-center border-y border-gray-700 px-2 py-1 my-1 ${isNear(price, PP, range) ? 'bg-yellow-900/70 text-yellow-100' : 'text-gray-300'}`}>
+        <div className={`grid grid-cols-[4.5rem_1fr] items-center border-y border-gray-700 px-2 py-1 my-1 ${isNear(price, PP, range) ? 'bg-yellow-500/30 text-yellow-100 animate-pulse' : 'text-gray-300'}`}>
           <span className="text-gray-500">PP</span>
           <span className="text-right font-mono">{fmt(PP)}</span>
         </div>
