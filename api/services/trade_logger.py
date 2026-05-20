@@ -3,6 +3,7 @@ from sqlalchemy import select
 
 from models.trade import Trade
 from schemas.trade_event import TradeEventSchema
+from services.entry_context import fill_entry_context
 
 
 async def upsert_trade(session: AsyncSession, event: TradeEventSchema) -> Trade:
@@ -32,6 +33,9 @@ async def upsert_trade(session: AsyncSession, event: TradeEventSchema) -> Trade:
         value = getattr(event, field)
         if value is not None:
             setattr(trade, field, value)
+
+    if event.open_price is not None and event.close_price is None:
+        await fill_entry_context(session, trade)
 
     await session.commit()
     await session.refresh(trade)

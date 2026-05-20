@@ -162,3 +162,70 @@ async def test_fill_entry_candle_returns_none_when_no_pattern_any_tf(db_session)
 
     assert trade.entry_candle == "none"
     assert trade.entry_candle_tf is None
+
+
+@pytest.mark.asyncio
+async def test_fill_is_rescue_true_when_same_direction_open(db_session):
+    existing = _make_trade(ticket=999, open_price=Decimal("1990.00"))
+    existing.close_time = None
+    db_session.add(existing)
+    await db_session.commit()
+
+    new_trade = _make_trade(ticket=1001)
+    new_trade.close_time = None
+    db_session.add(new_trade)
+    await db_session.commit()
+
+    await fill_entry_context(db_session, new_trade)
+
+    assert new_trade.is_rescue is True
+
+
+@pytest.mark.asyncio
+async def test_fill_is_rescue_false_when_no_existing(db_session):
+    trade = _make_trade(ticket=1001)
+    trade.close_time = None
+    db_session.add(trade)
+    await db_session.commit()
+
+    await fill_entry_context(db_session, trade)
+
+    assert trade.is_rescue is False
+
+
+@pytest.mark.asyncio
+async def test_entry_context_auto_filled_on_trade_event(client, db_session):
+    fib = FibLevel(
+        symbol="XAUUSD",
+        timeframe="D",
+        swing_high=2050.0,
+        swing_low=1950.0,
+        direction="bullish",
+        levels={"0.000": 1983.33, "0.236": 2006.93},
+        extensions={"0.236": 1959.73},
+        computed_at=datetime(2026, 5, 19, 8, 0, tzinfo=timezone.utc),
+    )
+    db_session.add(fib)
+    await db_session.commit()
+
+    payload = {
+        "transaction_type": "ENTRY_IN",
+        "ticket": 2001,
+        "symbol": "XAUUSD",
+        "direction": "buy",
+        "order_type": "market",
+        "order_state": "filled",
+        "open_price": "1962.00",
+        "open_time": "2026-05-19T10:00:00+00:00",
+    }
+    resp = await client.post("/api/trade-events", json=payload)
+    assert resp.status_code == 201
+
+    from sqlalchemy import select
+
+    result = await db_session.execute(
+        select(Trade).where(Trade.ticket == 2001, Trade.is_paper == False)
+    )
+    trade = result.scalar_one()
+    assert trade.near_fib_level is not None
+    assert trade.is_rescue is not None
