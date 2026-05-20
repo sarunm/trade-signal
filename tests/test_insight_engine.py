@@ -307,3 +307,31 @@ async def test_rescue_outcome_insight_created(db_session):
     data = insights[0].data
     assert pytest.approx(data["rescue_win_rate"], abs=0.01) == 2 / 5
     assert pytest.approx(data["initial_win_rate"], abs=0.01) == 4 / 5
+
+
+@pytest.mark.asyncio
+async def test_best_combo_insight_created(db_session):
+    """Creates best_combo insight showing top 3 winning combinations."""
+    # UTC 10:00 = ICT 17:00 = NY by the existing session assignment.
+    for i in range(5):
+        t = _make_trade(hour=10, profit=200.0, minute=i)
+        t.setup_pattern = "double_bottom"
+        t.trade_bias = "bullish"
+        t.near_fib_level = "S0.236"
+        db_session.add(t)
+    await db_session.commit()
+
+    await run_insight_engine(db_session)
+
+    result = await db_session.execute(
+        select(Insight).where(
+            Insight.type == "best_combo",
+            Insight.is_active == True,
+        )
+    )
+    insights = result.scalars().all()
+    assert len(insights) == 1
+    assert len(insights[0].data["combos"]) >= 1
+    combo = insights[0].data["combos"][0]
+    assert combo["pattern"] == "double_bottom"
+    assert combo["win_rate"] == pytest.approx(1.0)

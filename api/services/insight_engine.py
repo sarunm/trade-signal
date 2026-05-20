@@ -14,6 +14,7 @@ MIN_ENTRY_SAMPLE = 5
 MIN_CONFIDENCE = 0.6
 # XAUUSD: 1 point = 0.01 price unit → 200 pts = 20,000 pips
 LARGE_ADVERSE_THRESHOLD_PTS = 200.0
+_ICT = timezone(timedelta(hours=7))
 
 
 async def run_insight_engine(session: AsyncSession) -> None:
@@ -47,6 +48,7 @@ async def run_insight_engine(session: AsyncSession) -> None:
     await _compute_setup_win_rate(session, tagged)
     await _compute_fib_proximity_win_rate(session, tagged)
     await _compute_rescue_outcome(session, trades)
+    await _compute_best_combo(session, tagged)
     await session.commit()
 
 
@@ -94,6 +96,12 @@ def _assign_session(hour: int) -> str:
     if 13 <= hour < 22:
         return "NY"
     return "Asia"  # hours 0-6 and 22-23: post-NY pre-Asia overlap treated as Asia
+
+
+def _as_utc(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
 
 
 async def _compute_session_bias(session: AsyncSession, df: pd.DataFrame) -> None:
@@ -515,5 +523,78 @@ async def _compute_rescue_outcome(session: AsyncSession, trades: list) -> None:
             "initial_win_rate": initial_wr,
             "rescue_count": len(rescue),
             "initial_count": len(initial),
+        },
+    ))
+
+
+async def _compute_best_combo(session: AsyncSession, tagged: list) -> None:
+    records = [
+        {
+            "session": _assign_session(_as_utc(t.open_time).astimezone(_ICT).hour),
+            "setup_pattern": t.setup_pattern,
+            "trade_bias": t.trade_bias,
+            "near_fib_level": t.near_fib_level,
+            "is_win": float(t.profit) > 0,
+            "profit": float(t.profit),
+        }
+        for t in tagged
+        if t.profit is not None and t.open_time is not None
+    ]
+    if not records:
+        return
+
+    df = pd.DataFrame(records)
+    grouped = df.groupby(
+        ["session", "setup_pattern", "trade_bias", "near_fib_level"]
+    ).agg(
+        count=("is_win", "count"),
+        win_rate=("is_win", "mean"),
+        avg_profit=("profit", "mean"),
+    ).reset_index()
+
+    qualified = (
+        grouped[grouped["count"] >= MIN_ENTRY_SAMPLE]
+        .sort_values("win_rate", ascending=False)
+        .head(3)
+    )
+    if qualified.empty:
+        return
+
+    top = qualified.iloc[0]
+
+    old = await session.execute(
+        select(Insight).where(
+            Insight.type == "best_combo",
+            Insight.is_active == True,
+        )
+    )
+    for ins in old.scalars().all():
+        ins.is_active = False
+
+    session.add(Insight(
+        type="best_combo",
+        description=(
+            f"Best: {top['session']} + {top['setup_pattern']}"
+            f" + {top['trade_bias'] or 'any'}"
+            f" + near {top['near_fib_level'] or 'any'}"
+            f" -> {float(top['win_rate']):.0%} win rate ({int(top['count'])} เทรด)"
+        ),
+        confidence=float(top["win_rate"]),
+        sample_size=int(qualified["count"].sum()),
+        discovered_at=datetime.now(timezone.utc),
+        is_active=True,
+        data={
+            "combos": [
+                {
+                    "session": row["session"],
+                    "pattern": row["setup_pattern"],
+                    "bias": row["trade_bias"],
+                    "fib_level": row["near_fib_level"],
+                    "win_rate": float(row["win_rate"]),
+                    "avg_profit": float(row["avg_profit"]),
+                    "count": int(row["count"]),
+                }
+                for _, row in qualified.iterrows()
+            ]
         },
     ))
