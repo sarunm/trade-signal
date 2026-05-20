@@ -335,3 +335,61 @@ async def test_best_combo_insight_created(db_session):
     combo = insights[0].data["combos"][0]
     assert combo["pattern"] == "double_bottom"
     assert combo["win_rate"] == pytest.approx(1.0)
+
+
+@pytest.mark.asyncio
+async def test_post_close_run_backfills_trade(db_session):
+    """Backfills post_close_run_pts for trades where it's null."""
+    close_time = datetime(2026, 5, 19, 12, 0, tzinfo=timezone.utc)
+    trade = _make_trade(hour=10, profit=200.0)
+    trade.close_price = Decimal("1960.00")
+    trade.close_time = close_time
+    trade.direction = Direction.buy
+    trade.post_close_run_pts = None
+    db_session.add(trade)
+
+    # H1 bar after close: high = 1975.00, run = 1975 - 1960 = 15
+    db_session.add(PriceBar(
+        symbol="XAUUSD",
+        timeframe=Timeframe.H1,
+        time=datetime(2026, 5, 19, 12, 0, tzinfo=timezone.utc),
+        open=Decimal("1960.00"),
+        high=Decimal("1975.00"),
+        low=Decimal("1958.00"),
+        close=Decimal("1970.00"),
+    ))
+    await db_session.commit()
+
+    await run_insight_engine(db_session)
+
+    await db_session.refresh(trade)
+    assert trade.post_close_run_pts is not None
+    assert float(trade.post_close_run_pts) == pytest.approx(15.0, abs=0.1)
+
+
+@pytest.mark.asyncio
+async def test_post_close_run_insight_created(db_session):
+    """Creates post_close_run insight when winning tagged trades have run data."""
+    close_time = datetime(2026, 5, 19, 12, 0, tzinfo=timezone.utc)
+
+    for i in range(3):
+        t = _make_trade(hour=10, profit=200.0, minute=i)
+        t.close_price = Decimal("1960.00")
+        t.close_time = close_time + timedelta(minutes=i)
+        t.direction = Direction.buy
+        t.setup_pattern = "double_bottom"
+        t.post_close_run_pts = Decimal(str(100 + i * 10))
+        db_session.add(t)
+
+    await db_session.commit()
+    await run_insight_engine(db_session)
+
+    result = await db_session.execute(
+        select(Insight).where(
+            Insight.type == "post_close_run",
+            Insight.is_active == True,
+        )
+    )
+    insights = result.scalars().all()
+    assert len(insights) == 1
+    assert "double_bottom" in insights[0].data["by_pattern"]

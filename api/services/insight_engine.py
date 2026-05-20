@@ -49,6 +49,7 @@ async def run_insight_engine(session: AsyncSession) -> None:
     await _compute_fib_proximity_win_rate(session, tagged)
     await _compute_rescue_outcome(session, trades)
     await _compute_best_combo(session, tagged)
+    await _compute_post_close_run(session, trades)
     await session.commit()
 
 
@@ -597,4 +598,95 @@ async def _compute_best_combo(session: AsyncSession, tagged: list) -> None:
                 for _, row in qualified.iterrows()
             ]
         },
+    ))
+
+
+async def _compute_post_close_run(session: AsyncSession, trades: list) -> None:
+    to_backfill = [
+        t for t in trades
+        if t.close_price is not None
+        and t.close_time is not None
+        and t.post_close_run_pts is None
+    ]
+    for trade in to_backfill:
+        close_price = float(trade.close_price)
+        close_time = _as_utc(trade.close_time)
+        end_time = close_time + timedelta(hours=8)
+
+        if trade.direction == Direction.buy:
+            bar_res = await session.execute(
+                select(func.max(PriceBar.high)).where(
+                    PriceBar.symbol == trade.symbol,
+                    PriceBar.timeframe == Timeframe.H1,
+                    PriceBar.time >= close_time,
+                    PriceBar.time <= end_time,
+                )
+            )
+            extreme = bar_res.scalar()
+            if extreme is not None:
+                run = float(extreme) - close_price
+                if run > 0:
+                    trade.post_close_run_pts = round(run, 2)
+        else:
+            bar_res = await session.execute(
+                select(func.min(PriceBar.low)).where(
+                    PriceBar.symbol == trade.symbol,
+                    PriceBar.timeframe == Timeframe.H1,
+                    PriceBar.time >= close_time,
+                    PriceBar.time <= end_time,
+                )
+            )
+            extreme = bar_res.scalar()
+            if extreme is not None:
+                run = close_price - float(extreme)
+                if run > 0:
+                    trade.post_close_run_pts = round(run, 2)
+
+    winning_tagged = [
+        t for t in trades
+        if t.setup_pattern is not None
+        and t.profit is not None
+        and float(t.profit) > 0
+        and t.post_close_run_pts is not None
+    ]
+    if not winning_tagged:
+        return
+
+    df = pd.DataFrame([
+        {"setup_pattern": t.setup_pattern, "run_pts": float(t.post_close_run_pts)}
+        for t in winning_tagged
+    ])
+    grouped = df.groupby("setup_pattern").agg(
+        count=("run_pts", "count"),
+        avg_run=("run_pts", "mean"),
+    ).reset_index()
+
+    qualified = grouped[grouped["count"] >= 3]
+    if qualified.empty:
+        return
+
+    old = await session.execute(
+        select(Insight).where(
+            Insight.type == "post_close_run",
+            Insight.is_active == True,
+        )
+    )
+    for ins in old.scalars().all():
+        ins.is_active = False
+
+    by_pattern = {
+        row["setup_pattern"]: float(row["avg_run"])
+        for _, row in qualified.iterrows()
+    }
+    parts = " | ".join(f"{p} -> {r:.0f} pts" for p, r in by_pattern.items())
+    overall_avg = float(df["run_pts"].mean())
+
+    session.add(Insight(
+        type="post_close_run",
+        description=f"ราคาวิ่งต่อหลังปิด: {parts}",
+        confidence=1.0,
+        sample_size=len(winning_tagged),
+        discovered_at=datetime.now(timezone.utc),
+        is_active=True,
+        data={"by_pattern": by_pattern, "overall_avg": overall_avg},
     ))
