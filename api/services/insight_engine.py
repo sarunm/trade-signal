@@ -45,6 +45,7 @@ async def run_insight_engine(session: AsyncSession) -> None:
     await _compute_large_adverse_recovery(session, trades)
     tagged = [t for t in trades if t.setup_pattern is not None]
     await _compute_setup_win_rate(session, tagged)
+    await _compute_fib_proximity_win_rate(session, tagged)
     await session.commit()
 
 
@@ -403,3 +404,73 @@ async def _compute_setup_win_rate(session: AsyncSession, tagged: list) -> None:
                 "trades": int(row["count"]),
             },
         ))
+
+
+async def _compute_fib_proximity_win_rate(session: AsyncSession, tagged: list) -> None:
+    records = [
+        {
+            "bucket": (
+                "close" if float(t.fib_distance_pts) < 5
+                else "medium" if float(t.fib_distance_pts) < 15
+                else "far"
+            ),
+            "is_win": float(t.profit) > 0,
+        }
+        for t in tagged
+        if t.fib_distance_pts is not None and t.profit is not None
+    ]
+    if not records:
+        return
+
+    df = pd.DataFrame(records)
+    grouped = df.groupby("bucket").agg(
+        count=("is_win", "count"),
+        win_rate=("is_win", "mean"),
+    ).reset_index()
+
+    qualified = grouped[grouped["count"] >= MIN_ENTRY_SAMPLE]
+    if len(qualified) < 2:
+        return
+
+    rates = qualified["win_rate"].values
+    spread = float(max(rates) - min(rates))
+    if spread < 0.20:
+        return
+
+    bucket_stats = {
+        row["bucket"]: (float(row["win_rate"]), int(row["count"]))
+        for _, row in grouped.iterrows()
+    }
+
+    def fmt(name):
+        if name not in bucket_stats:
+            return "-"
+        return f"{bucket_stats[name][0]:.0%}"
+
+    total = int(grouped["count"].sum())
+
+    old = await session.execute(
+        select(Insight).where(
+            Insight.type == "fib_proximity_win_rate",
+            Insight.is_active == True,
+        )
+    )
+    for ins in old.scalars().all():
+        ins.is_active = False
+
+    session.add(Insight(
+        type="fib_proximity_win_rate",
+        description=(
+            f"Entry ห่าง Fib < 5 pts -> {fmt('close')} | "
+            f"5-15 pts -> {fmt('medium')} | "
+            f">15 pts -> {fmt('far')} ({total} เทรด)"
+        ),
+        confidence=spread,
+        sample_size=total,
+        discovered_at=datetime.now(timezone.utc),
+        is_active=True,
+        data={
+            bucket: {"win_rate": stats[0], "count": stats[1]}
+            for bucket, stats in bucket_stats.items()
+        },
+    ))

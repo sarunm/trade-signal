@@ -227,3 +227,45 @@ async def test_setup_win_rate_insight_created(db_session):
     assert len(insights) == 1
     assert insights[0].sample_size == 6
     assert pytest.approx(float(insights[0].confidence), abs=0.01) == 4 / 6
+
+
+@pytest.mark.asyncio
+async def test_fib_proximity_win_rate_insight_created(db_session):
+    """Creates insight when close/far buckets differ by >= 20pp."""
+    for i in range(4):
+        t = _make_trade(hour=10, profit=200.0, minute=i)
+        t.setup_pattern = "double_bottom"
+        t.near_fib_level = "S0.236"
+        t.fib_distance_pts = Decimal("2.0")
+        db_session.add(t)
+    t = _make_trade(hour=10, profit=-100.0, minute=4)
+    t.setup_pattern = "double_bottom"
+    t.near_fib_level = "S0.236"
+    t.fib_distance_pts = Decimal("2.0")
+    db_session.add(t)
+
+    t_win = _make_trade(hour=11, profit=200.0, minute=0)
+    t_win.setup_pattern = "double_bottom"
+    t_win.near_fib_level = "R0.618"
+    t_win.fib_distance_pts = Decimal("20.0")
+    db_session.add(t_win)
+    for i in range(1, 5):
+        t = _make_trade(hour=11, profit=-100.0, minute=i)
+        t.setup_pattern = "double_bottom"
+        t.near_fib_level = "R0.618"
+        t.fib_distance_pts = Decimal("20.0")
+        db_session.add(t)
+
+    await db_session.commit()
+
+    await run_insight_engine(db_session)
+
+    result = await db_session.execute(
+        select(Insight).where(
+            Insight.type == "fib_proximity_win_rate",
+            Insight.is_active == True,
+        )
+    )
+    insights = result.scalars().all()
+    assert len(insights) == 1
+    assert insights[0].confidence >= 0.20
