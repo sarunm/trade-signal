@@ -176,3 +176,30 @@ async def test_patch_tag_returns_404_for_unknown_ticket(client, db_session):
         json={"setup_pattern": "double_bottom"},
     )
     assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_list_trades_respects_offset(client, db_session):
+    for i in range(5):
+        trade = Trade(
+            id=uuid.uuid4(),
+            ticket=5000 + i,
+            symbol="XAUUSD",
+            direction=Direction.buy,
+            order_state=OrderState.filled,
+            open_price=Decimal("2000.00"),
+            close_price=Decimal("2010.00"),
+            open_time=datetime(2026, 5, 19, i, 0, tzinfo=timezone.utc),
+            close_time=datetime(2026, 5, 19, i, 1, tzinfo=timezone.utc),
+            profit=Decimal("100.00"),
+            is_paper=False,
+        )
+        db_session.add(trade)
+    await db_session.commit()
+
+    resp_all = await client.get("/api/trades?state=closed&limit=10&offset=0")
+    resp_offset = await client.get("/api/trades?state=closed&limit=10&offset=2")
+    assert resp_all.status_code == 200
+    assert resp_offset.status_code == 200
+    assert len(resp_all.json()) == 5
+    assert len(resp_offset.json()) == 3

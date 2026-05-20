@@ -36,3 +36,14 @@ async def acknowledge_alert(
     await session.commit()
     await session.refresh(alert)
     return alert
+
+
+@router.post("/alerts/acknowledge-all")
+async def acknowledge_all_alerts(session: AsyncSession = Depends(get_session)):
+    result = await session.execute(select(Alert).where(Alert.acknowledged == False))
+    alerts = result.scalars().all()
+    count = len(alerts)
+    for alert in alerts:
+        alert.acknowledged = True
+    await session.commit()
+    return {"acknowledged": count}
