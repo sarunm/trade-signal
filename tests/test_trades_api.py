@@ -83,3 +83,40 @@ async def test_list_closed_trades_limit(client, db_session):
 async def test_invalid_state_returns_422(client):
     response = await client.get("/api/trades?state=invalid")
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_trade_response_includes_entry_context_fields(client, db_session):
+    trade = Trade(
+        id=uuid.uuid4(),
+        ticket=1001,
+        symbol="XAUUSD",
+        direction=Direction.buy,
+        order_state=OrderState.filled,
+        open_price=Decimal("2000.00"),
+        open_time=datetime(2026, 5, 19, 10, 0, tzinfo=timezone.utc),
+        is_paper=False,
+        setup_pattern="double_bottom",
+        trade_bias="bullish",
+        near_fib_level="S0.235",
+        fib_distance_pts=Decimal("3.50"),
+        entry_candle="pin_bar_bullish",
+        entry_candle_tf="H1",
+        is_rescue=False,
+    )
+    db_session.add(trade)
+    await db_session.commit()
+
+    resp = await client.get("/api/trades?state=open")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 1
+    t = data[0]
+    assert t["setup_pattern"] == "double_bottom"
+    assert t["trade_bias"] == "bullish"
+    assert t["near_fib_level"] == "S0.235"
+    assert float(t["fib_distance_pts"]) == pytest.approx(3.5)
+    assert t["entry_candle"] == "pin_bar_bullish"
+    assert t["entry_candle_tf"] == "H1"
+    assert t["is_rescue"] is False
+    assert t["post_close_run_pts"] is None
