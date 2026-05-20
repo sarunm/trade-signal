@@ -120,3 +120,59 @@ async def test_trade_response_includes_entry_context_fields(client, db_session):
     assert t["entry_candle_tf"] == "H1"
     assert t["is_rescue"] is False
     assert t["post_close_run_pts"] is None
+
+
+@pytest.mark.asyncio
+async def test_patch_tag_updates_setup_pattern(client, db_session):
+    trade = Trade(
+        id=uuid.uuid4(),
+        ticket=3001,
+        symbol="XAUUSD",
+        direction=Direction.buy,
+        order_state=OrderState.filled,
+        open_price=Decimal("2000.00"),
+        open_time=datetime(2026, 5, 19, 10, 0, tzinfo=timezone.utc),
+        is_paper=False,
+    )
+    db_session.add(trade)
+    await db_session.commit()
+
+    resp = await client.patch(
+        "/api/trades/3001/tag",
+        json={"setup_pattern": "double_bottom", "trade_bias": "bullish"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["setup_pattern"] == "double_bottom"
+    assert data["trade_bias"] == "bullish"
+
+
+@pytest.mark.asyncio
+async def test_patch_tag_rejects_invalid_pattern(client, db_session):
+    trade = Trade(
+        id=uuid.uuid4(),
+        ticket=3002,
+        symbol="XAUUSD",
+        direction=Direction.buy,
+        order_state=OrderState.filled,
+        open_price=Decimal("2000.00"),
+        open_time=datetime(2026, 5, 19, 10, 0, tzinfo=timezone.utc),
+        is_paper=False,
+    )
+    db_session.add(trade)
+    await db_session.commit()
+
+    resp = await client.patch(
+        "/api/trades/3002/tag",
+        json={"setup_pattern": "not_a_real_pattern"},
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_patch_tag_returns_404_for_unknown_ticket(client, db_session):
+    resp = await client.patch(
+        "/api/trades/99999/tag",
+        json={"setup_pattern": "double_bottom"},
+    )
+    assert resp.status_code == 404
