@@ -269,3 +269,41 @@ async def test_fib_proximity_win_rate_insight_created(db_session):
     insights = result.scalars().all()
     assert len(insights) == 1
     assert insights[0].confidence >= 0.20
+
+
+@pytest.mark.asyncio
+async def test_rescue_outcome_insight_created(db_session):
+    """Creates insight comparing rescue vs initial trade win rates."""
+    # 5 rescue trades: 40% win rate
+    for i in range(2):
+        t = _make_trade(hour=10, profit=200.0, minute=i)
+        t.is_rescue = True
+        db_session.add(t)
+    for i in range(2, 5):
+        t = _make_trade(hour=10, profit=-100.0, minute=i)
+        t.is_rescue = True
+        db_session.add(t)
+
+    # 5 initial trades: 80% win rate
+    for i in range(4):
+        t = _make_trade(hour=11, profit=200.0, minute=i)
+        t.is_rescue = False
+        db_session.add(t)
+    t = _make_trade(hour=11, profit=-100.0, minute=4)
+    t.is_rescue = False
+    db_session.add(t)
+
+    await db_session.commit()
+    await run_insight_engine(db_session)
+
+    result = await db_session.execute(
+        select(Insight).where(
+            Insight.type == "rescue_outcome",
+            Insight.is_active == True,
+        )
+    )
+    insights = result.scalars().all()
+    assert len(insights) == 1
+    data = insights[0].data
+    assert pytest.approx(data["rescue_win_rate"], abs=0.01) == 2 / 5
+    assert pytest.approx(data["initial_win_rate"], abs=0.01) == 4 / 5

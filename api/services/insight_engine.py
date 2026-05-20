@@ -46,6 +46,7 @@ async def run_insight_engine(session: AsyncSession) -> None:
     tagged = [t for t in trades if t.setup_pattern is not None]
     await _compute_setup_win_rate(session, tagged)
     await _compute_fib_proximity_win_rate(session, tagged)
+    await _compute_rescue_outcome(session, trades)
     await session.commit()
 
 
@@ -472,5 +473,47 @@ async def _compute_fib_proximity_win_rate(session: AsyncSession, tagged: list) -
         data={
             bucket: {"win_rate": stats[0], "count": stats[1]}
             for bucket, stats in bucket_stats.items()
+        },
+    ))
+
+
+async def _compute_rescue_outcome(session: AsyncSession, trades: list) -> None:
+    trades_with_data = [
+        t for t in trades
+        if t.profit is not None and t.is_rescue is not None
+    ]
+    rescue = [t for t in trades_with_data if t.is_rescue]
+    initial = [t for t in trades_with_data if not t.is_rescue]
+
+    if len(rescue) < MIN_ENTRY_SAMPLE or len(initial) < MIN_ENTRY_SAMPLE:
+        return
+
+    rescue_wr = sum(1 for t in rescue if float(t.profit) > 0) / len(rescue)
+    initial_wr = sum(1 for t in initial if float(t.profit) > 0) / len(initial)
+
+    old = await session.execute(
+        select(Insight).where(
+            Insight.type == "rescue_outcome",
+            Insight.is_active == True,
+        )
+    )
+    for ins in old.scalars().all():
+        ins.is_active = False
+
+    session.add(Insight(
+        type="rescue_outcome",
+        description=(
+            f"ไม้แก้: ชนะ {rescue_wr:.0%} ({len(rescue)} เทรด) "
+            f"vs ไม้เดิม: ชนะ {initial_wr:.0%} ({len(initial)} เทรด)"
+        ),
+        confidence=max(rescue_wr, initial_wr),
+        sample_size=len(trades_with_data),
+        discovered_at=datetime.now(timezone.utc),
+        is_active=True,
+        data={
+            "rescue_win_rate": rescue_wr,
+            "initial_win_rate": initial_wr,
+            "rescue_count": len(rescue),
+            "initial_count": len(initial),
         },
     ))
