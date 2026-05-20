@@ -10,6 +10,7 @@ from models.price_bar import PriceBar, Timeframe
 from services.pattern_detector import detect_pin_bar, detect_engulfing
 
 MIN_SAMPLE_SIZE = 10
+MIN_ENTRY_SAMPLE = 5
 MIN_CONFIDENCE = 0.6
 # XAUUSD: 1 point = 0.01 price unit → 200 pts = 20,000 pips
 LARGE_ADVERSE_THRESHOLD_PTS = 200.0
@@ -42,6 +43,8 @@ async def run_insight_engine(session: AsyncSession) -> None:
     await _compute_pattern_win_rate(session, trades)
     await _compute_early_exit_rate(session, trades)
     await _compute_large_adverse_recovery(session, trades)
+    tagged = [t for t in trades if t.setup_pattern is not None]
+    await _compute_setup_win_rate(session, tagged)
     await session.commit()
 
 
@@ -341,3 +344,62 @@ async def _compute_large_adverse_recovery(session: AsyncSession, trades: list) -
             "avg_adverse_pts": avg_adverse,
         },
     ))
+
+
+async def _compute_setup_win_rate(session: AsyncSession, tagged: list) -> None:
+    if not tagged:
+        return
+
+    records = [
+        {
+            "setup_pattern": t.setup_pattern,
+            "trade_bias": t.trade_bias,
+            "near_fib_level": t.near_fib_level,
+            "is_win": float(t.profit) > 0,
+            "profit": float(t.profit),
+        }
+        for t in tagged
+        if t.profit is not None
+    ]
+    if not records:
+        return
+
+    df = pd.DataFrame(records)
+    grouped = df.groupby(["setup_pattern", "trade_bias", "near_fib_level"]).agg(
+        count=("is_win", "count"),
+        win_rate=("is_win", "mean"),
+        avg_profit=("profit", "mean"),
+    ).reset_index()
+
+    qualified = grouped[grouped["count"] >= MIN_ENTRY_SAMPLE]
+    if qualified.empty:
+        return
+
+    old = await session.execute(
+        select(Insight).where(Insight.type == "setup_win_rate", Insight.is_active == True)
+    )
+    for ins in old.scalars().all():
+        ins.is_active = False
+
+    for _, row in qualified.iterrows():
+        session.add(Insight(
+            type="setup_win_rate",
+            description=(
+                f"{row['setup_pattern']} + {row['trade_bias'] or 'any'}"
+                f" + near {row['near_fib_level'] or 'any'}"
+                f" -> ชนะ {float(row['win_rate']):.0%} ({int(row['count'])} เทรด)"
+                f" เฉลี่ย +฿{float(row['avg_profit']):.0f}"
+            ),
+            confidence=float(row["win_rate"]),
+            sample_size=int(row["count"]),
+            discovered_at=datetime.now(timezone.utc),
+            is_active=True,
+            data={
+                "pattern": row["setup_pattern"],
+                "bias": row["trade_bias"],
+                "fib_level": row["near_fib_level"],
+                "win_rate": float(row["win_rate"]),
+                "avg_profit": float(row["avg_profit"]),
+                "trades": int(row["count"]),
+            },
+        ))

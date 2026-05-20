@@ -196,3 +196,34 @@ async def test_large_adverse_recovery_no_insight_when_move_too_small(db_session)
         select(Insight).where(Insight.type == "large_adverse_recovery")
     )
     assert result.scalars().all() == []
+
+
+@pytest.mark.asyncio
+async def test_setup_win_rate_insight_created(db_session):
+    """Creates setup_win_rate insight when 5+ tagged trades qualify."""
+    for i in range(4):
+        t = _make_trade(hour=10, profit=200.0, minute=i)
+        t.setup_pattern = "double_bottom"
+        t.trade_bias = "bullish"
+        t.near_fib_level = "S0.236"
+        db_session.add(t)
+    for i in range(4, 6):
+        t = _make_trade(hour=11, profit=-100.0, minute=i)
+        t.setup_pattern = "double_bottom"
+        t.trade_bias = "bullish"
+        t.near_fib_level = "S0.236"
+        db_session.add(t)
+    await db_session.commit()
+
+    await run_insight_engine(db_session)
+
+    result = await db_session.execute(
+        select(Insight).where(
+            Insight.type == "setup_win_rate",
+            Insight.is_active == True,
+        )
+    )
+    insights = result.scalars().all()
+    assert len(insights) == 1
+    assert insights[0].sample_size == 6
+    assert pytest.approx(float(insights[0].confidence), abs=0.01) == 4 / 6
