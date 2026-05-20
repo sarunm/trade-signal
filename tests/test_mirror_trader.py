@@ -76,6 +76,21 @@ async def test_creates_mirror_trade_on_entry(db_session):
 
 
 @pytest.mark.asyncio
+async def test_mirror_trade_copies_account_id(db_session):
+    event = _entry_event()
+    event.account_id = 335297575
+
+    await create_mirror_trade(db_session, event)
+    await db_session.commit()
+
+    result = await db_session.execute(
+        select(Trade).where(Trade.is_paper == True)
+    )
+    paper = result.scalar_one()
+    assert paper.account_id == 335297575
+
+
+@pytest.mark.asyncio
 async def test_no_mirror_on_exit_event(db_session):
     event = _exit_event()
     await create_mirror_trade(db_session, event)

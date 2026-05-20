@@ -23,5 +23,6 @@ class AccountStateSchema(BaseModel):
 class PriceTickSchema(BaseModel):
     timestamp: datetime
     symbol: str
+    account_id: Optional[int] = None
     account: AccountStateSchema
     bars: Dict[str, OHLCVSchema]

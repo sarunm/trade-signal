@@ -7,6 +7,7 @@ import pandas as pd
 from models.trade import Trade, OrderState, Direction
 from models.insight import Insight
 from models.price_bar import PriceBar, Timeframe
+from models.account_snapshot import AccountSnapshot
 from services.pattern_detector import detect_pin_bar, detect_engulfing
 
 MIN_SAMPLE_SIZE = 10
@@ -17,16 +18,30 @@ LARGE_ADVERSE_THRESHOLD_PTS = 200.0
 _ICT = timezone(timedelta(hours=7))
 
 
-async def run_insight_engine(session: AsyncSession) -> None:
+async def _get_current_account_id(session: AsyncSession):
     result = await session.execute(
-        select(Trade).where(
-            Trade.is_paper == False,
-            Trade.order_state == OrderState.filled,
-            Trade.open_time.isnot(None),
-            Trade.close_time.isnot(None),
-            Trade.profit.isnot(None),
-        )
+        select(AccountSnapshot.account_id)
+        .where(AccountSnapshot.account_id.isnot(None))
+        .order_by(AccountSnapshot.timestamp.desc())
+        .limit(1)
     )
+    return result.scalar_one_or_none()
+
+
+async def run_insight_engine(session: AsyncSession) -> None:
+    account_id = await _get_current_account_id(session)
+
+    query = select(Trade).where(
+        Trade.is_paper == False,
+        Trade.order_state == OrderState.filled,
+        Trade.open_time.isnot(None),
+        Trade.close_time.isnot(None),
+        Trade.profit.isnot(None),
+    )
+    if account_id is not None:
+        query = query.where(Trade.account_id == account_id)
+
+    result = await session.execute(query)
     trades = result.scalars().all()
     if not trades:
         return

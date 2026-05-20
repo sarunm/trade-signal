@@ -15,6 +15,7 @@ async def save_price_tick(session: AsyncSession, tick: PriceTickSchema) -> None:
         margin=tick.account.margin,
         free_margin=tick.account.free_margin,
         floating_pl=tick.account.floating_pl,
+        account_id=tick.account_id,
     )
     session.add(snapshot)
 

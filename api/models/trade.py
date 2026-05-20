@@ -70,3 +70,4 @@ class Trade(Base):
     entry_candle_tf: Mapped[Optional[str]] = mapped_column(String(5), nullable=True)
     is_rescue: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     post_close_run_pts: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2), nullable=True)
+    account_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True, index=True)

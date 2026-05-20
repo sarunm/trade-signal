@@ -45,6 +45,7 @@ async def create_mirror_trade(session: AsyncSession, event: TradeEventSchema) ->
         open_time=event.open_time or datetime.now(timezone.utc),
         tp=paper_tp,
         sl=paper_sl,
+        account_id=event.account_id,
         is_paper=True,
         paper_mode=PaperMode.mirror,
         paper_exit_strategy=_strategy_label(tp_strategy, sl_strategy),

@@ -14,6 +14,8 @@ VALID_SETUP_PATTERNS = {
     "rounded_top",
     "rounded_bottom",
     "price_cluster",
+    "support",
+    "resistance",
     "other",
 }
 
@@ -27,6 +29,8 @@ class TradeTagSchema(BaseModel):
         "rounded_top",
         "rounded_bottom",
         "price_cluster",
+        "support",
+        "resistance",
         "other",
     ]] = None
     trade_bias: Optional[Literal["bullish", "bearish"]] = None
@@ -59,5 +63,6 @@ class TradeResponse(BaseModel):
     entry_candle_tf: Optional[str] = None
     is_rescue: Optional[bool] = None
     post_close_run_pts: Optional[Decimal] = None
+    account_id: Optional[int] = None
 
     model_config = {"from_attributes": True}

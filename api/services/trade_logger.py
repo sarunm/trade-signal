@@ -34,6 +34,9 @@ async def upsert_trade(session: AsyncSession, event: TradeEventSchema) -> Trade:
         if value is not None:
             setattr(trade, field, value)
 
+    if event.account_id is not None:
+        trade.account_id = event.account_id
+
     if event.open_price is not None and event.close_price is None:
         await fill_entry_context(session, trade)
 

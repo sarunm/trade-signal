@@ -2,6 +2,7 @@ import pytest
 import uuid
 from decimal import Decimal
 from datetime import datetime, timezone
+from models.account_snapshot import AccountSnapshot
 from models.trade import Trade, Direction, OrderState, OrderType
 
 
@@ -35,6 +36,53 @@ async def test_list_open_trades(client, db_session):
     assert len(data) == 1
     assert data[0]["ticket"] == 1001
     assert data[0]["close_price"] is None
+
+
+@pytest.mark.asyncio
+async def test_list_open_trades_excludes_expired_orders(client, db_session):
+    open_trade = make_trade(1001)
+    expired = make_trade(1002)
+    expired.order_state = OrderState.expired
+    expired.open_price = None
+    db_session.add(open_trade)
+    db_session.add(expired)
+    await db_session.commit()
+
+    response = await client.get("/api/trades?state=open")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert [row["ticket"] for row in data] == [1001]
+
+
+@pytest.mark.asyncio
+async def test_list_trades_account_scope_keeps_matching_paper_pair(client, db_session):
+    db_session.add(AccountSnapshot(
+        timestamp=datetime(2026, 5, 20, 10, 0, tzinfo=timezone.utc),
+        equity=Decimal("10000.00"),
+        balance=Decimal("10000.00"),
+        margin=Decimal("0.00"),
+        free_margin=Decimal("10000.00"),
+        floating_pl=Decimal("0.00"),
+        account_id=335297575,
+    ))
+    real = make_trade(1001, is_paper=False)
+    real.account_id = 335297575
+    paper = make_trade(1001, is_paper=True)
+    paper.account_id = 335297575
+    other = make_trade(1002, is_paper=False)
+    other.account_id = 999999
+    db_session.add_all([real, paper, other])
+    await db_session.commit()
+
+    response = await client.get("/api/trades?state=open")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    assert {row["is_paper"] for row in data} == {False, True}
+    assert {row["ticket"] for row in data} == {1001}
+    assert all(row["open_price"] is not None for row in data)
 
 
 @pytest.mark.asyncio

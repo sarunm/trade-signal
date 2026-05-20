@@ -2,6 +2,8 @@ const API = 'http://localhost:8000'
 
 const PATTERNS = [
   { value: '', label: '— pattern' },
+  { value: 'support', label: 'แนวรับ' },
+  { value: 'resistance', label: 'แนวต้าน' },
   { value: 'double_bottom', label: 'Double Bottom' },
   { value: 'double_top', label: 'Double Top' },
   { value: 'triple_bottom', label: 'Triple Bottom' },

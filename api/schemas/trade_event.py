@@ -9,6 +9,7 @@ class TradeEventSchema(BaseModel):
     transaction_type: str
     ticket: int
     symbol: str
+    account_id: Optional[int] = None
     direction: Optional[Direction] = None
     order_type: Optional[OrderType] = None
     order_state: Optional[OrderState] = None

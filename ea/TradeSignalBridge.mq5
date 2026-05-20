@@ -80,6 +80,7 @@ void SyncOpenPositions()
       string body = StringFormat(
          "{"
          "\"transaction_type\":\"DEAL_ADD\","
+         "\"account_id\":%I64d,"
          "\"ticket\":%I64u,"
          "\"symbol\":\"%s\","
          "\"direction\":\"%s\","
@@ -98,6 +99,7 @@ void SyncOpenPositions()
          "\"swap\":%.2f,"
          "\"commission\":0.00"
          "}",
+         AccountInfoInteger(ACCOUNT_LOGIN),
          ticket, InpSymbol, direction,
          F(open_price), volume,
          NullOrStr(tp), NullOrStr(sl),
@@ -159,6 +161,7 @@ void SyncHistoryDeals(int days_back)
          body = StringFormat(
             "{"
             "\"transaction_type\":\"DEAL_ADD\","
+            "\"account_id\":%I64d,"
             "\"ticket\":%I64u,"
             "\"symbol\":\"%s\","
             "\"direction\":\"%s\","
@@ -177,6 +180,7 @@ void SyncHistoryDeals(int days_back)
             "\"swap\":%.2f,"
             "\"commission\":%.2f"
             "}",
+            AccountInfoInteger(ACCOUNT_LOGIN),
             canonical_ticket, InpSymbol, direction,
             F(deal_price), volume,
             NullOrStr(tp), NullOrStr(sl),
@@ -190,6 +194,7 @@ void SyncHistoryDeals(int days_back)
          body = StringFormat(
             "{"
             "\"transaction_type\":\"DEAL_ADD\","
+            "\"account_id\":%I64d,"
             "\"ticket\":%I64u,"
             "\"symbol\":\"%s\","
             "\"direction\":\"%s\","
@@ -208,6 +213,7 @@ void SyncHistoryDeals(int days_back)
             "\"swap\":%.2f,"
             "\"commission\":%.2f"
             "}",
+            AccountInfoInteger(ACCOUNT_LOGIN),
             close_ticket, InpSymbol, direction,
             F(deal_price), volume,
             NullOrStr(tp), NullOrStr(sl),
@@ -388,6 +394,7 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
    string body = StringFormat(
       "{"
       "\"transaction_type\":\"%s\","
+      "\"account_id\":%I64d,"
       "\"ticket\":%I64u,"
       "\"symbol\":\"%s\","
       "\"direction\":\"%s\","
@@ -406,7 +413,7 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
       "\"swap\":%.2f,"
       "\"commission\":%.2f"
       "}",
-      trans_type, ticket, InpSymbol,
+      trans_type, AccountInfoInteger(ACCOUNT_LOGIN), ticket, InpSymbol,
       DirectionStr(order_type_enum),
       OrderTypeStr(order_type_enum),
       order_state,
@@ -436,11 +443,13 @@ void SendMarketTick()
       "{"
       "\"timestamp\":%s,"
       "\"symbol\":\"%s\","
+      "\"account_id\":%I64d,"
       "\"bid\":%s,"
       "\"ask\":%s"
       "}",
       now,
       InpSymbol,
+      AccountInfoInteger(ACCOUNT_LOGIN),
       F(bid),
       F(ask)
    );
@@ -464,6 +473,7 @@ void SendPriceTick()
       "{"
       "\"timestamp\":%s,"
       "\"symbol\":\"%s\","
+      "\"account_id\":%I64d,"
       "\"account\":{"
          "\"equity\":%.2f,"
          "\"balance\":%.2f,"
@@ -475,6 +485,7 @@ void SendPriceTick()
       "}",
       now,
       InpSymbol,
+      AccountInfoInteger(ACCOUNT_LOGIN),
       AccountInfoDouble(ACCOUNT_EQUITY),
       AccountInfoDouble(ACCOUNT_BALANCE),
       AccountInfoDouble(ACCOUNT_MARGIN),
