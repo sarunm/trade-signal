@@ -7,6 +7,10 @@ Last task commit: bcd71a5 test: add env-var loading test for Settings + update a
 
 ## What Changed This Session
 
+- **Cumulative P/L endpoint + sparkline (`TASK: Add cumulative P/L endpoint and sparkline to dashboard`)**:
+  - Confirmed existing commit `cef6045 feat: add cumulative P/L endpoint and sparkline dashboard` satisfies the task.
+  - Marked the backlog task done after re-running verification from current `HEAD`.
+  - Left the active `agy` Fibonacci redesign task untouched.
 - **Vite Dependency Bug Fix**: Installed missing `recharts` package inside the frontend container and on the host machine to fix the Vite dev import-analysis error.
 - **Fibonacci Levels (`TASK: Fibonacci levels — EA compute + backend store + dashboard display`)**:
   - `api/models/fib_level.py`: Added `FibLevel` model with unique constraint on `(symbol, timeframe)`.
@@ -21,6 +25,10 @@ Last task commit: bcd71a5 test: add env-var loading test for Settings + update a
 
 ## Verified
 
+- `pytest tests/test_trades_api.py -v`: 15 passed
+- `pytest tests/ -v`: 116 passed
+- `cd frontend && npm run build`: passed
+- `curl "http://localhost:8000/api/trades/pnl-history?days=30"`: returned cumulative P/L rows
 - `pytest tests/test_fib_levels.py -v`: 5 passed
 - `pytest tests/ -v`: 116 passed (including P/L sparkline and cumulative history tests)
 - `cd frontend && npm run build` (within container): successfully compiled in production mode
@@ -31,4 +39,4 @@ Last task commit: bcd71a5 test: add env-var loading test for Settings + update a
 
 ## Next Best Step
 
-Claude: review Fibonacci levels implementation, post frequency reduction, and the cumulative P/L sparkline task.
+Claude: review the completed cumulative P/L sparkline task, then continue reviewing or assigning the active Fibonacci ROM PP redesign task.
