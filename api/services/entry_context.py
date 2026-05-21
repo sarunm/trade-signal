@@ -32,11 +32,11 @@ async def _fill_fib_proximity(session: AsyncSession, trade: Trade) -> None:
 
     open_price = Decimal(trade.open_price)
     candidates = []
-    for key, price in fib.levels.items():
-        label = "PP" if key == "0.000" else f"R{key}"
-        candidates.append((label, Decimal(str(price))))
-    for key, price in fib.extensions.items():
-        candidates.append((f"S{key}", Decimal(str(price))))
+    candidates.append(("PP", Decimal(str(fib.pp))))
+    for key, price in fib.resistance.items():
+        candidates.append((key, Decimal(str(price))))
+    for key, price in fib.support.items():
+        candidates.append((key, Decimal(str(price))))
 
     if not candidates:
         return

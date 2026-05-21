@@ -17,26 +17,28 @@ async def receive_fib_levels(
     result = await session.execute(
         select(FibLevel).where(
             FibLevel.symbol == payload.symbol,
-            FibLevel.timeframe == payload.timeframe,
+            FibLevel.period == payload.period,
         )
     )
     row = result.scalar_one_or_none()
     if row:
-        row.swing_high = payload.swing_high
-        row.swing_low = payload.swing_low
-        row.direction = payload.direction
-        row.levels = payload.levels
-        row.extensions = payload.extensions
+        row.prev_high = payload.prev_high
+        row.prev_low = payload.prev_low
+        row.prev_close = payload.prev_close
+        row.pp = payload.pp
+        row.resistance = payload.resistance
+        row.support = payload.support
         row.computed_at = payload.computed_at
     else:
         row = FibLevel(
             symbol=payload.symbol,
-            timeframe=payload.timeframe,
-            swing_high=payload.swing_high,
-            swing_low=payload.swing_low,
-            direction=payload.direction,
-            levels=payload.levels,
-            extensions=payload.extensions,
+            period=payload.period,
+            prev_high=payload.prev_high,
+            prev_low=payload.prev_low,
+            prev_close=payload.prev_close,
+            pp=payload.pp,
+            resistance=payload.resistance,
+            support=payload.support,
             computed_at=payload.computed_at,
         )
         session.add(row)

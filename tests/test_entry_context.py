@@ -28,12 +28,13 @@ def _make_trade(**kwargs) -> Trade:
 async def test_fill_fib_proximity_finds_nearest_level(db_session):
     fib = FibLevel(
         symbol="XAUUSD",
-        timeframe="D",
-        swing_high=2050.0,
-        swing_low=1950.0,
-        direction="bullish",
-        levels={"0.000": 1983.33, "0.236": 2006.93, "0.618": 2045.17},
-        extensions={"0.236": 1959.73, "0.618": 1921.50},
+        period="W",
+        prev_high=2050.0,
+        prev_low=1950.0,
+        prev_close=2000.0,
+        pp=2000.0,
+        resistance={"R1": 2006.93, "R2": 2045.17},
+        support={"S1": 1959.73, "S2": 1921.50},
         computed_at=datetime(2026, 5, 19, 8, 0, tzinfo=timezone.utc),
     )
     db_session.add(fib)
@@ -45,7 +46,7 @@ async def test_fill_fib_proximity_finds_nearest_level(db_session):
 
     await fill_entry_context(db_session, trade)
 
-    assert trade.near_fib_level == "S0.236"
+    assert trade.near_fib_level == "S1"
     assert trade.fib_distance_pts is not None
     assert float(trade.fib_distance_pts) == pytest.approx(2.27, abs=0.1)
 
@@ -54,12 +55,13 @@ async def test_fill_fib_proximity_finds_nearest_level(db_session):
 async def test_fill_fib_proximity_labels_pp_correctly(db_session):
     fib = FibLevel(
         symbol="XAUUSD",
-        timeframe="D",
-        swing_high=2050.0,
-        swing_low=1950.0,
-        direction="bullish",
-        levels={"0.000": 1983.33, "0.236": 2006.93},
-        extensions={"0.236": 1959.73},
+        period="W",
+        prev_high=2050.0,
+        prev_low=1950.0,
+        prev_close=2000.0,
+        pp=1983.33,
+        resistance={"R1": 2006.93},
+        support={"S1": 1959.73},
         computed_at=datetime(2026, 5, 19, 8, 0, tzinfo=timezone.utc),
     )
     db_session.add(fib)
@@ -197,12 +199,13 @@ async def test_fill_is_rescue_false_when_no_existing(db_session):
 async def test_entry_context_auto_filled_on_trade_event(client, db_session):
     fib = FibLevel(
         symbol="XAUUSD",
-        timeframe="D",
-        swing_high=2050.0,
-        swing_low=1950.0,
-        direction="bullish",
-        levels={"0.000": 1983.33, "0.236": 2006.93},
-        extensions={"0.236": 1959.73},
+        period="W",
+        prev_high=2050.0,
+        prev_low=1950.0,
+        prev_close=2000.0,
+        pp=2000.0,
+        resistance={"R1": 2006.93},
+        support={"S1": 1959.73},
         computed_at=datetime(2026, 5, 19, 8, 0, tzinfo=timezone.utc),
     )
     db_session.add(fib)

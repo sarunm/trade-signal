@@ -1,46 +1,48 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Dict, Literal
+from typing import Dict
 from pydantic import BaseModel, field_validator
 
-LEVEL_RATIOS = {"0.236", "0.382", "0.500", "0.618", "0.786"}
-EXT_RATIOS   = {"0.236", "0.382", "0.500", "0.618", "0.786"}
+RESISTANCE_KEYS = {f"R{i}" for i in range(1, 11)}
+SUPPORT_KEYS = {f"S{i}" for i in range(1, 11)}
 
 
 class FibLevelInSchema(BaseModel):
     symbol: str
-    timeframe: str
-    swing_high: Decimal
-    swing_low: Decimal
-    direction: Literal["bullish", "bearish"]
-    levels: Dict[str, float]
-    extensions: Dict[str, float]
+    period: str
+    prev_high: Decimal
+    prev_low: Decimal
+    prev_close: Decimal
+    pp: Decimal
+    resistance: Dict[str, float]
+    support: Dict[str, float]
     computed_at: datetime
 
-    @field_validator("levels")
+    @field_validator("resistance")
     @classmethod
-    def validate_levels(cls, value):
-        if set(value.keys()) != LEVEL_RATIOS:
-            raise ValueError(f"levels must contain exactly: {sorted(LEVEL_RATIOS)}")
+    def validate_resistance(cls, value):
+        if set(value.keys()) != RESISTANCE_KEYS:
+            raise ValueError(f"resistance must contain exactly: {sorted(RESISTANCE_KEYS)}")
         return value
 
-    @field_validator("extensions")
+    @field_validator("support")
     @classmethod
-    def validate_extensions(cls, value):
-        if set(value.keys()) != EXT_RATIOS:
-            raise ValueError(f"extensions must contain exactly: {sorted(EXT_RATIOS)}")
+    def validate_support(cls, value):
+        if set(value.keys()) != SUPPORT_KEYS:
+            raise ValueError(f"support must contain exactly: {sorted(SUPPORT_KEYS)}")
         return value
 
 
 class FibLevelResponse(BaseModel):
     id: int
     symbol: str
-    timeframe: str
-    swing_high: Decimal
-    swing_low: Decimal
-    direction: str
-    levels: Dict[str, float]
-    extensions: Dict[str, float]
+    period: str
+    prev_high: Decimal
+    prev_low: Decimal
+    prev_close: Decimal
+    pp: Decimal
+    resistance: Dict[str, float]
+    support: Dict[str, float]
     computed_at: datetime
 
     model_config = {"from_attributes": True}

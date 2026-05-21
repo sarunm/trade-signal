@@ -3,16 +3,16 @@
 Updated: 2026-05-21
 Current owner: agy
 Branch: main
-Last task commit: fix: dedup guard and UTC enforcement in session-loss-streak alert
+Last task commit: feat: redesign Fibonacci levels to match ROM PP method
 
 ## Current Goal
 
-Redesign Fib levels to match ROM indicator — PP method, Weekly period.
+None — Redesign Fib levels to match ROM indicator is completed.
 
 ## Status
 
-In Progress — agy is implementing the redesign.
+Idle — Waiting for new task assignment.
 
 ## Next Step
 
-agy: Design implementation plan and request user approval.
+Claude: Review completed task and assign next task.

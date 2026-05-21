@@ -76,7 +76,7 @@ exact commands
 ### TASK: [BUG] Redesign Fib levels to match ROM indicator — PP method, Weekly period
 
 **assignee:** agy
-**status:** in_progress
+**status:** done
 **priority:** high
 **remark:** agy implement ผิด method (swing detection) — ROM ใช้ PP = (H+L+C)/3 จาก previous week's OHLC
 
