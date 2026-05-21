@@ -3,8 +3,8 @@ from decimal import Decimal
 from typing import Dict, Literal
 from pydantic import BaseModel, field_validator
 
-LEVEL_RATIOS = {"0.000", "0.235", "0.382", "0.5", "0.618", "0.728", "1.000", "1.235", "1.328", "1.500", "1.618"}
-EXT_RATIOS   = {"0.235", "0.382", "0.5", "0.618", "0.728", "1.000", "1.235", "1.328", "1.500", "1.618"}
+LEVEL_RATIOS = {"0.236", "0.382", "0.500", "0.618", "0.786"}
+EXT_RATIOS   = {"0.236", "0.382", "0.500", "0.618", "0.786"}
 
 
 class FibLevelInSchema(BaseModel):

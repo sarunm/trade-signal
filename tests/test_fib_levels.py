@@ -1,14 +1,15 @@
 import pytest
 
-LEVEL_RATIOS = {"0.000", "0.235", "0.382", "0.5", "0.618", "0.728", "1.000", "1.235", "1.328", "1.500", "1.618"}
-EXT_RATIOS   = {"0.235", "0.382", "0.5", "0.618", "0.728", "1.000", "1.235", "1.328", "1.500", "1.618"}
+LEVEL_RATIOS = {"0.236", "0.382", "0.500", "0.618", "0.786"}
+EXT_RATIOS   = {"0.236", "0.382", "0.500", "0.618", "0.786"}
 
-# PP = (4870.56 + 4608.56 + 4750.00) / 3 = 4743.04, range = 262.00
-_PP    = 4743.04
-_RANGE = 262.00
+# swing_high = 4870.56, swing_low = 4608.56
+_HIGH  = 4870.56
+_LOW   = 4608.56
+_RANGE = _HIGH - _LOW
 
-def _r(ratio): return round(_PP + _RANGE * ratio, 5)
-def _s(ratio): return round(_PP - _RANGE * ratio, 5)
+def _r(ratio): return round(_LOW + _RANGE * ratio, 5)
+def _s(ratio): return round(_LOW - _RANGE * ratio, 5)
 
 FIB_PAYLOAD = {
     "symbol": "GOLD",
@@ -17,29 +18,18 @@ FIB_PAYLOAD = {
     "swing_low": "4608.56000",
     "direction": "bullish",
     "levels": {
-        "0.000": _PP,
-        "0.235": _r(0.235),
+        "0.236": _r(0.236),
         "0.382": _r(0.382),
-        "0.5":   _r(0.5),
+        "0.500": _r(0.5),
         "0.618": _r(0.618),
-        "0.728": _r(0.728),
-        "1.000": _r(1.0),
-        "1.235": _r(1.235),
-        "1.328": _r(1.328),
-        "1.500": _r(1.5),
-        "1.618": _r(1.618),
+        "0.786": _r(0.786),
     },
     "extensions": {
-        "0.235": _s(0.235),
+        "0.236": _s(0.236),
         "0.382": _s(0.382),
-        "0.5":   _s(0.5),
+        "0.500": _s(0.5),
         "0.618": _s(0.618),
-        "0.728": _s(0.728),
-        "1.000": _s(1.0),
-        "1.235": _s(1.235),
-        "1.328": _s(1.328),
-        "1.500": _s(1.5),
-        "1.618": _s(1.618),
+        "0.786": _s(0.786),
     },
     "computed_at": "2026-05-18T09:00:00Z",
 }
@@ -65,7 +55,7 @@ async def test_post_fib_levels_upserts_same_symbol_and_timeframe(client):
         **FIB_PAYLOAD,
         "swing_high": "4900.00000",
         "direction": "bearish",
-        "levels": {**FIB_PAYLOAD["levels"], "0.5": 4777.77},
+        "levels": {**FIB_PAYLOAD["levels"], "0.500": 4777.77},
         "computed_at": "2026-05-18T10:00:00Z",
     }
 
@@ -77,7 +67,7 @@ async def test_post_fib_levels_upserts_same_symbol_and_timeframe(client):
     assert len(rows) == 1
     assert rows[0]["swing_high"] == "4900.00000"
     assert rows[0]["direction"] == "bearish"
-    assert rows[0]["levels"]["0.5"] == 4777.77
+    assert rows[0]["levels"]["0.500"] == 4777.77
 
 
 @pytest.mark.asyncio
@@ -108,7 +98,7 @@ async def test_fib_levels_have_correct_ratio_keys(client):
 async def test_post_fib_levels_rejects_missing_ratio(client):
     payload = {
         **FIB_PAYLOAD,
-        "levels": {k: v for k, v in FIB_PAYLOAD["levels"].items() if k != "0.728"},
+        "levels": {k: v for k, v in FIB_PAYLOAD["levels"].items() if k != "0.786"},
     }
 
     response = await client.post("/api/fib-levels", json=payload)

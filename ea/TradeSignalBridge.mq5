@@ -13,6 +13,8 @@ input int    InpMarketTickSec = 1;    // throttle bid/ask posts for paper exits
 input int    InpSyncDays   = 30;   // days of closed deal history to sync on startup
 
 datetime g_last_market_tick_sent = 0;
+double   g_last_sent_swing_high  = 0.0;
+double   g_last_sent_swing_low   = 0.0;
 
 //--- HTTP POST — logs status code and response body on non-200
 bool PostJSON(const string endpoint, const string body)
@@ -505,48 +507,111 @@ void OnTick()
 
 void ComputeFibLevels()
 {
-   // ROM Fibonacci Pivot Points: PP = (prev_day_H + prev_day_L + prev_day_C) / 3
-   // R/S levels extend from PP by (prev_day_range * ratio)
-   double ph[1], pl[1], pc[1];
-   if(CopyHigh(InpSymbol, PERIOD_D1, 1, 1, ph)  < 1 ||
-      CopyLow(InpSymbol,  PERIOD_D1, 1, 1, pl)  < 1 ||
-      CopyClose(InpSymbol, PERIOD_D1, 1, 1, pc) < 1)
+   MqlRates rates[];
+   if(CopyRates(InpSymbol, PERIOD_D1, 0, 60, rates) < 60)
    {
-      Print("ComputeFibLevels: D1 data not ready");
+      Print("ComputeFibLevels: D1 data not ready (less than 60 bars available)");
       return;
    }
 
-   double phigh = ph[0], plow = pl[0], pclose = pc[0];
-   double range = phigh - plow;
-   if(range <= 0) { Print("ComputeFibLevels: zero range"); return; }
+   int pivot_high_idx = -1;
+   int pivot_low_idx = -1;
 
-   double PP = (phigh + plow + pclose) / 3.0;
-   string direction = (pclose > (phigh + plow) / 2.0) ? "bullish" : "bearish";
-   Print("ComputeFibLevels: PP=", F(PP), " H=", F(phigh), " L=", F(plow), " C=", F(pclose));
+   for(int i = 54; i >= 5; i--)
+   {
+      if(pivot_high_idx == -1)
+      {
+         bool is_pivot_high = true;
+         for(int j = i - 5; j <= i + 5; j++)
+         {
+            if(j == i) continue;
+            if(rates[i].high <= rates[j].high)
+            {
+               is_pivot_high = false;
+               break;
+            }
+         }
+         if(is_pivot_high)
+         {
+            pivot_high_idx = i;
+         }
+      }
 
-   // ROM ratios: 0.235, 0.382, 0.5, 0.618, 0.728, 1.0, 1.235, 1.328, 1.5, 1.618
-   double ratios[] = {0.235, 0.382, 0.5, 0.618, 0.728, 1.0, 1.235, 1.328, 1.5, 1.618};
-   string lbls[]   = {"0.235","0.382","0.5","0.618","0.728","1.000","1.235","1.328","1.500","1.618"};
+      if(pivot_low_idx == -1)
+      {
+         bool is_pivot_low = true;
+         for(int j = i - 5; j <= i + 5; j++)
+         {
+            if(j == i) continue;
+            if(rates[i].low >= rates[j].low)
+            {
+               is_pivot_low = false;
+               break;
+            }
+         }
+         if(is_pivot_low)
+         {
+            pivot_low_idx = i;
+         }
+      }
 
-   // levels includes PP (key "0.000") + R1..R10; extensions has S1..S10
-   string lvl_json = StringFormat("\"0.000\":%s", F(PP));
+      if(pivot_high_idx != -1 && pivot_low_idx != -1)
+         break;
+   }
+
+   if(pivot_high_idx == -1 || pivot_low_idx == -1)
+   {
+      Print("ComputeFibLevels: pivot high/low not found in 60 bars");
+      return;
+   }
+
+   double swing_high = rates[pivot_high_idx].high;
+   double swing_low = rates[pivot_low_idx].low;
+   double range = swing_high - swing_low;
+   if(range <= 0)
+   {
+      Print("ComputeFibLevels: invalid range <= 0");
+      return;
+   }
+
+   // direction: pivot_high_time > pivot_low_time ? "bearish" : "bullish"
+   string direction = (rates[pivot_high_idx].time > rates[pivot_low_idx].time) ? "bearish" : "bullish";
+
+   // Skip if swing levels have not changed
+   if(swing_high == g_last_sent_swing_high && swing_low == g_last_sent_swing_low)
+   {
+      return;
+   }
+
+   double ratios[] = {0.236, 0.382, 0.5, 0.618, 0.786};
+   string lbls[]   = {"0.236", "0.382", "0.500", "0.618", "0.786"};
+
+   string lvl_json = "";
    string ext_json = "";
    for(int i = 0; i < ArraySize(ratios); i++)
    {
-      lvl_json += StringFormat(",\"%s\":%s", lbls[i], F(PP + range * ratios[i]));
+      if(lvl_json != "") lvl_json += ",";
+      lvl_json += StringFormat("\"%s\":%s", lbls[i], F(swing_low + range * ratios[i]));
+
       if(ext_json != "") ext_json += ",";
-      ext_json += StringFormat("\"%s\":%s", lbls[i], F(PP - range * ratios[i]));
+      ext_json += StringFormat("\"%s\":%s", lbls[i], F(swing_low - range * ratios[i]));
    }
 
    string body = StringFormat(
       "{\"symbol\":\"%s\",\"timeframe\":\"D1\","
       "\"swing_high\":%s,\"swing_low\":%s,\"direction\":\"%s\","
       "\"levels\":{%s},\"extensions\":{%s},\"computed_at\":\"%s\"}",
-      InpSymbol, F(phigh), F(plow), direction,
+      InpSymbol, F(swing_high), F(swing_low), direction,
       lvl_json, ext_json, ISOTime(TimeCurrent())
    );
-   PostJSON("/api/fib-levels", body);
-   DrawFibLines(PP, range, ratios, lbls);
+
+   if(PostJSON("/api/fib-levels", body))
+   {
+      g_last_sent_swing_high = swing_high;
+      g_last_sent_swing_low  = swing_low;
+   }
+   DrawFibLines(swing_high, swing_low, ratios, lbls);
+
 }
 
 void DrawFibLine(string name, double price, color clr, ENUM_LINE_STYLE style, int width, string tooltip)
@@ -561,7 +626,7 @@ void DrawFibLine(string name, double price, color clr, ENUM_LINE_STYLE style, in
    ObjectSetInteger(0, name, OBJPROP_BACK, false);
 }
 
-void DrawFibLines(double PP, double range, double &ratios[], string &lbls[])
+void DrawFibLines(double swing_high, double swing_low, double &ratios[], string &lbls[])
 {
    for(int i = ObjectsTotal(0) - 1; i >= 0; i--)
    {
@@ -570,20 +635,26 @@ void DrawFibLines(double PP, double range, double &ratios[], string &lbls[])
          ObjectDelete(0, name);
    }
 
-   // PP center — gray dashed
-   DrawFibLine("TSB_FIB_PP", PP, clrSilver, STYLE_DASH, 1, "ROM PP: " + F(PP));
+   double range = swing_high - swing_low;
 
-   // R levels (above PP) — green
-   for(int i = 0; i < ArraySize(ratios); i++)
-      DrawFibLine("TSB_FIB_R_" + lbls[i], PP + range * ratios[i],
-                  clrMediumSeaGreen, STYLE_SOLID, 1,
-                  "ROM R" + lbls[i] + ": " + F(PP + range * ratios[i]));
+   // Swing High line (Silver, dashed)
+   DrawFibLine("TSB_FIB_HIGH", swing_high, clrSilver, STYLE_DASH, 1, "Swing High: " + F(swing_high));
+   // Swing Low line (Silver, dashed)
+   DrawFibLine("TSB_FIB_LOW", swing_low, clrSilver, STYLE_DASH, 1, "Swing Low: " + F(swing_low));
 
-   // S levels (below PP) — red
+   // Retracements (above swing_low) - green
    for(int i = 0; i < ArraySize(ratios); i++)
-      DrawFibLine("TSB_FIB_S_" + lbls[i], PP - range * ratios[i],
-                  clrTomato, STYLE_SOLID, 1,
-                  "ROM S" + lbls[i] + ": " + F(PP - range * ratios[i]));
+   {
+      double val = swing_low + range * ratios[i];
+      DrawFibLine("TSB_FIB_RET_" + lbls[i], val, clrMediumSeaGreen, STYLE_SOLID, 1, "Retracement " + lbls[i] + ": " + F(val));
+   }
+
+   // Extensions (below swing_low) - red
+   for(int i = 0; i < ArraySize(ratios); i++)
+   {
+      double val = swing_low - range * ratios[i];
+      DrawFibLine("TSB_FIB_EXT_" + lbls[i], val, clrTomato, STYLE_SOLID, 1, "Extension " + lbls[i] + ": " + F(val));
+   }
 
    ChartRedraw(0);
 }
