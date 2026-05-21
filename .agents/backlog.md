@@ -93,7 +93,7 @@ exact commands
 ### TASK: [BUG] Fix undeclared g_last_market_tick_sent in EA
 
 **assignee:** codex
-**status:** pending
+**status:** done
 **priority:** high
 **blocks:** [BUG] Redesign Fib levels to match ROM indicator — PP method, Weekly period
 
@@ -102,8 +102,8 @@ exact commands
 **Files to touch:**
 - `ea/TradeSignalBridge.mq5` — เพิ่ม `datetime g_last_market_tick_sent = 0;` กลับในส่วน global declarations (บรรทัดเดียวกับ `g_last_sent_week_time`)
 **Acceptance criteria:**
-- [ ] EA compiles ไม่มี undeclared identifier error
-- [ ] `g_last_market_tick_sent` declared ใน global scope
+- [x] EA compiles ไม่มี undeclared identifier error
+- [x] `g_last_market_tick_sent` declared ใน global scope
 **Verify:**
 Manual compile ใน MT5 Editor — ไม่มี error
 
