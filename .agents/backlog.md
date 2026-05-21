@@ -24,6 +24,10 @@
 
 **Bug rule:** Claude เจอ bug ระหว่าง review → สร้าง task ใหม่ prefix `[BUG]` พร้อม `blocks:` field ชี้ไปที่ task ต้นเหตุ อย่าแก้ inline
 
+**Backlog rule (Claude):** ทุกครั้งที่เจอสิ่งที่ต้องทำ — ไม่ว่าจะเป็น bug, feature, หรือ deferred item — ให้เพิ่มลง backlog ทันที พร้อม `assignee` + `priority` ก่อนจะทำอย่างอื่นต่อ ห้าม defer โดยไม่มี task
+
+**Priority rule (Agents):** Agent ต้อง pick task ที่ `priority: high` ก่อนเสมอ → `normal` → `low` ห้ามข้ามไปทำ task ที่ priority ต่ำกว่าถ้ายังมี high/normal ค้างอยู่
+
 **Feedback rule:** Agent เจอ task แปลกๆ, scope ไม่ชัด, มีข้อแนะนำ, หรือ risk → เขียนใน `.agents/feedback.md` ก่อน open PR เสมอ
 
 **Claude review:** Reads `.agents/feedback.md` → reviews PR → approves + merges หรือ requests changes
@@ -72,6 +76,79 @@ exact commands
 ---
 
 ## Queue
+
+### TASK: [BUG] Fix undeclared g_last_market_tick_sent in EA
+
+**assignee:** codex
+**status:** pending
+**priority:** high
+**blocks:** [BUG] Redesign Fib levels to match ROM indicator — PP method, Weekly period
+
+**Why:** found during review of commit 6fc99cb — EA will not compile
+**Root cause:** `g_last_market_tick_sent` declaration was deleted from globals but usages at lines 458 + 502 remain
+**Files to touch:**
+- `ea/TradeSignalBridge.mq5` — เพิ่ม `datetime g_last_market_tick_sent = 0;` กลับในส่วน global declarations (บรรทัดเดียวกับ `g_last_sent_week_time`)
+**Acceptance criteria:**
+- [ ] EA compiles ไม่มี undeclared identifier error
+- [ ] `g_last_market_tick_sent` declared ใน global scope
+**Verify:**
+Manual compile ใน MT5 Editor — ไม่มี error
+
+---
+
+### TASK: [BUG] Fix fib_level model uses JSON instead of JSONB
+
+**assignee:** codex
+**status:** pending
+**priority:** low
+**remark:** ทำงานได้แต่ inconsistent กับ DB type จริง — defer ได้แต่ควรแก้ก่อน migrate production
+**blocks:** [BUG] Redesign Fib levels to match ROM indicator — PP method, Weekly period
+
+**Why:** found during review of commit 6fc99cb — `api/models/fib_level.py` declares `resistance` + `support` เป็น `JSON` แต่ DB columns เป็น `JSONB` จาก migration 004
+**Root cause:** Codex ใช้ `JSON` แทน `JSONB` ตอน redesign model
+**Files to touch:**
+- `api/models/fib_level.py` — เปลี่ยน `mapped_column(JSON, ...)` เป็น `mapped_column(JSONB, ...)` ทั้ง 2 columns + import `from sqlalchemy.dialects.postgresql import JSONB`
+**Acceptance criteria:**
+- [ ] `resistance` + `support` ใน model ใช้ `JSONB`
+- [ ] `pytest tests/ -v` passes
+**Verify:**
+```bash
+cd api && pytest ../tests/test_fib_levels.py -v
+```
+
+---
+
+### TASK: Trader Profile MCP — Phase 1 implementation
+
+**assignee:** agy
+**status:** pending
+**priority:** normal
+**remark:** spec + plan ครบแล้ว — `docs/superpowers/specs/2026-05-21-trader-profile-mcp-design.md` + `docs/superpowers/plans/2026-05-21-trader-profile-mcp.md`
+
+**Why:** ระบบควรสามารถตอบคำถามเกี่ยวกับ trader profile ได้ผ่าน MCP tools — win rate, fib proximity, session performance ฯลฯ
+**Files to touch:**
+- ดูรายละเอียดใน `docs/superpowers/plans/2026-05-21-trader-profile-mcp.md`
+**Acceptance criteria:**
+- ดูใน plan file
+**Verify:**
+- ดูใน plan file
+
+---
+
+### TASK: Trade Advisor — entry scoring + recovery map + live zone alerts
+
+**assignee:** agy
+**status:** blocked
+**priority:** normal
+**remark:** รอ spec เขียนเสร็จก่อน — spec กำลัง brainstorm อยู่ จะ unblock เมื่อ spec commit แล้ว
+
+**Why:** ให้ระบบช่วย evaluate entry, แสดง recovery plan ตาม fib levels, และ alert เมื่อ price เข้า zone
+**Files to touch:**
+- TBD — รอ spec
+**Acceptance criteria:**
+- TBD — รอ spec
+
+---
 
 ### TASK: [BUG] Redesign Fib levels to match ROM indicator — PP method, Weekly period
 
