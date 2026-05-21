@@ -144,7 +144,7 @@ Manual compile ใน MT5 Editor — ไม่มี error
 ### TASK: [BUG] Fix fib_level model uses JSON instead of JSONB
 
 **assignee:** codex
-**status:** pending
+**status:** done
 **priority:** low
 **remark:** ทำงานได้แต่ inconsistent กับ DB type จริง — defer ได้แต่ควรแก้ก่อน migrate production
 **blocks:** [BUG] Redesign Fib levels to match ROM indicator — PP method, Weekly period
@@ -154,8 +154,8 @@ Manual compile ใน MT5 Editor — ไม่มี error
 **Files to touch:**
 - `api/models/fib_level.py` — เปลี่ยน `mapped_column(JSON, ...)` เป็น `mapped_column(JSONB, ...)` ทั้ง 2 columns + import `from sqlalchemy.dialects.postgresql import JSONB`
 **Acceptance criteria:**
-- [ ] `resistance` + `support` ใน model ใช้ `JSONB`
-- [ ] `pytest tests/ -v` passes
+- [x] `resistance` + `support` ใน model ใช้ `JSONB`
+- [x] `pytest tests/ -v` passes
 **Verify:**
 ```bash
 cd api && pytest ../tests/test_fib_levels.py -v

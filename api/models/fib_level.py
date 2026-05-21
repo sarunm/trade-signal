@@ -1,5 +1,6 @@
 from datetime import datetime
 from sqlalchemy import String, Numeric, DateTime, JSON, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database import Base
@@ -16,6 +17,10 @@ class FibLevel(Base):
     prev_low: Mapped[float] = mapped_column(Numeric(12, 5), nullable=False)
     prev_close: Mapped[float] = mapped_column(Numeric(12, 5), nullable=False)
     pp: Mapped[float] = mapped_column(Numeric(12, 5), nullable=False)
-    resistance: Mapped[dict] = mapped_column(JSON, nullable=False)
-    support: Mapped[dict] = mapped_column(JSON, nullable=False)
+    resistance: Mapped[dict] = mapped_column(
+        JSONB().with_variant(JSON(), "sqlite"), nullable=False
+    )
+    support: Mapped[dict] = mapped_column(
+        JSONB().with_variant(JSON(), "sqlite"), nullable=False
+    )
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

@@ -7,6 +7,10 @@ Last task commit: bcd71a5 test: add env-var loading test for Settings + update a
 
 ## What Changed This Session
 
+- **Bug fix (`TASK: [BUG] Fix fib_level model uses JSON instead of JSONB`)**:
+  - Updated `api/models/fib_level.py` so `resistance` and `support` use PostgreSQL `JSONB`.
+  - Added a SQLite `JSON` variant to keep the in-memory test database compatible.
+  - Marked the backlog bug task done after targeted and full backend verification.
 - **Bug fix (`TASK: [BUG] Fix undeclared g_last_market_tick_sent in EA`)**:
   - Restored `datetime g_last_market_tick_sent = 0;` in the EA global declarations.
   - Marked the backlog bug task done after verifying the declaration and existing usages.
@@ -28,6 +32,9 @@ Last task commit: bcd71a5 test: add env-var loading test for Settings + update a
 
 ## Verified
 
+- `PYTHONPATH=api python -c "... JSONB assertions ..."`: failed before the fix, passed after
+- `pytest tests/test_fib_levels.py -v`: 5 passed
+- `pytest tests/ -v`: 116 passed
 - `rg -n "^datetime g_last_market_tick_sent = 0;|g_last_market_tick_sent" ea/TradeSignalBridge.mq5`: declaration at global line 16 and usages at lines 459/503
 - MT5 compile still requires manual MetaEditor verification; no `.mq5` compiler is available in this repo session
 - `pytest tests/test_trades_api.py -v`: 15 passed
