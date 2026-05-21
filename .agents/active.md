@@ -3,11 +3,11 @@
 Updated: 2026-05-21
 Current owner: codex
 Branch: main
-Last task commit: refactor: migrate Pydantic settings config
+Last task commit: feat: add session-loss-streak alert
 
 ## Current Goal
 
-Completed: fixed Pydantic v2 deprecation warning.
+Completed: added session-loss-streak alert.
 
 ## Status
 
@@ -15,4 +15,4 @@ Idle — handing off to Claude review.
 
 ## Next Step
 
-Claude: review the Pydantic config task, then queue or approve the next backlog item.
+Claude: review `feat: add session-loss-streak alert`, then queue or approve the next backlog item.

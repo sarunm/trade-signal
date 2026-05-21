@@ -30,29 +30,6 @@ exact commands to confirm it works
 
 ## Queue
 
-### TASK: Add session-loss-streak alert
-
-**Why:** `consecutive_loss` fires on any 3 losses in a row. A more useful alert is when those losses cluster in the same trading session (London / NY / Asia) — it tells the user to stop trading that session today.
-**Files to touch:**
-- `api/services/alert_manager.py` — add `_check_session_loss_streak`
-- `api/models/alert.py` — verify no schema change needed (type is a free string)
-- `tests/test_alert_manager.py` — add tests for the new alert
-**Acceptance criteria:**
-- [ ] New function `_check_session_loss_streak(session, event)` called from `check_trade_alerts`
-- [ ] Alert type: `"session_loss_streak"`
-- [ ] Fires when the last 3 closed real losses on the same symbol all fall in the same trading session (London 07-16 UTC, NY 13-22 UTC, Asia otherwise)
-- [ ] Does NOT fire if the losses span different sessions
-- [ ] `trigger_data` includes: `session`, `count`, `total_loss`, `tickets`
-- [ ] At least 3 test cases: fires correctly, does not fire cross-session, does not fire with fewer than 3 losses
-- [ ] `pytest tests/ -v` passes
-**Verify:**
-```bash
-pytest tests/test_alert_manager.py -v
-pytest tests/ -v
-```
-
----
-
 ### TASK: Add cumulative P/L endpoint and sparkline to dashboard
 
 **Why:** The dashboard shows per-trade P/L but not the trajectory over time. A sparkline of cumulative real P/L helps the user see if they are improving or declining.

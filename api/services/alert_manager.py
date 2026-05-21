@@ -24,6 +24,7 @@ RESCUE_DELTA_THRESHOLD = 0.20
 async def check_trade_alerts(session: AsyncSession, event: TradeEventSchema) -> None:
     await _check_double_down(session, event)
     await _check_consecutive_loss(session, event)
+    await _check_session_loss_streak(session, event)
     await session.commit()
 
 
@@ -300,3 +301,65 @@ async def _check_consecutive_loss(session: AsyncSession, event: TradeEventSchema
         sent_at=datetime.now(timezone.utc),
         acknowledged=False,
     ))
+
+
+async def _check_session_loss_streak(session: AsyncSession, event: TradeEventSchema) -> None:
+    if event.profit is None or event.profit >= 0:
+        return
+
+    result = await session.execute(
+        select(Trade).where(
+            Trade.is_paper == False,
+            Trade.symbol == event.symbol,
+            Trade.order_state == OrderState.filled,
+            Trade.close_time.isnot(None),
+            Trade.profit.isnot(None),
+        ).order_by(Trade.close_time.desc()).limit(CONSECUTIVE_LOSS_THRESHOLD)
+    )
+    recent = result.scalars().all()
+
+    if len(recent) < CONSECUTIVE_LOSS_THRESHOLD:
+        return
+    if not all(t.profit < 0 for t in recent):
+        return
+
+    common_sessions = set(_sessions_for_close_time(recent[0].close_time))
+    for trade in recent[1:]:
+        common_sessions &= set(_sessions_for_close_time(trade.close_time))
+    if not common_sessions:
+        return
+
+    total_loss = float(sum(t.profit for t in recent))
+    session_name = _pick_session(common_sessions)
+    session.add(Alert(
+        type="session_loss_streak",
+        message=(
+            f"{CONSECUTIVE_LOSS_THRESHOLD} consecutive losses in {session_name} "
+            f"(total: ${total_loss:.2f}). Stop trading this session today."
+        ),
+        trigger_data={
+            "session": session_name,
+            "count": CONSECUTIVE_LOSS_THRESHOLD,
+            "total_loss": total_loss,
+            "tickets": [t.ticket for t in recent],
+        },
+        sent_at=datetime.now(timezone.utc),
+        acknowledged=False,
+    ))
+
+
+def _sessions_for_close_time(value: datetime) -> list[str]:
+    hour = value.hour
+    sessions = []
+    if 7 <= hour < 16:
+        sessions.append("London")
+    if 13 <= hour < 22:
+        sessions.append("NY")
+    return sessions or ["Asia"]
+
+
+def _pick_session(sessions: set[str]) -> str:
+    for session_name in ("London", "NY", "Asia"):
+        if session_name in sessions:
+            return session_name
+    return "Asia"

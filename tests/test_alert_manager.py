@@ -10,7 +10,12 @@ from schemas.trade_event import TradeEventSchema
 from schemas.price_tick import PriceTickSchema, AccountStateSchema, OHLCVSchema
 
 
-def _filled_buy(ticket: int, profit: float = None, close: bool = False) -> Trade:
+def _filled_buy(
+    ticket: int,
+    profit: float = None,
+    close: bool = False,
+    close_time: datetime = None,
+) -> Trade:
     t = Trade(
         id=uuid.uuid4(),
         ticket=ticket,
@@ -24,7 +29,7 @@ def _filled_buy(ticket: int, profit: float = None, close: bool = False) -> Trade
     )
     if close and profit is not None:
         t.close_price = Decimal("1940.00") if profit < 0 else Decimal("1960.00")
-        t.close_time = datetime.now(timezone.utc)
+        t.close_time = close_time or datetime.now(timezone.utc)
         t.profit = Decimal(str(profit))
     return t
 
@@ -121,6 +126,117 @@ async def test_no_consecutive_loss_alert_after_win(db_session):
     await check_trade_alerts(db_session, event)
 
     result = await db_session.execute(select(Alert).where(Alert.type == "consecutive_loss"))
+    assert result.scalars().all() == []
+
+
+@pytest.mark.asyncio
+async def test_session_loss_streak_alert_fires_for_three_losses_in_same_session(db_session):
+    """Alert when the last 3 closed real losses are in the same trading session."""
+    closes = [
+        datetime(2026, 5, 21, 8, 0, tzinfo=timezone.utc),
+        datetime(2026, 5, 21, 9, 0, tzinfo=timezone.utc),
+        datetime(2026, 5, 21, 10, 0, tzinfo=timezone.utc),
+    ]
+    for ticket, close_time in zip([1101, 1102, 1103], closes):
+        db_session.add(_filled_buy(
+            ticket=ticket,
+            profit=-100.0,
+            close=True,
+            close_time=close_time,
+        ))
+    await db_session.commit()
+
+    event = _event(ticket=1103, close_price=1940.0, profit=-100.0)
+    await check_trade_alerts(db_session, event)
+
+    result = await db_session.execute(
+        select(Alert).where(Alert.type == "session_loss_streak")
+    )
+    alerts = result.scalars().all()
+    assert len(alerts) == 1
+    assert alerts[0].trigger_data == {
+        "session": "London",
+        "count": 3,
+        "total_loss": -300.0,
+        "tickets": [1103, 1102, 1101],
+    }
+
+
+@pytest.mark.asyncio
+async def test_session_loss_streak_no_alert_when_losses_span_sessions(db_session):
+    """No alert when the last 3 losses are split across trading sessions."""
+    trade_data = [
+        (1201, datetime(2026, 5, 21, 8, 0, tzinfo=timezone.utc)),
+        (1202, datetime(2026, 5, 21, 9, 0, tzinfo=timezone.utc)),
+        (1203, datetime(2026, 5, 21, 18, 0, tzinfo=timezone.utc)),
+    ]
+    for ticket, close_time in trade_data:
+        db_session.add(_filled_buy(
+            ticket=ticket,
+            profit=-100.0,
+            close=True,
+            close_time=close_time,
+        ))
+    await db_session.commit()
+
+    event = _event(ticket=1203, close_price=1940.0, profit=-100.0)
+    await check_trade_alerts(db_session, event)
+
+    result = await db_session.execute(
+        select(Alert).where(Alert.type == "session_loss_streak")
+    )
+    assert result.scalars().all() == []
+
+
+@pytest.mark.asyncio
+async def test_session_loss_streak_counts_ny_overlap_hour(db_session):
+    """NY session includes the 13-16 UTC overlap with London."""
+    trade_data = [
+        (1251, datetime(2026, 5, 21, 14, 0, tzinfo=timezone.utc)),
+        (1252, datetime(2026, 5, 21, 18, 0, tzinfo=timezone.utc)),
+        (1253, datetime(2026, 5, 21, 20, 0, tzinfo=timezone.utc)),
+    ]
+    for ticket, close_time in trade_data:
+        db_session.add(_filled_buy(
+            ticket=ticket,
+            profit=-100.0,
+            close=True,
+            close_time=close_time,
+        ))
+    await db_session.commit()
+
+    event = _event(ticket=1253, close_price=1940.0, profit=-100.0)
+    await check_trade_alerts(db_session, event)
+
+    result = await db_session.execute(
+        select(Alert).where(Alert.type == "session_loss_streak")
+    )
+    alerts = result.scalars().all()
+    assert len(alerts) == 1
+    assert alerts[0].trigger_data["session"] == "NY"
+
+
+@pytest.mark.asyncio
+async def test_session_loss_streak_no_alert_with_fewer_than_three_losses(db_session):
+    """No alert until 3 closed real losses exist for the symbol."""
+    for ticket, close_time in [
+        (1301, datetime(2026, 5, 21, 8, 0, tzinfo=timezone.utc)),
+        (1302, datetime(2026, 5, 21, 9, 0, tzinfo=timezone.utc)),
+    ]:
+        db_session.add(_filled_buy(
+            ticket=ticket,
+            profit=-100.0,
+            close=True,
+            close_time=close_time,
+        ))
+    await db_session.commit()
+
+    event = _event(ticket=1302, close_price=1940.0, profit=-100.0)
+    await check_trade_alerts(db_session, event)
+
+    result = await db_session.execute(
+        select(Alert).where(Alert.type == "session_loss_streak")
+    )
     assert result.scalars().all() == []
 
 
