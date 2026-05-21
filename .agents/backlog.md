@@ -1,14 +1,20 @@
 # Task Backlog
 
-**Owner:** Claude adds tasks. Codex picks from the top.
+**Roles:** Claude — design + assign + review. Codex / agy — implement only.
 
 **Workflow:**
-1. Codex takes the top task → updates `.agents/active.md` (owner + status `in_progress`)
-2. Implements per acceptance criteria
-3. Runs verify commands — all must pass
-4. Updates `.agents/handoff.md` → marks task done (~~strikethrough~~ or delete)
+1. Claude assigns `assignee` (codex|agy) and sets `status: pending` before dispatching
+2. Agent picks **only** tasks where `assignee` matches their name
+3. Agent updates `status: in_progress` in this file when starting
+4. Implements per acceptance criteria, runs verify commands — all must pass
+5. Agent updates `status: done` and writes `.agents/handoff.md`
+6. Claude reviews — if bugs found, creates a new `[BUG]` task (never fixes inline)
 
-**Claude review:** After Codex marks done, Claude runs the review checklist in `AGENTS.md` before closing the task.
+**Status values:** `pending` → `in_progress` → `done` | `blocked`
+
+**Bug rule:** Claude เจอ bug ระหว่าง review → สร้าง task ใหม่ prefix `[BUG]` พร้อม `blocks:` field ชี้ไปที่ task ต้นเหตุ อย่าแก้ inline
+
+**Claude review:** After agent marks done, Claude runs the review checklist in `AGENTS.md` before closing the task.
 
 ---
 
@@ -16,6 +22,10 @@
 
 ```
 ### TASK: <title>
+
+**assignee:** codex | agy
+**status:** pending | in_progress | done | blocked
+**blocks:** (optional) task title ที่ task นี้ blocking อยู่
 
 **Why:** one line — what problem this solves
 **Files to touch:**
@@ -26,11 +36,33 @@
 exact commands to confirm it works
 ```
 
+## Bug Task Format
+
+```
+### TASK: [BUG] <title>
+
+**assignee:** codex | agy
+**status:** pending
+**blocks:** <task title ที่พบ bug นี้ระหว่าง review>
+
+**Why:** found during review of <commit/task>
+**Root cause:** one line
+**Files to touch:**
+- specific files only
+**Acceptance criteria:**
+- [ ] specific fix verified
+**Verify:**
+exact commands
+```
+
 ---
 
 ## Queue
 
 ### TASK: Add cumulative P/L endpoint and sparkline to dashboard
+
+**assignee:** codex
+**status:** pending
 
 **Why:** The dashboard shows per-trade P/L but not the trajectory over time. A sparkline of cumulative real P/L helps the user see if they are improving or declining.
 **Files to touch:**
@@ -58,6 +90,9 @@ curl "http://localhost:8000/api/trades/pnl-history?days=30"
 ---
 
 ### TASK: Fibonacci levels — EA compute + backend store + dashboard display
+
+**assignee:** agy
+**status:** pending
 
 **Why:** User ดู fib levels จาก ROM indicator บน TradingView เพื่อหาแนวรับแนวต้าน ระบบควรคำนวณ fib เดียวกันและแสดงบน dashboard ได้เลยโดยไม่ต้องเปิด TradingView
 
