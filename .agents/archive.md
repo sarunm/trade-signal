@@ -4,6 +4,26 @@ Tasks ที่ `status: done` — เก็บไว้เป็น reference
 
 ---
 
+### TASK: [BUG] Fix undeclared g_last_market_tick_sent in EA
+
+**assignee:** codex | **status:** done | **priority:** high
+**commit:** 187649f fix: mark market tick throttle task done / b12897c fix: restore market tick throttle state
+
+**Why:** found during review of commit 6fc99cb — EA will not compile
+**Root cause:** `g_last_market_tick_sent` declaration was deleted from globals but usages at lines 458 + 502 remain
+
+---
+
+### TASK: [BUG] Fix fib_level model uses JSON instead of JSONB
+
+**assignee:** codex | **status:** done | **priority:** low
+**commit:** f9d0e3d fix: use JSONB for fib level payloads
+
+**Why:** found during review of commit 6fc99cb — `api/models/fib_level.py` declares `resistance` + `support` เป็น `JSON` แต่ DB columns เป็น `JSONB` จาก migration 004
+**Root cause:** Codex ใช้ `JSON` แทน `JSONB` ตอน redesign model
+
+---
+
 ### TASK: [BUG] Redesign Fib levels to match ROM indicator — PP method, Weekly period
 
 **assignee:** agy | **status:** done | **priority:** high

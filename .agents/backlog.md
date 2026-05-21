@@ -38,10 +38,8 @@
 
 | # | Task | Assignee | Priority | Status |
 |---|---|---|---|---|
-| 1 | [BUG] Fix undeclared g_last_market_tick_sent in EA | codex | 🔴 high | pending |
-| 2 | Trader Profile MCP — Phase 1 | agy | 🟢 normal | pending |
-| 3 | Trade Advisor — entry scoring + recovery map + live zone alerts | agy | 🟢 normal | blocked |
-| 4 | [BUG] Fix fib_level model JSON → JSONB | codex | 🟡 low | pending |
+| 1 | Trader Profile MCP — Phase 1 | agy | 🟢 normal | pending |
+| 2 | Trade Advisor — entry scoring + recovery map + live zone alerts | agy | 🟢 normal | pending |
 
 **Done tasks:** ดู [archive.md](archive.md)
 
@@ -90,25 +88,6 @@ exact commands
 
 ## Queue
 
-### TASK: [BUG] Fix undeclared g_last_market_tick_sent in EA
-
-**assignee:** codex
-**status:** done
-**priority:** high
-**blocks:** [BUG] Redesign Fib levels to match ROM indicator — PP method, Weekly period
-
-**Why:** found during review of commit 6fc99cb — EA will not compile
-**Root cause:** `g_last_market_tick_sent` declaration was deleted from globals but usages at lines 458 + 502 remain
-**Files to touch:**
-- `ea/TradeSignalBridge.mq5` — เพิ่ม `datetime g_last_market_tick_sent = 0;` กลับในส่วน global declarations (บรรทัดเดียวกับ `g_last_sent_week_time`)
-**Acceptance criteria:**
-- [x] EA compiles ไม่มี undeclared identifier error
-- [x] `g_last_market_tick_sent` declared ใน global scope
-**Verify:**
-Manual compile ใน MT5 Editor — ไม่มี error
-
----
-
 ### TASK: Trader Profile MCP — Phase 1 implementation
 
 **assignee:** agy
@@ -129,34 +108,33 @@ Manual compile ใน MT5 Editor — ไม่มี error
 ### TASK: Trade Advisor — entry scoring + recovery map + live zone alerts
 
 **assignee:** agy
-**status:** blocked
+**status:** pending
 **priority:** normal
-**remark:** รอ spec เขียนเสร็จก่อน — จะ unblock เมื่อ spec commit แล้ว
+**remark:** spec ได้รับการอนุมัติแล้วที่ `docs/superpowers/specs/2026-05-21-trade-advisor-design.md`
 
 **Why:** ให้ระบบช่วย evaluate entry, แสดง recovery plan ตาม fib levels, และ alert เมื่อ price เข้า zone
 **Files to touch:**
-- TBD — รอ spec
+- `api/services/trade_advisor.py` (New)
+- `api/routers/trade_advisor.py` (New)
+- `api/alembic/versions/008_add_trade_advisor_fields.py` (New)
+- `frontend/src/components/TradeAdvisor.jsx` (New)
+- `frontend/src/hooks/useTradeAlerts.js` (New)
+- `tests/test_trade_advisor.py` (New)
+- `api/routers/trade_events.py` (Modify)
+- `api/routers/market_tick.py` (Modify)
+- `api/main.py` (Modify)
+- `frontend/src/App.jsx` (Modify)
 **Acceptance criteria:**
-- TBD — รอ spec
-
----
-
-### TASK: [BUG] Fix fib_level model uses JSON instead of JSONB
-
-**assignee:** codex
-**status:** done
-**priority:** low
-**remark:** ทำงานได้แต่ inconsistent กับ DB type จริง — defer ได้แต่ควรแก้ก่อน migrate production
-**blocks:** [BUG] Redesign Fib levels to match ROM indicator — PP method, Weekly period
-
-**Why:** found during review of commit 6fc99cb — `api/models/fib_level.py` declares `resistance` + `support` เป็น `JSON` แต่ DB columns เป็น `JSONB` จาก migration 004
-**Root cause:** Codex ใช้ `JSON` แทน `JSONB` ตอน redesign model
-**Files to touch:**
-- `api/models/fib_level.py` — เปลี่ยน `mapped_column(JSON, ...)` เป็น `mapped_column(JSONB, ...)` ทั้ง 2 columns + import `from sqlalchemy.dialects.postgresql import JSONB`
-**Acceptance criteria:**
-- [x] `resistance` + `support` ใน model ใช้ `JSONB`
-- [x] `pytest tests/ -v` passes
+- [ ] `compute_entry_score()` คำนวณคะแนนตาม spec (Fib alignment, Session win rate, Entry pattern, Rescue placement, ATR state, Session peak hours, Setup losses)
+- [ ] `compute_recovery_plan()` คำนวณ TP/Add/Cut zones ตาม weekly fib levels
+- [ ] `check_advisor_zones()` ส่ง alert เมื่อราคาถึง zone บน `/api/market-tick` พร้อม cooldown 1 alert ต่อ zone/trade
+- [ ] `GET /api/trade-advisor` คืนข้อมูล open trades พร้อม score + recovery plan
+- [ ] Frontend `TradeAdvisor.jsx` แสดงผล score breakdown + Targets/Zones/Cut
+- [ ] `useTradeAlerts.js` ค้นหา alerts และแจ้งเตือนผ่าน Browser Web Notifications API ทุก 10 วินาที
+- [ ] `pytest tests/test_trade_advisor.py -v` และชุดทดสอบทั้งหมดผ่านการทดสอบ
 **Verify:**
 ```bash
-cd api && pytest ../tests/test_fib_levels.py -v
+cd api && pytest ../tests/test_trade_advisor.py -v
+cd api && pytest ../tests/ -v
+cd frontend && npm run build
 ```
