@@ -1,14 +1,20 @@
 # Task Backlog
 
-**Roles:** Claude — design + assign + review. Codex / agy — implement only.
+**Roles:** Claude — design + assign + PR review + merge. Codex / agy — implement only.
 
 **Workflow:**
 1. Claude assigns `assignee` (codex|agy) and sets `status: pending` before dispatching
 2. Agent picks **only** tasks where `assignee` matches their name
-3. Agent updates `status: in_progress` in this file when starting
-4. Implements per acceptance criteria, runs verify commands — all must pass
-5. Agent updates `status: done` and writes `.agents/handoff.md`
-6. Claude reviews — if bugs found, creates a new `[BUG]` task (never fixes inline)
+3. Agent creates branch: `git checkout -b <assignee>/<task-slug>` และ updates `status: in_progress`
+4. Implements per acceptance criteria
+5. Runs all verify commands — **all must pass before continuing**
+6. Commits, opens PR to `main` via `gh pr create`
+7. Updates `status: done` + writes `.agents/handoff.md` พร้อม PR URL
+8. Claude reads `.agents/feedback.md` + reviews PR diff
+9. Approved → Claude merges PR + pushes
+10. Bugs found → Claude creates `[BUG]` task, requests changes on PR
+
+**Branch naming:** `codex/<task-slug>` หรือ `agy/<task-slug>` เช่น `agy/fib-pp-weekly`
 
 **Status values:** `pending` → `in_progress` → `done` | `blocked`
 
@@ -18,9 +24,9 @@
 
 **Bug rule:** Claude เจอ bug ระหว่าง review → สร้าง task ใหม่ prefix `[BUG]` พร้อม `blocks:` field ชี้ไปที่ task ต้นเหตุ อย่าแก้ inline
 
-**Feedback rule:** Agent เจอ task แปลกๆ, scope ไม่ชัด, มีข้อแนะนำ, หรือ risk → เขียนใน `.agents/feedback.md` ก่อน mark done เสมอ
+**Feedback rule:** Agent เจอ task แปลกๆ, scope ไม่ชัด, มีข้อแนะนำ, หรือ risk → เขียนใน `.agents/feedback.md` ก่อน open PR เสมอ
 
-**Claude review:** After agent marks done, Claude reads `.agents/feedback.md` first, then runs the review checklist in `AGENTS.md` before closing the task.
+**Claude review:** Reads `.agents/feedback.md` → reviews PR → approves + merges หรือ requests changes
 
 ---
 
@@ -203,7 +209,7 @@ Manual — ดู EA logs หลัง deploy
 ### TASK: Add cumulative P/L endpoint and sparkline to dashboard
 
 **assignee:** codex
-**status:** pending
+**status:** done
 
 **Why:** The dashboard shows per-trade P/L but not the trajectory over time. A sparkline of cumulative real P/L helps the user see if they are improving or declining.
 **Files to touch:**
@@ -213,13 +219,13 @@ Manual — ดู EA logs หลัง deploy
 - `frontend/src/components/PnlChart.jsx` — new component (Recharts `LineChart`)
 - `frontend/src/App.jsx` — add `usePolling(fetchPnl)` and render `<PnlChart />`
 **Acceptance criteria:**
-- [ ] `GET /api/trades/pnl-history?days=30` returns JSON array of `[{date: "YYYY-MM-DD", cumulative_pnl: float}, ...]` sorted ascending by date
-- [ ] Only includes closed real trades (`is_paper=false`, `close_time not null`, `profit not null`)
-- [ ] `PnlChart` renders a Recharts `LineChart` — line is green when latest value > 0, red otherwise
-- [ ] Chart is visible on the dashboard below ClosedTrades
-- [ ] Empty state: "No closed trades yet" text (no chart crash)
-- [ ] `pytest tests/ -v` passes
-- [ ] `npm run build` passes
+- [x] `GET /api/trades/pnl-history?days=30` returns JSON array of `[{date: "YYYY-MM-DD", cumulative_pnl: float}, ...]` sorted ascending by date
+- [x] Only includes closed real trades (`is_paper=false`, `close_time not null`, `profit not null`)
+- [x] `PnlChart` renders a Recharts `LineChart` — line is green when latest value > 0, red otherwise
+- [x] Chart is visible on the dashboard below ClosedTrades
+- [x] Empty state: "No closed trades yet" text (no chart crash)
+- [x] `pytest tests/ -v` passes
+- [x] `npm run build` passes
 **Verify:**
 ```bash
 pytest tests/test_trades_api.py -v
