@@ -7,6 +7,7 @@ import FibPanel from './components/FibPanel'
 import OpenPositions from './components/OpenPositions'
 import ClosedTrades from './components/ClosedTrades'
 import DailyPLPanel from './components/DailyPLPanel'
+import PnlChart from './components/PnlChart'
 
 const API = 'http://localhost:8000'
 
@@ -30,6 +31,7 @@ export default function App() {
     () => get(`/api/trades?state=closed&limit=${closedLimit}&offset=${closedOffset}`),
     [closedLimit, closedOffset]
   )
+  const fetchPnl = useCallback(() => get('/api/trades/pnl-history?days=30'), [])
   const fetchFib = useCallback(() => get('/api/fib-levels'), [])
 
   const account = usePolling(fetchAccount)
@@ -38,6 +40,7 @@ export default function App() {
   const dailyPL = usePolling(fetchDailyPL)
   const openTrades = usePolling(fetchOpen)
   const closedTrades = usePolling(fetchClosed)
+  const pnlHistory = usePolling(fetchPnl)
   const fib = usePolling(fetchFib)
 
   const acknowledgeAlert = useCallback(async (id) => {
@@ -90,6 +93,7 @@ export default function App() {
         offset={closedOffset}
         onOffsetChange={setClosedOffset}
       />
+      <PnlChart data={pnlHistory.data} error={pnlHistory.error} />
     </div>
   )
 }

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal, Optional
 from uuid import UUID
@@ -34,6 +34,11 @@ class TradeTagSchema(BaseModel):
         "other",
     ]] = None
     trade_bias: Optional[Literal["bullish", "bearish"]] = None
+
+
+class PnlHistoryPoint(BaseModel):
+    date: date
+    cumulative_pnl: float
 
 
 class TradeResponse(BaseModel):

@@ -1,9 +1,11 @@
-import pytest
 import uuid
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from datetime import datetime, timezone
+
+import pytest
 from models.account_snapshot import AccountSnapshot
-from models.trade import Trade, Direction, OrderState, OrderType
+from models.trade import Direction, OrderState, OrderType, Trade
+from sqlalchemy import select
 
 
 def make_trade(ticket, is_paper=False, close_price=None, profit=None):
@@ -20,14 +22,18 @@ def make_trade(ticket, is_paper=False, close_price=None, profit=None):
         volume=Decimal("0.10"),
         is_paper=is_paper,
         open_time=datetime(2026, 5, 18, 10, 0, tzinfo=timezone.utc),
-        close_time=datetime(2026, 5, 18, 12, 0, tzinfo=timezone.utc) if close_price else None,
+        close_time=datetime(2026, 5, 18, 12, 0, tzinfo=timezone.utc)
+        if close_price
+        else None,
     )
 
 
 @pytest.mark.asyncio
 async def test_list_open_trades(client, db_session):
     db_session.add(make_trade(1001))
-    db_session.add(make_trade(1002, close_price=Decimal("1930.00000"), profit=Decimal("100.00")))
+    db_session.add(
+        make_trade(1002, close_price=Decimal("1930.00000"), profit=Decimal("100.00"))
+    )
     await db_session.commit()
 
     response = await client.get("/api/trades?state=open")
@@ -57,15 +63,17 @@ async def test_list_open_trades_excludes_expired_orders(client, db_session):
 
 @pytest.mark.asyncio
 async def test_list_trades_account_scope_keeps_matching_paper_pair(client, db_session):
-    db_session.add(AccountSnapshot(
-        timestamp=datetime(2026, 5, 20, 10, 0, tzinfo=timezone.utc),
-        equity=Decimal("10000.00"),
-        balance=Decimal("10000.00"),
-        margin=Decimal("0.00"),
-        free_margin=Decimal("10000.00"),
-        floating_pl=Decimal("0.00"),
-        account_id=335297575,
-    ))
+    db_session.add(
+        AccountSnapshot(
+            timestamp=datetime(2026, 5, 20, 10, 0, tzinfo=timezone.utc),
+            equity=Decimal("10000.00"),
+            balance=Decimal("10000.00"),
+            margin=Decimal("0.00"),
+            free_margin=Decimal("10000.00"),
+            floating_pl=Decimal("0.00"),
+            account_id=335297575,
+        )
+    )
     real = make_trade(1001, is_paper=False)
     real.account_id = 335297575
     paper = make_trade(1001, is_paper=True)
@@ -88,7 +96,9 @@ async def test_list_trades_account_scope_keeps_matching_paper_pair(client, db_se
 @pytest.mark.asyncio
 async def test_list_closed_trades(client, db_session):
     db_session.add(make_trade(1001))
-    db_session.add(make_trade(1002, close_price=Decimal("1930.00000"), profit=Decimal("100.00")))
+    db_session.add(
+        make_trade(1002, close_price=Decimal("1930.00000"), profit=Decimal("100.00"))
+    )
     await db_session.commit()
 
     response = await client.get("/api/trades?state=closed")
@@ -112,14 +122,20 @@ async def test_list_trades_returns_both_real_and_paper(client, db_session):
     data = response.json()
     assert len(data) == 2
     paper_row = next(row for row in data if row["is_paper"])
-    assert paper_row["paper_exit_strategy"] == "tp:session_direction_avg;sl:direction_avg"
+    assert (
+        paper_row["paper_exit_strategy"] == "tp:session_direction_avg;sl:direction_avg"
+    )
     assert paper_row["paper_exit_reason"] == "tp"
 
 
 @pytest.mark.asyncio
 async def test_list_closed_trades_limit(client, db_session):
     for i in range(5):
-        db_session.add(make_trade(2000 + i, close_price=Decimal("1930.00000"), profit=Decimal("10.00")))
+        db_session.add(
+            make_trade(
+                2000 + i, close_price=Decimal("1930.00000"), profit=Decimal("10.00")
+            )
+        )
     await db_session.commit()
 
     response = await client.get("/api/trades?state=closed&limit=3")
@@ -251,3 +267,81 @@ async def test_list_trades_respects_offset(client, db_session):
     assert resp_offset.status_code == 200
     assert len(resp_all.json()) == 5
     assert len(resp_offset.json()) == 3
+
+
+@pytest.mark.asyncio
+async def test_get_pnl_history_returns_cumulative_real_closed_trades_sorted(
+    client, db_session
+):
+    db_session.add_all(
+        [
+            make_trade(
+                6001,
+                close_price=Decimal("1930.00000"),
+                profit=Decimal("100.50"),
+            ),
+            make_trade(
+                6002,
+                close_price=Decimal("1910.00000"),
+                profit=Decimal("-25.25"),
+            ),
+            make_trade(
+                6003,
+                close_price=Decimal("1940.00000"),
+                profit=Decimal("10.00"),
+            ),
+        ]
+    )
+    await db_session.flush()
+    trades = await db_session.execute(
+        select(Trade).where(Trade.ticket.in_([6001, 6002, 6003]))
+    )
+    rows = {trade.ticket: trade for trade in trades.scalars().all()}
+    rows[6001].close_time = datetime(2026, 5, 18, 12, 0, tzinfo=timezone.utc)
+    rows[6002].close_time = datetime(2026, 5, 19, 12, 0, tzinfo=timezone.utc)
+    rows[6003].close_time = datetime(2026, 5, 19, 14, 0, tzinfo=timezone.utc)
+    await db_session.commit()
+
+    response = await client.get("/api/trades/pnl-history?days=30")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {"date": "2026-05-18", "cumulative_pnl": 100.5},
+        {"date": "2026-05-19", "cumulative_pnl": 85.25},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_get_pnl_history_excludes_paper_open_and_null_profit_trades(
+    client, db_session
+):
+    closed_real = make_trade(
+        6101, close_price=Decimal("1930.00000"), profit=Decimal("80.00")
+    )
+    paper = make_trade(
+        6102, is_paper=True, close_price=Decimal("1930.00000"), profit=Decimal("999.00")
+    )
+    open_real = make_trade(6103, profit=Decimal("50.00"))
+    null_profit = make_trade(6104, close_price=Decimal("1930.00000"))
+    db_session.add_all([closed_real, paper, open_real, null_profit])
+    await db_session.commit()
+
+    response = await client.get("/api/trades/pnl-history?days=30")
+
+    assert response.status_code == 200
+    assert response.json() == [{"date": "2026-05-18", "cumulative_pnl": 80.0}]
+
+
+@pytest.mark.asyncio
+async def test_get_pnl_history_uses_today_anchor_not_latest_trade(client, db_session):
+    old_trade = make_trade(
+        6201, close_price=Decimal("1930.00000"), profit=Decimal("80.00")
+    )
+    old_trade.close_time = datetime.now(timezone.utc) - timedelta(days=60)
+    db_session.add(old_trade)
+    await db_session.commit()
+
+    response = await client.get("/api/trades/pnl-history?days=30")
+
+    assert response.status_code == 200
+    assert response.json() == []
