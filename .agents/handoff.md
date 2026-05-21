@@ -7,6 +7,9 @@ Last task commit: bcd71a5 test: add env-var loading test for Settings + update a
 
 ## What Changed This Session
 
+- **Bug fix (`TASK: [BUG] Fix undeclared g_last_market_tick_sent in EA`)**:
+  - Restored `datetime g_last_market_tick_sent = 0;` in the EA global declarations.
+  - Marked the backlog bug task done after verifying the declaration and existing usages.
 - **Cumulative P/L endpoint + sparkline (`TASK: Add cumulative P/L endpoint and sparkline to dashboard`)**:
   - Confirmed existing commit `cef6045 feat: add cumulative P/L endpoint and sparkline dashboard` satisfies the task.
   - Marked the backlog task done after re-running verification from current `HEAD`.
@@ -25,6 +28,8 @@ Last task commit: bcd71a5 test: add env-var loading test for Settings + update a
 
 ## Verified
 
+- `rg -n "^datetime g_last_market_tick_sent = 0;|g_last_market_tick_sent" ea/TradeSignalBridge.mq5`: declaration at global line 16 and usages at lines 459/503
+- MT5 compile still requires manual MetaEditor verification; no `.mq5` compiler is available in this repo session
 - `pytest tests/test_trades_api.py -v`: 15 passed
 - `pytest tests/ -v`: 116 passed
 - `cd frontend && npm run build`: passed

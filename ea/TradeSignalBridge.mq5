@@ -13,6 +13,7 @@ input int    InpMarketTickSec = 1;    // throttle bid/ask posts for paper exits
 input int    InpSyncDays   = 30;   // days of closed deal history to sync on startup
 
 datetime g_last_sent_week_time = 0;
+datetime g_last_market_tick_sent = 0;
 
 //--- HTTP POST — logs status code and response body on non-200
 bool PostJSON(const string endpoint, const string body)
