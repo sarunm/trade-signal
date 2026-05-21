@@ -48,17 +48,19 @@
 | **Fib alignment** | `trade.near_fib_level` ± 5 pts | +25 (PP), +20 (R/S level), 0 (ไกล) |
 | **Session win rate** | insight_engine — session ปัจจุบัน | +20 (>60%), 0 (40–60%), −15 (<40%) |
 | **Entry pattern** | `trade.entry_candle_type` | +20 (pin bar / engulfing ตรงทิศทาง) |
-| **Consecutive setup losses** | trades grouped by setup (ดูด้านล่าง) | −15 ต่อ setup (max −30) |
 | **Rescue placement** | `trade.is_rescue` + `near_fib_level` | +15 (ตรง fib ± 5 pts), −15 (ไม่ตรง) |
+| **ATR state** | `price_bars` H/L/C — 20-bar ATR avg | +10 (ATR ≤ 1.5× avg), −10 (ATR > 1.5× avg) |
+| **Session peak hours** | `datetime.utcnow()` | +10 (London 9–11am / NY 2–4pm UTC), −10 (Fri >17:00 / Mon <8:00 UTC) |
+| **Consecutive setup losses** | trades grouped by setup (ดูด้านล่าง) | −15 ต่อ setup (max −30) |
 
-**Max score:** 80 pts (25+20+20+15) — consecutive losses และ rescue ไม่ดีสามารถทำให้ติดลบได้
+**Max score:** 100 pts (25+20+20+15+10+10) — consecutive losses และ rescue ไม่ดีสามารถทำให้ติดลบได้
 
 ### Verdict
 
 ```
-55–80   ✅  Good entry
-30–54   ⚠️  Caution
-< 30    ❌  High risk
+70–100  ✅  Good entry
+40–69   ⚠️  Caution
+< 40    ❌  High risk
 ```
 
 ### นิยาม "1 Setup"
