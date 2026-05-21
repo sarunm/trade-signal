@@ -1,5 +1,7 @@
 # Task Backlog
 
+**Obsidian Knowledge Base:** ก่อนเริ่ม task ใดก็ตาม ให้อ่าน `/Users/nick/Obsidian Vault/agents/INDEX.md` ก่อนเสมอ — ดูว่าต้องอ่านไฟล์ไหนต่อ แล้วอ่านเฉพาะไฟล์นั้น
+
 **Roles:** Claude — design + assign + PR review + merge. Codex / agy — implement only.
 
 **Workflow:**
