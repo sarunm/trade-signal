@@ -331,6 +331,18 @@ async def _check_session_loss_streak(session: AsyncSession, event: TradeEventSch
 
     total_loss = float(sum(t.profit for t in recent))
     session_name = _pick_session(common_sessions)
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=ALERT_COOLDOWN_HOURS)
+    existing = await session.execute(
+        select(Alert).where(
+            Alert.type == "session_loss_streak",
+            Alert.sent_at >= cutoff,
+        )
+    )
+    for alert in existing.scalars().all():
+        if alert.trigger_data and alert.trigger_data.get("session") == session_name:
+            return
+
     session.add(Alert(
         type="session_loss_streak",
         message=(
@@ -349,6 +361,8 @@ async def _check_session_loss_streak(session: AsyncSession, event: TradeEventSch
 
 
 def _sessions_for_close_time(value: datetime) -> list[str]:
+    if value.tzinfo is not None:
+        value = value.astimezone(timezone.utc)
     hour = value.hour
     sessions = []
     if 7 <= hour < 16:

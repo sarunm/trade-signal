@@ -3,11 +3,11 @@
 Updated: 2026-05-21
 Current owner: codex
 Branch: main
-Last task commit: feat: add session-loss-streak alert
+Last task commit: fix: dedup guard and UTC enforcement in session-loss-streak alert
 
 ## Current Goal
 
-Completed: added session-loss-streak alert.
+Completed: fixed session-loss-streak alert review bugs.
 
 ## Status
 
@@ -15,4 +15,4 @@ Idle — handing off to Claude review.
 
 ## Next Step
 
-Claude: review `feat: add session-loss-streak alert`, then queue or approve the next backlog item.
+Claude: review `fix: dedup guard and UTC enforcement in session-loss-streak alert`.

@@ -1,11 +1,16 @@
 import pytest
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 from sqlalchemy import select
 from models.trade import Trade, Direction, OrderState
 from models.alert import Alert
-from services.alert_manager import check_trade_alerts, check_equity_buffer, check_insight_alerts
+from services.alert_manager import (
+    _sessions_for_close_time,
+    check_trade_alerts,
+    check_equity_buffer,
+    check_insight_alerts,
+)
 from schemas.trade_event import TradeEventSchema
 from schemas.price_tick import PriceTickSchema, AccountStateSchema, OHLCVSchema
 
@@ -214,6 +219,44 @@ async def test_session_loss_streak_counts_ny_overlap_hour(db_session):
     alerts = result.scalars().all()
     assert len(alerts) == 1
     assert alerts[0].trigger_data["session"] == "NY"
+
+
+@pytest.mark.asyncio
+async def test_session_loss_streak_deduplicates_same_session_within_cooldown(db_session):
+    """No duplicate alert for the same session within the cooldown window."""
+    db_session.add(Alert(
+        type="session_loss_streak",
+        message="existing London loss streak",
+        trigger_data={"session": "London"},
+        sent_at=datetime.now(timezone.utc),
+        acknowledged=False,
+    ))
+    for ticket, close_time in [
+        (1261, datetime(2026, 5, 21, 8, 0, tzinfo=timezone.utc)),
+        (1262, datetime(2026, 5, 21, 9, 0, tzinfo=timezone.utc)),
+        (1263, datetime(2026, 5, 21, 10, 0, tzinfo=timezone.utc)),
+    ]:
+        db_session.add(_filled_buy(
+            ticket=ticket,
+            profit=-100.0,
+            close=True,
+            close_time=close_time,
+        ))
+    await db_session.commit()
+
+    event = _event(ticket=1263, close_price=1940.0, profit=-100.0)
+    await check_trade_alerts(db_session, event)
+
+    result = await db_session.execute(
+        select(Alert).where(Alert.type == "session_loss_streak")
+    )
+    assert len(result.scalars().all()) == 1
+
+
+def test_session_loss_streak_uses_utc_for_timezone_aware_close_times():
+    """Timezone-aware close times are grouped by UTC session hours."""
+    ict = timezone(timedelta(hours=7))
+    assert _sessions_for_close_time(datetime(2026, 5, 21, 14, 0, tzinfo=ict)) == ["London"]
 
 
 @pytest.mark.asyncio
