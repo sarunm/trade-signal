@@ -1,18 +1,18 @@
 # Active Agent State
 
 Updated: 2026-05-21
-Current owner: codex
+Current owner: agy
 Branch: main
 Last task commit: fix: dedup guard and UTC enforcement in session-loss-streak alert
 
 ## Current Goal
 
-Completed: fixed session-loss-streak alert review bugs.
+Redesign Fib levels to match ROM indicator — PP method, Weekly period.
 
 ## Status
 
-Idle — handing off to Claude review.
+In Progress — agy is implementing the redesign.
 
 ## Next Step
 
-Claude: review `fix: dedup guard and UTC enforcement in session-loss-streak alert`.
+agy: Design implementation plan and request user approval.
