@@ -1,44 +1,30 @@
 # Agent Handoff
 
-Updated: 2026-05-18
-Agent: claude
+Updated: 2026-05-21
+Agent: codex
 Branch: main
-Last commit: f08034d docs: add shared agent handoff state
+Last task commit: refactor: migrate Pydantic settings config
 
-## What Changed This Session (not yet committed)
+## What Changed This Session
 
-### Backend
-- `api/services/insight_engine.py`: added `_compute_early_exit_rate()` — compares closed real trades vs their paper mirrors, creates `early_exit_rate` insight in Thai when ≥10 winning trades and early-exit rate ≥60%
+- Committed existing daily P/L dashboard work:
+  - `8c99b5c feat: add daily P/L dashboard panel`
+  - `eb8b5f2 docs: add trading system planning artifacts`
+- `api/config.py`: replaced class-based Pydantic settings config with `model_config = ConfigDict(env_file=".env")`.
+- `tests/test_pydantic_config.py`: added regression coverage to prevent reintroducing `class Config`.
+- `.agents/backlog.md`: removed completed commit/Pydantic tasks; next task is `Add session-loss-streak alert`.
 
-### Frontend
-- `frontend/src/components/ClosedTrades.jsx`: added Entry (`open_price`) and Exit Price (`close_price`) columns
-- `frontend/src/components/InsightsPanel.jsx`: added `early_exit_rate: 'bg-amber-900 text-amber-200'` to TYPE_COLORS
+## Verified
 
-### EA
-- `ea/TradeSignalBridge.mq5`: `SyncHistoryDeals` — DEAL_ENTRY_OUT now uses `DEAL_POSITION_ID` as ticket (so upsert merges close data onto opening row, not orphan row)
-- `ea/TradeSignalBridge.mq5`: `OnTradeTransaction` — same fix: DEAL_ENTRY_OUT sets `ticket = position_id`
-
-### Agent state
-- `AGENTS.md`: full rewrite — current system state, engineering rules, Claude review checklist
-- `.agents/backlog.md`: full rewrite — 4 tasks with acceptance criteria and verify commands
-- `.agents/active.md`: updated
-- `.agents/handoff.md`: updated (this file)
-
-### DB cleanup (already applied to running DB)
-- Deleted 12 orphan close rows (real trades with close_price only, no open_price)
-- Deleted 5 paper trades with no SL/TP
-
-## Verified (pre-commit)
-
-- `pytest tests/ -v`: 64 passed, 1 Pydantic deprecation warning
-- `cd frontend && npm run build`: passes
+- `pytest tests/test_pydantic_config.py -v`: 1 passed
+- `rg -n "class Config" api`: no matches
+- `pytest tests/ -v 2>&1 | grep -E "warning|Warning|passed|failed"`: `106 passed`, no warning lines
+- `pytest tests/ -v`: 106 passed
 
 ## Known Issues
 
-- EA fix requires user to restart EA in MT5 for `SyncHistoryDeals` to re-run with the corrected position-ticket logic
-- Paper trades created before this session have no SL/TP (orphaned paper rows were deleted; new ones will be created on next real trade event after EA restart)
-- `early_exit_rate` insight requires ≥10 winning trades in DB to fire — will stay silent until enough data accumulates
+- `.DS_Store` remains untracked and intentionally uncommitted.
 
 ## Next Best Step
 
-Codex: take the top task in `.agents/backlog.md` — run tests, build, commit all staged changes.
+Claude: review `refactor: migrate Pydantic settings config`.

@@ -30,52 +30,6 @@ exact commands to confirm it works
 
 ## Queue
 
-### TASK: Commit pending changes (early-exit insight + ClosedTrades columns + EA position-ticket fix + AGENTS.md rewrite)
-
-**Why:** Several changes were made in the current session but not committed: early_exit_rate insight, ClosedTrades entry/exit price columns, InsightsPanel amber color, EA DEAL_POSITION_ID fix for ENTRY_OUT deals, and AGENTS.md rewrite.
-**Files to touch:**
-- `api/services/insight_engine.py` (verify `_compute_early_exit_rate` exists)
-- `frontend/src/components/ClosedTrades.jsx` (verify Entry + Exit Price columns)
-- `frontend/src/components/InsightsPanel.jsx` (verify `early_exit_rate` amber color)
-- `ea/TradeSignalBridge.mq5` (verify DEAL_POSITION_ID used for ENTRY_OUT in both SyncHistoryDeals and OnTradeTransaction)
-- `AGENTS.md`
-- `.agents/backlog.md`
-- `.agents/active.md`
-- `.agents/handoff.md`
-**Acceptance criteria:**
-- [ ] `pytest tests/ -v` passes (64 passed, 1 warning — no regressions)
-- [ ] `cd frontend && npm run build` passes
-- [ ] All changed files are staged and committed with a clear message
-- [ ] `git log --oneline -1` shows the commit
-**Verify:**
-```bash
-pytest tests/ -v
-cd frontend && npm run build
-git diff --stat HEAD
-git log --oneline -3
-```
-
----
-
-### TASK: Fix Pydantic v2 deprecation warning
-
-**Why:** `pytest tests/ -v` prints a `PydanticDeprecatedSince20` warning about class-based `Config`. Clean test output makes regressions easier to spot.
-**Files to touch:**
-- All files under `api/schemas/` and `api/models/` that use `class Config:`
-- Run `grep -rn "class Config" api/` to find them
-**Acceptance criteria:**
-- [ ] `pytest tests/ -v` passes with **0 warnings** (not just 0 failures)
-- [ ] No `class Config:` remains in `api/schemas/` or `api/models/`
-- [ ] All replaced with `model_config = ConfigDict(...)` from `pydantic import ConfigDict`
-- [ ] No existing schema or model behaviour changes — all 64 tests still pass
-**Verify:**
-```bash
-grep -rn "class Config" api/
-pytest tests/ -v 2>&1 | grep -E "warning|Warning|passed|failed"
-```
-
----
-
 ### TASK: Add session-loss-streak alert
 
 **Why:** `consecutive_loss` fires on any 3 losses in a row. A more useful alert is when those losses cluster in the same trading session (London / NY / Asia) — it tells the user to stop trading that session today.

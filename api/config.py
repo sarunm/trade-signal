@@ -1,3 +1,4 @@
+from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
 
 
@@ -9,8 +10,7 @@ class Settings(BaseSettings):
         "postgresql+psycopg2://tradesignal:tradesignal@db:5432/tradesignal"
     )
 
-    class Config:
-        env_file = ".env"
+    model_config = ConfigDict(env_file=".env")
 
 
 settings = Settings()

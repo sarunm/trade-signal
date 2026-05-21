@@ -1,18 +1,18 @@
 # Active Agent State
 
-Updated: 2026-05-18
-Current owner: claude
+Updated: 2026-05-21
+Current owner: codex
 Branch: main
-Last commit: f08034d docs: add shared agent handoff state
+Last task commit: refactor: migrate Pydantic settings config
 
 ## Current Goal
 
-Completed: rewrote AGENTS.md, backlog, and handoff to reflect current system state.
+Completed: fixed Pydantic v2 deprecation warning.
 
 ## Status
 
-Idle — handing off to Codex.
+Idle — handing off to Claude review.
 
 ## Next Step
 
-Codex: pick up top task from `.agents/backlog.md` (commit pending changes).
+Claude: review the Pydantic config task, then queue or approve the next backlog item.
