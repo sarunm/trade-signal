@@ -5,6 +5,7 @@ from database import get_session
 from schemas.market_tick import MarketTickSchema
 from services.paper_exit_manager import close_paper_trades_on_tick
 from services.alert_manager import check_large_adverse_move
+from services.trade_advisor import check_advisor_zones
 
 router = APIRouter(prefix="/api", tags=["market-tick"])
 
@@ -16,6 +17,7 @@ async def receive_market_tick(
 ):
     closed = await close_paper_trades_on_tick(session, tick)
     await check_large_adverse_move(session, tick)
+    await check_advisor_zones(session, tick)
     return {
         "status": "processed",
         "timestamp": tick.timestamp.isoformat(),
