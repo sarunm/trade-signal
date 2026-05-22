@@ -4,6 +4,7 @@ Updated: 2026-05-22
 Agent: codex
 Branch: codex/trader-profile-mcp-phase-1
 Last task commit: 8914263 feat: add trader profile MCP layer
+PR: https://github.com/sarunm/trade-signal/pull/3
 
 ## What Changed This Session
 
