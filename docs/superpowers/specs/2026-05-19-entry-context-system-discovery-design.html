@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Entry Context & System Discovery — Design Spec</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f1117; color: #e2e8f0; line-height: 1.7; }
+
+  .sidebar { position: fixed; top: 0; left: 0; width: 220px; height: 100vh; background: #161b27; border-right: 1px solid #2d3748; overflow-y: auto; padding: 24px 0; z-index: 100; }
+  .sidebar h3 { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: #4a5568; padding: 0 20px 8px; }
+  .sidebar a { display: block; font-size: 12px; color: #718096; text-decoration: none; padding: 5px 20px; border-left: 3px solid transparent; transition: all .15s; }
+  .sidebar a:hover { color: #e2e8f0; border-left-color: #4f80ff; background: #1a2035; }
+  .sidebar .sub { padding-left: 32px; font-size: 11px; }
+
+  .main { margin-left: 220px; padding: 40px 48px; max-width: 960px; }
+
+  h1 { font-size: 26px; font-weight: 700; color: #fff; margin-bottom: 8px; }
+  h2 { font-size: 18px; font-weight: 700; color: #fff; margin: 40px 0 16px; padding-bottom: 8px; border-bottom: 1px solid #2d3748; }
+  h3 { font-size: 14px; font-weight: 700; color: #a0aec0; margin: 24px 0 10px; }
+  h4 { font-size: 13px; font-weight: 600; color: #63b3ed; margin: 18px 0 8px; font-family: 'SF Mono', monospace; }
+
+  .meta { display: flex; flex-wrap: wrap; gap: 12px; margin: 16px 0 24px; }
+  .meta-item { background: #1a2035; border: 1px solid #2d3748; border-radius: 8px; padding: 10px 16px; font-size: 12px; }
+  .meta-item strong { display: block; color: #4a5568; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 4px; }
+  .meta-item span { color: #e2e8f0; }
+
+  .callout { border-radius: 8px; padding: 14px 18px; margin: 16px 0; font-size: 13px; }
+  .callout.info { background: #1a2a4a; border-left: 4px solid #4f80ff; color: #bee3f8; }
+  .callout.warn { background: #2a2010; border-left: 4px solid #d69e2e; color: #faf089; }
+  .callout.success { background: #0d2a1a; border-left: 4px solid #38a169; color: #9ae6b4; }
+
+  .phase-row { display: flex; gap: 12px; margin: 16px 0; }
+  .phase-card { flex: 1; border-radius: 8px; padding: 16px; text-align: center; }
+  .phase-card.active { background: #1a2a4a; border: 2px solid #4f80ff; }
+  .phase-card.future { background: #1a1a2a; border: 1px solid #2d3748; }
+  .phase-card .label { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: #4a5568; margin-bottom: 6px; }
+  .phase-card .title { font-size: 13px; font-weight: 600; }
+  .phase-card.active .title { color: #90cdf4; }
+  .phase-card.future .title { color: #4a5568; }
+  .phase-card .desc { font-size: 11px; color: #4a5568; margin-top: 4px; }
+  .phase-card.active .desc { color: #718096; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 12px 0; }
+  th { background: #1a2035; color: #718096; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; padding: 10px 14px; text-align: left; border-bottom: 1px solid #2d3748; }
+  td { padding: 10px 14px; border-bottom: 1px solid #1e2637; color: #e2e8f0; vertical-align: top; }
+  tr:hover td { background: #161b27; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+  .badge.auto { background: #0d2a1a; color: #68d391; }
+  .badge.manual { background: #2a1a3a; color: #b794f4; }
+  .badge.post { background: #2a1a10; color: #f6ad55; }
+
+  code { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; background: #1e2637; padding: 2px 6px; border-radius: 4px; color: #81e6d9; }
+  pre { background: #161b27; border: 1px solid #2d3748; border-radius: 8px; padding: 18px; overflow-x: auto; margin: 12px 0; }
+  pre code { background: none; padding: 0; color: #e2e8f0; font-size: 12px; line-height: 1.6; }
+
+  .insight-card { background: #161b27; border: 1px solid #2d3748; border-radius: 8px; padding: 16px; margin: 10px 0; }
+  .insight-card .type { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: #4a5568; margin-bottom: 6px; }
+  .insight-card .example { font-size: 13px; color: #e2e8f0; background: #0f1117; border-radius: 6px; padding: 10px 14px; margin-top: 8px; font-family: 'SF Mono', monospace; }
+  .insight-card .win { color: #68d391; }
+  .insight-card .lose { color: #fc8181; }
+
+  .alert-card { background: #2a1a10; border: 1px solid #744210; border-radius: 8px; padding: 16px; margin: 10px 0; }
+  .alert-card .type { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: #744210; margin-bottom: 6px; }
+  .alert-card .msg { font-size: 13px; color: #fbd38d; background: #1a1000; border-radius: 6px; padding: 10px 14px; margin-top: 8px; }
+
+  .ui-mock { background: #1a2035; border: 1px solid #2d3748; border-radius: 8px; padding: 16px; font-family: 'SF Mono', monospace; font-size: 12px; margin: 12px 0; }
+  .ui-mock .row-real { color: #90cdf4; padding: 4px 0; }
+  .ui-mock .row-paper { color: #a0aec0; padding: 4px 0; }
+  .ui-mock .row-header { color: #fff; font-weight: 700; padding: 4px 0; border-bottom: 1px solid #2d3748; margin-bottom: 6px; }
+  .ui-mock .delta-pos { color: #68d391; }
+  .ui-mock .delta-neg { color: #fc8181; }
+
+  .file-grid { display: grid; grid-template-columns: auto 1fr; gap: 0; border: 1px solid #2d3748; border-radius: 8px; overflow: hidden; font-size: 12px; }
+  .file-grid .file-action { background: #1a2035; padding: 8px 14px; border-bottom: 1px solid #2d3748; color: #718096; font-weight: 600; text-transform: uppercase; font-size: 10px; letter-spacing: .06em; }
+  .file-grid .file-path { background: #0f1117; padding: 8px 14px; border-bottom: 1px solid #2d3748; font-family: 'SF Mono', monospace; color: #81e6d9; }
+  .file-grid .create { color: #68d391; }
+  .file-grid .modify { color: #f6ad55; }
+
+  .test-list { list-style: none; }
+  .test-list li { display: flex; align-items: flex-start; gap: 10px; padding: 6px 0; border-bottom: 1px solid #1e2637; font-size: 13px; }
+  .test-list li:last-child { border-bottom: none; }
+  .test-list .test-name { font-family: 'SF Mono', monospace; color: #81e6d9; font-size: 11px; min-width: 280px; }
+  .test-list .test-desc { color: #718096; font-size: 12px; }
+
+  .section-num { display: inline-block; background: #4f80ff; color: #fff; border-radius: 50%; width: 22px; height: 22px; text-align: center; line-height: 22px; font-size: 11px; font-weight: 700; margin-right: 8px; }
+
+  .values-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+  .value-chip { background: #1e2637; border: 1px solid #2d3748; border-radius: 20px; padding: 3px 12px; font-size: 11px; font-family: 'SF Mono', monospace; color: #e2e8f0; }
+</style>
+</head>
+<body>
+
+<nav class="sidebar">
+  <h3>Sections</h3>
+  <a href="#overview">Overview</a>
+  <a href="#roadmap">Phase Roadmap</a>
+  <a href="#data">1. Data Model</a>
+  <a class="sub" href="#columns">1.1 New Columns</a>
+  <a class="sub" href="#migration">1.2 Migration</a>
+  <a href="#autofill">2. Auto-Fill</a>
+  <a class="sub" href="#fib-prox">Fib Proximity</a>
+  <a class="sub" href="#h1-candle">H1 Candle</a>
+  <a class="sub" href="#rescue">Is Rescue</a>
+  <a href="#api">3. API Changes</a>
+  <a href="#insights">4. Insight Engine</a>
+  <a href="#alerts">5. New Alerts</a>
+  <a href="#frontend">6. Frontend</a>
+  <a href="#testing">7. Testing</a>
+  <a href="#files">8. File Summary</a>
+</nav>
+
+<main class="main">
+
+  <h1 id="overview">Entry Context & Trading System Discovery</h1>
+
+  <div class="meta">
+    <div class="meta-item"><strong>Goal</strong><span>Discover winning conditions from trade history</span></div>
+    <div class="meta-item"><strong>Stack</strong><span>FastAPI · PostgreSQL · React · Tailwind</span></div>
+    <div class="meta-item"><strong>New deps</strong><span>None</span></div>
+    <div class="meta-item"><strong>Migration</strong><span>005_add_entry_context</span></div>
+  </div>
+
+  <div class="callout info">
+    <strong>Goal:</strong> Capture rich market context at every trade entry (5 fields auto-fill, 2 manual tag via dashboard) so the insight engine can statistically discover which conditions correlate with winning trades — building labeled data for an eventual autonomous EA.
+  </div>
+
+  <div class="callout warn">
+    <strong>For implementers:</strong> Maintain <code>implementation-notes.md</code> throughout — record every decision not in this spec, deviations, trade-offs, and open questions for review.
+  </div>
+
+  <!-- ROADMAP -->
+  <h2 id="roadmap">Phase Roadmap</h2>
+  <div class="phase-row">
+    <div class="phase-card active">
+      <div class="label">This Spec</div>
+      <div class="title">Phase 1</div>
+      <div class="desc">Capture labeled data + statistical insight discovery</div>
+    </div>
+    <div class="phase-card future">
+      <div class="label">Next</div>
+      <div class="title">Phase 2</div>
+      <div class="desc">EA rules derived from discovered patterns</div>
+    </div>
+    <div class="phase-card future">
+      <div class="label">Future</div>
+      <div class="title">Phase 3</div>
+      <div class="desc">ML classifier — needs 200+ labeled trades</div>
+    </div>
+  </div>
+
+  <!-- DATA MODEL -->
+  <h2 id="data"><span class="section-num">1</span>Data Model</h2>
+
+  <h3 id="columns">1.1 New columns on <code>trades</code> table</h3>
+  <p style="font-size:12px;color:#4a5568;margin-bottom:12px;">All nullable — no backfill required on existing rows.</p>
+
+  <table>
+    <thead>
+      <tr><th>Column</th><th>Type</th><th>Source</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>setup_pattern</code></td><td>VARCHAR(30)</td><td><span class="badge manual">Manual</span></td><td>Chart pattern user identified at entry</td></tr>
+      <tr><td><code>trade_bias</code></td><td>VARCHAR(10)</td><td><span class="badge manual">Manual</span></td><td>User's directional conviction (bullish/bearish)</td></tr>
+      <tr><td><code>near_fib_level</code></td><td>VARCHAR(10)</td><td><span class="badge auto">Auto</span></td><td>Closest ROM Fib level label, e.g. <code>S0.235</code>, <code>PP</code>, <code>R1.000</code></td></tr>
+      <tr><td><code>fib_distance_pts</code></td><td>NUMERIC(8,2)</td><td><span class="badge auto">Auto</span></td><td>Points between open_price and nearest Fib level</td></tr>
+      <tr><td><code>h1_candle</code></td><td>VARCHAR(30)</td><td><span class="badge auto">Auto</span></td><td>Candle pattern on H1 at entry, e.g. <code>pin_bar_bullish</code></td></tr>
+      <tr><td><code>is_rescue</code></td><td>BOOLEAN</td><td><span class="badge auto">Auto</span></td><td>True if ≥1 open real trade in same symbol+direction exists</td></tr>
+      <tr><td><code>post_close_run_pts</code></td><td>NUMERIC(8,2)</td><td><span class="badge post">Post-close</span></td><td>Max favorable move in 8h after close (H1 bars)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Valid values</h3>
+  <p style="font-size:12px;color:#718096;margin-bottom:6px;"><strong style="color:#a0aec0">setup_pattern</strong></p>
+  <div class="values-row">
+    <span class="value-chip">double_bottom</span><span class="value-chip">double_top</span>
+    <span class="value-chip">triple_bottom</span><span class="value-chip">triple_top</span>
+    <span class="value-chip">rounded_bottom</span><span class="value-chip">rounded_top</span>
+    <span class="value-chip">price_cluster</span><span class="value-chip">other</span>
+    <span class="value-chip" style="color:#4a5568">null (untagged)</span>
+  </div>
+  <p style="font-size:12px;color:#718096;margin:10px 0 6px;"><strong style="color:#a0aec0">trade_bias</strong></p>
+  <div class="values-row">
+    <span class="value-chip">bullish</span><span class="value-chip">bearish</span>
+  </div>
+  <p style="font-size:12px;color:#718096;margin:10px 0 6px;"><strong style="color:#a0aec0">h1_candle</strong></p>
+  <div class="values-row">
+    <span class="value-chip">pin_bar_bullish</span><span class="value-chip">pin_bar_bearish</span>
+    <span class="value-chip">engulfing_bullish</span><span class="value-chip">engulfing_bearish</span>
+    <span class="value-chip">doji</span><span class="value-chip">none</span>
+  </div>
+
+  <h3 id="migration">1.2 Migration — <code>005_add_entry_context.py</code></h3>
+  <pre><code>def upgrade():
+    op.add_column("trades", sa.Column("setup_pattern",    sa.String(30),      nullable=True))
+    op.add_column("trades", sa.Column("trade_bias",       sa.String(10),      nullable=True))
+    op.add_column("trades", sa.Column("near_fib_level",   sa.String(10),      nullable=True))
+    op.add_column("trades", sa.Column("fib_distance_pts", sa.Numeric(8, 2),   nullable=True))
+    op.add_column("trades", sa.Column("h1_candle",        sa.String(30),      nullable=True))
+    op.add_column("trades", sa.Column("is_rescue",        sa.Boolean,         nullable=True))
+    op.add_column("trades", sa.Column("post_close_run_pts", sa.Numeric(8, 2), nullable=True))
+
+def downgrade():
+    for col in ["setup_pattern","trade_bias","near_fib_level",
+                "fib_distance_pts","h1_candle","is_rescue","post_close_run_pts"]:
+        op.drop_column("trades", col)</code></pre>
+
+  <!-- AUTO-FILL -->
+  <h2 id="autofill"><span class="section-num">2</span>Auto-Fill Entry Context</h2>
+
+  <div class="callout info">New file: <code>api/services/entry_context.py</code> — called by <code>trade_logger.py</code> after ENTRY_IN upsert, only for real trades (<code>is_paper=False</code>) with <code>open_price</code> set. Does <strong>not</strong> commit — caller commits.</div>
+
+  <h4 id="fib-prox">_fill_fib_proximity(session, trade)</h4>
+  <ol style="font-size:13px;color:#a0aec0;padding-left:20px;line-height:2;">
+    <li>Query <code>fib_levels</code> for <code>symbol = trade.symbol</code> (most recent row)</li>
+    <li>If no row → skip (fields stay null)</li>
+    <li>Collect all label/price pairs from <code>levels</code> dict (key <code>"0.000"</code> → label <code>"PP"</code>; other keys → prefix <code>R</code>, e.g. <code>"0.235"</code> → <code>"R0.235"</code>) and <code>extensions</code> dict (keys → prefix <code>S</code>, e.g. <code>"0.235"</code> → <code>"S0.235"</code>)</li>
+    <li>Find label with <code>min(abs(open_price - price))</code></li>
+    <li>Set <code>trade.near_fib_level = label</code>, <code>trade.fib_distance_pts = distance</code></li>
+  </ol>
+
+  <h4 id="h1-candle">_fill_h1_candle(session, trade)</h4>
+  <ol style="font-size:13px;color:#a0aec0;padding-left:20px;line-height:2;">
+    <li>If <code>trade.open_time</code> is None → skip</li>
+    <li><code>hour_start = open_time.replace(minute=0, second=0, microsecond=0)</code></li>
+    <li>Query current H1 bar: <code>time ∈ [hour_start, hour_start + 1h)</code></li>
+    <li>Query previous H1 bar: <code>time ∈ [hour_start - 1h, hour_start)</code></li>
+    <li>If no current bar → skip</li>
+    <li>Build <code>bars = [prev?, current]</code>, run <code>detect_pin_bar(bars)</code> → <code>pin_bar_{direction}</code></li>
+    <li>Else <code>detect_engulfing(bars)</code> → <code>engulfing_{direction}</code></li>
+    <li>Else if <code>open == close</code> → <code>"doji"</code></li>
+    <li>Else → <code>"none"</code></li>
+  </ol>
+
+  <h4 id="rescue">_fill_is_rescue(session, trade)</h4>
+  <p style="font-size:13px;color:#a0aec0;">Count open real trades with same <code>symbol + direction</code> and <code>close_time IS NULL</code> and <code>ticket != trade.ticket</code>. Set <code>is_rescue = count &gt; 0</code>.</p>
+
+  <h3>Wire-up in <code>trade_logger.py</code></h3>
+  <pre><code>from services.entry_context import fill_entry_context
+
+# after: session.add(trade); await session.flush()
+if not event.is_paper and event.open_price is not None:
+    await fill_entry_context(session, trade)
+# then: await session.commit()  ← unchanged, caller always commits</code></pre>
+
+  <!-- API -->
+  <h2 id="api"><span class="section-num">3</span>API Changes</h2>
+
+  <table>
+    <thead><tr><th>Method</th><th>Path</th><th>Action</th><th>File</th></tr></thead>
+    <tbody>
+      <tr><td><code>PATCH</code></td><td><code>/api/trades/{ticket}/tag</code></td><td>Save setup_pattern + trade_bias for real trade</td><td><code>routers/trades.py</code></td></tr>
+      <tr><td><code>POST</code></td><td><code>/api/alerts/acknowledge-all</code></td><td>Mark all unacked alerts acknowledged</td><td><code>routers/alerts.py</code></td></tr>
+      <tr><td><code>GET</code></td><td><code>/api/trades</code></td><td>Add <code>offset</code> param; include 7 new fields in response</td><td><code>routers/trades.py</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3>PATCH /api/trades/{ticket}/tag — request body</h3>
+  <pre><code>{ "setup_pattern": "double_bottom", "trade_bias": "bullish" }
+# Both fields optional. Unknown setup_pattern value → 422.
+# Targets is_paper=False row. Unknown ticket → 404.</code></pre>
+
+  <h3>POST /api/alerts/acknowledge-all — response</h3>
+  <pre><code>{ "acknowledged": 5 }   // count of rows updated</code></pre>
+
+  <!-- INSIGHT ENGINE -->
+  <h2 id="insights"><span class="section-num">4</span>Insight Engine — 5 New Functions</h2>
+
+  <div class="callout info"><code>MIN_SAMPLE_SIZE = 5</code> for all new insight types (lower than existing 10 — fewer tagged trades expected initially). Filter: <code>tagged = [t for t in trades if t.setup_pattern is not None]</code></div>
+
+  <div class="insight-card">
+    <div class="type">4.1 · setup_win_rate</div>
+    <p style="font-size:13px;color:#a0aec0;">Group tagged closed trades by <code>(setup_pattern, trade_bias, near_fib_level)</code>. For each group ≥ 5 trades: compute win_rate + avg_profit. Create one Insight per qualifying group. Deactivate old setup_win_rate insights first.</p>
+    <div class="example"><span class="win">double_bottom + bullish + near S0.235 → ชนะ 78% (18 เทรด) เฉลี่ย +฿1,240</span></div>
+  </div>
+
+  <div class="insight-card">
+    <div class="type">4.2 · fib_proximity_win_rate</div>
+    <p style="font-size:13px;color:#a0aec0;">Bucket <code>fib_distance_pts</code> into: <strong>close</strong> (&lt;5 pts), <strong>medium</strong> (5–15 pts), <strong>far</strong> (≥15 pts). Only create insight if any two buckets differ by ≥ 20pp — otherwise not actionable.</p>
+    <div class="example">Entry ห่าง Fib &lt;5 pts → <span class="win">74%</span> | 5–15 pts → 51% | &gt;15 pts → <span class="lose">38%</span></div>
+  </div>
+
+  <div class="insight-card">
+    <div class="type">4.3 · rescue_outcome</div>
+    <p style="font-size:13px;color:#a0aec0;">Split by <code>is_rescue</code>. Both groups need ≥ 5 trades. Compare win rates and avg profits.</p>
+    <div class="example">ไม้แก้: ชนะ <span class="lose">45%</span> (20 เทรด) vs ไม้เดิม: ชนะ <span class="win">68%</span> (40 เทรด)</div>
+  </div>
+
+  <div class="insight-card">
+    <div class="type">4.4 · best_combo</div>
+    <p style="font-size:13px;color:#a0aec0;">Group by <code>(setup_pattern, trade_bias, near_fib_level, session)</code>. Session derived from <code>open_time</code> converted to <strong>ICT (UTC+7)</strong> before calling <code>_assign_session()</code>. Report top 3 by win_rate (min 5 each).</p>
+    <div class="example"><span class="win">Best: morning + double_bottom + bullish + S0.235 → 83% win rate (12 เทรด)</span></div>
+  </div>
+
+  <div class="insight-card">
+    <div class="type">4.5 · post_close_run</div>
+    <p style="font-size:13px;color:#a0aec0;"><strong>Step 1 — Backfill</strong> <code>post_close_run_pts</code> for all closed real trades where it's null: query H1 bars <code>[close_time, close_time+8h]</code>. BUY: <code>max(high) − close_price</code>. SELL: <code>close_price − min(low)</code>. Store if &gt; 0.</p>
+    <p style="font-size:13px;color:#a0aec0;margin-top:8px;"><strong>Step 2 — Insight</strong> on winning tagged trades (min 3 per pattern).</p>
+    <div class="example">double_bottom → วิ่งต่อได้ <span class="win">420 pts</span> | price_cluster → <span class="win">185 pts</span> หลังคุณปิด</div>
+  </div>
+
+  <!-- ALERTS -->
+  <h2 id="alerts"><span class="section-num">5</span>New Alert Types</h2>
+
+  <div class="callout warn">Called from <code>run_insight_engine()</code> after insight functions. Cooldown: 24h per alert type — check <code>Alert.sent_at &gt; now − 24h</code> before inserting.</div>
+
+  <div class="alert-card">
+    <div class="type">low_winrate_setup</div>
+    <p style="font-size:13px;color:#a0aec0;">Trigger: <code>(setup_pattern, trade_bias)</code> used ≥ 5 times with <code>win_rate &lt; 0.40</code></p>
+    <div class="msg">double_top + bullish: ชนะแค่ 28% (9 เทรด) — setup นี้ประวัติไม่ดี พิจารณาใหม่</div>
+  </div>
+
+  <div class="alert-card">
+    <div class="type">rescue_ineffective</div>
+    <p style="font-size:13px;color:#a0aec0;">Trigger: rescue <code>win_rate &lt; 0.35</code> AND rescue count ≥ 5 AND <code>(initial_win_rate − rescue_win_rate) &gt; 0.20</code></p>
+    <div class="msg">ไม้แก้ชนะแค่ 30% vs ไม้เดิม 65% — ข้อมูลบอกว่าตัดขาดทุนแล้วเริ่มใหม่ดีกว่า</div>
+  </div>
+
+  <!-- FRONTEND -->
+  <h2 id="frontend"><span class="section-num">6</span>Frontend Changes</h2>
+
+  <h3>6.1 Tag Dropdowns — Open Positions</h3>
+  <p style="font-size:13px;color:#a0aec0;margin-bottom:10px;">Add <code>&lt;SetupTag&gt;</code> component to each real filled trade row. Two <code>&lt;select&gt;</code> elements — onChange fires PATCH immediately, no submit button. Show <code>near_fib_level</code> and <code>h1_candle</code> as read-only grey text.</p>
+  <div class="ui-mock">
+    <div class="row-header">#12345  BUY  entry: 4,870.00  profit: −฿430</div>
+    <div style="display:flex;gap:12px;align-items:center;padding:4px 0;">
+      <select style="background:#2d3748;color:#e2e8f0;border:1px solid #4a5568;border-radius:4px;padding:3px 8px;font-size:11px;">
+        <option>Double Bottom ✓</option>
+      </select>
+      <select style="background:#2d3748;color:#e2e8f0;border:1px solid #4a5568;border-radius:4px;padding:3px 8px;font-size:11px;">
+        <option>Bullish ✓</option>
+      </select>
+      <span style="color:#4a5568;font-size:11px;">near S0.235 · pin_bar_bullish</span>
+    </div>
+  </div>
+
+  <h3>6.2 Closed Trades — 2-Row Layout</h3>
+  <p style="font-size:13px;color:#a0aec0;margin-bottom:10px;">Group by ticket. Real trade on top, paper trade below. Δ = paper_profit − real_profit.</p>
+  <div class="ui-mock">
+    <div class="row-header">#12345  BUY</div>
+    <div class="row-real">Real :  entry 4,870.00  exit 4,890.00  +฿1,200</div>
+    <div class="row-paper">Paper:  entry 4,870.00  exit 4,920.00  +฿1,800  <span class="delta-pos">Δ+฿600</span></div>
+    <br>
+    <div class="row-header">#12346  SELL</div>
+    <div class="row-real">Real :  entry 4,920.00  exit 4,940.00  −฿800</div>
+    <div class="row-paper">Paper:  entry 4,920.00  exit 4,930.00  −฿400  <span class="delta-pos">Δ+฿400</span></div>
+  </div>
+
+  <h3>6.3 Ack All Button</h3>
+  <p style="font-size:13px;color:#a0aec0;">Add <code>[Ack All]</code> in alerts panel header. POST /api/alerts/acknowledge-all → refresh list on success.</p>
+
+  <h3>6.4 Paging (Open + Closed)</h3>
+  <p style="font-size:13px;color:#a0aec0;margin-bottom:8px;">Default limit: 20. Show Prev/Next when applicable. Fetch with <code>?limit={limit}&offset={offset}</code>.</p>
+  <div class="values-row">
+    <span class="value-chip">10</span><span class="value-chip">20</span><span class="value-chip">50</span><span class="value-chip">100</span>
+  </div>
+
+  <!-- TESTING -->
+  <h2 id="testing"><span class="section-num">7</span>Testing Strategy</h2>
+
+  <h3>test_entry_context.py (new)</h3>
+  <ul class="test-list">
+    <li><span class="test-name">test_fill_fib_proximity_finds_nearest_level</span><span class="test-desc">open_price near S2 → near_fib_level="S0.235"</span></li>
+    <li><span class="test-name">test_fill_fib_proximity_skips_when_no_fib_data</span><span class="test-desc">no fib_levels row → fields stay null</span></li>
+    <li><span class="test-name">test_fill_h1_candle_detects_pin_bar</span><span class="test-desc">bullish pin H1 → h1_candle="pin_bar_bullish"</span></li>
+    <li><span class="test-name">test_fill_h1_candle_returns_none_when_no_bar</span><span class="test-desc">no H1 bar → h1_candle=null</span></li>
+    <li><span class="test-name">test_fill_is_rescue_true_when_same_direction_open</span><span class="test-desc">existing open buy + new buy → is_rescue=True</span></li>
+    <li><span class="test-name">test_fill_is_rescue_false_when_no_existing</span><span class="test-desc">no open trades → is_rescue=False</span></li>
+    <li><span class="test-name">test_entry_context_auto_filled_on_trade_event</span><span class="test-desc">POST /api/trade-events ENTRY_IN → near_fib_level set</span></li>
+  </ul>
+
+  <h3 style="margin-top:20px;">test_insight_engine.py (additions)</h3>
+  <ul class="test-list">
+    <li><span class="test-name">test_setup_win_rate_insight_created</span><span class="test-desc">5+ tagged trades → correct win_rate</span></li>
+    <li><span class="test-name">test_fib_proximity_win_rate_insight_created</span><span class="test-desc">trades in all 3 distance buckets</span></li>
+    <li><span class="test-name">test_rescue_outcome_insight_created</span><span class="test-desc">mix is_rescue true/false</span></li>
+    <li><span class="test-name">test_best_combo_insight_created</span><span class="test-desc">tagged trades across sessions (ICT)</span></li>
+    <li><span class="test-name">test_post_close_run_backfills_trade</span><span class="test-desc">H1 bars after close → post_close_run_pts set</span></li>
+    <li><span class="test-name">test_post_close_run_insight_created</span><span class="test-desc">winning tagged trades with run filled</span></li>
+  </ul>
+
+  <h3 style="margin-top:20px;">test_alert_manager.py (additions)</h3>
+  <ul class="test-list">
+    <li><span class="test-name">test_low_winrate_setup_alert_fires</span><span class="test-desc">5 losses on same pattern → alert</span></li>
+    <li><span class="test-name">test_low_winrate_setup_no_alert_when_good_winrate</span><span class="test-desc">70% win rate → no alert</span></li>
+    <li><span class="test-name">test_rescue_ineffective_alert_fires</span><span class="test-desc">rescue 30% vs initial 70% → alert</span></li>
+    <li><span class="test-name">test_rescue_ineffective_cooldown_deduplicates</span><span class="test-desc">fires only once in 24h</span></li>
+  </ul>
+
+  <h3 style="margin-top:20px;">test_trades_api.py + test_alerts_api.py (additions)</h3>
+  <ul class="test-list">
+    <li><span class="test-name">test_patch_tag_updates_setup_pattern</span><span class="test-desc">PATCH tag → 200, fields updated</span></li>
+    <li><span class="test-name">test_patch_tag_rejects_invalid_pattern</span><span class="test-desc">unknown pattern → 422</span></li>
+    <li><span class="test-name">test_patch_tag_returns_404_for_unknown_ticket</span><span class="test-desc">unknown ticket → 404</span></li>
+    <li><span class="test-name">test_list_trades_respects_offset</span><span class="test-desc">offset=10 → first row skipped</span></li>
+    <li><span class="test-name">test_acknowledge_all_marks_all_unacked</span><span class="test-desc">POST ack-all → all acknowledged</span></li>
+  </ul>
+
+  <!-- FILE SUMMARY -->
+  <h2 id="files"><span class="section-num">8</span>File Summary</h2>
+  <div class="file-grid">
+    <div class="file-action create">Create</div><div class="file-path">api/services/entry_context.py</div>
+    <div class="file-action create">Create</div><div class="file-path">api/alembic/versions/005_add_entry_context.py</div>
+    <div class="file-action create">Create</div><div class="file-path">tests/test_entry_context.py</div>
+    <div class="file-action modify">Modify</div><div class="file-path">api/models/trade.py — 7 new columns</div>
+    <div class="file-action modify">Modify</div><div class="file-path">api/schemas/trade.py — 7 new optional fields in TradeResponse</div>
+    <div class="file-action modify">Modify</div><div class="file-path">api/services/trade_logger.py — call fill_entry_context on ENTRY_IN</div>
+    <div class="file-action modify">Modify</div><div class="file-path">api/services/insight_engine.py — 5 new functions</div>
+    <div class="file-action modify">Modify</div><div class="file-path">api/services/alert_manager.py — 2 new alert checks</div>
+    <div class="file-action modify">Modify</div><div class="file-path">api/routers/trades.py — PATCH tag + offset param</div>
+    <div class="file-action modify">Modify</div><div class="file-path">api/routers/alerts.py — POST acknowledge-all</div>
+    <div class="file-action modify">Modify</div><div class="file-path">frontend/src/components/OpenPositionsPanel.jsx — tag dropdowns</div>
+    <div class="file-action modify">Modify</div><div class="file-path">frontend/src/components/ClosedTradesPanel.jsx — 2-row layout + paging</div>
+    <div class="file-action modify">Modify</div><div class="file-path">frontend/src/components/AlertsPanel.jsx — Ack All button</div>
+  </div>
+
+  <div style="height:60px;"></div>
+</main>
+</body>
+</html>

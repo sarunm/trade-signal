@@ -1,16 +1,26 @@
 import pytest
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 from sqlalchemy import select
 from models.trade import Trade, Direction, OrderState
 from models.alert import Alert
-from services.alert_manager import check_trade_alerts, check_equity_buffer
+from services.alert_manager import (
+    _sessions_for_close_time,
+    check_trade_alerts,
+    check_equity_buffer,
+    check_insight_alerts,
+)
 from schemas.trade_event import TradeEventSchema
 from schemas.price_tick import PriceTickSchema, AccountStateSchema, OHLCVSchema
 
 
-def _filled_buy(ticket: int, profit: float = None, close: bool = False) -> Trade:
+def _filled_buy(
+    ticket: int,
+    profit: float = None,
+    close: bool = False,
+    close_time: datetime = None,
+) -> Trade:
     t = Trade(
         id=uuid.uuid4(),
         ticket=ticket,
@@ -24,7 +34,7 @@ def _filled_buy(ticket: int, profit: float = None, close: bool = False) -> Trade
     )
     if close and profit is not None:
         t.close_price = Decimal("1940.00") if profit < 0 else Decimal("1960.00")
-        t.close_time = datetime.now(timezone.utc)
+        t.close_time = close_time or datetime.now(timezone.utc)
         t.profit = Decimal(str(profit))
     return t
 
@@ -125,6 +135,155 @@ async def test_no_consecutive_loss_alert_after_win(db_session):
 
 
 @pytest.mark.asyncio
+async def test_session_loss_streak_alert_fires_for_three_losses_in_same_session(db_session):
+    """Alert when the last 3 closed real losses are in the same trading session."""
+    closes = [
+        datetime(2026, 5, 21, 8, 0, tzinfo=timezone.utc),
+        datetime(2026, 5, 21, 9, 0, tzinfo=timezone.utc),
+        datetime(2026, 5, 21, 10, 0, tzinfo=timezone.utc),
+    ]
+    for ticket, close_time in zip([1101, 1102, 1103], closes):
+        db_session.add(_filled_buy(
+            ticket=ticket,
+            profit=-100.0,
+            close=True,
+            close_time=close_time,
+        ))
+    await db_session.commit()
+
+    event = _event(ticket=1103, close_price=1940.0, profit=-100.0)
+    await check_trade_alerts(db_session, event)
+
+    result = await db_session.execute(
+        select(Alert).where(Alert.type == "session_loss_streak")
+    )
+    alerts = result.scalars().all()
+    assert len(alerts) == 1
+    assert alerts[0].trigger_data == {
+        "session": "London",
+        "count": 3,
+        "total_loss": -300.0,
+        "tickets": [1103, 1102, 1101],
+    }
+
+
+@pytest.mark.asyncio
+async def test_session_loss_streak_no_alert_when_losses_span_sessions(db_session):
+    """No alert when the last 3 losses are split across trading sessions."""
+    trade_data = [
+        (1201, datetime(2026, 5, 21, 8, 0, tzinfo=timezone.utc)),
+        (1202, datetime(2026, 5, 21, 9, 0, tzinfo=timezone.utc)),
+        (1203, datetime(2026, 5, 21, 18, 0, tzinfo=timezone.utc)),
+    ]
+    for ticket, close_time in trade_data:
+        db_session.add(_filled_buy(
+            ticket=ticket,
+            profit=-100.0,
+            close=True,
+            close_time=close_time,
+        ))
+    await db_session.commit()
+
+    event = _event(ticket=1203, close_price=1940.0, profit=-100.0)
+    await check_trade_alerts(db_session, event)
+
+    result = await db_session.execute(
+        select(Alert).where(Alert.type == "session_loss_streak")
+    )
+    assert result.scalars().all() == []
+
+
+@pytest.mark.asyncio
+async def test_session_loss_streak_counts_ny_overlap_hour(db_session):
+    """NY session includes the 13-16 UTC overlap with London."""
+    trade_data = [
+        (1251, datetime(2026, 5, 21, 14, 0, tzinfo=timezone.utc)),
+        (1252, datetime(2026, 5, 21, 18, 0, tzinfo=timezone.utc)),
+        (1253, datetime(2026, 5, 21, 20, 0, tzinfo=timezone.utc)),
+    ]
+    for ticket, close_time in trade_data:
+        db_session.add(_filled_buy(
+            ticket=ticket,
+            profit=-100.0,
+            close=True,
+            close_time=close_time,
+        ))
+    await db_session.commit()
+
+    event = _event(ticket=1253, close_price=1940.0, profit=-100.0)
+    await check_trade_alerts(db_session, event)
+
+    result = await db_session.execute(
+        select(Alert).where(Alert.type == "session_loss_streak")
+    )
+    alerts = result.scalars().all()
+    assert len(alerts) == 1
+    assert alerts[0].trigger_data["session"] == "NY"
+
+
+@pytest.mark.asyncio
+async def test_session_loss_streak_deduplicates_same_session_within_cooldown(db_session):
+    """No duplicate alert for the same session within the cooldown window."""
+    db_session.add(Alert(
+        type="session_loss_streak",
+        message="existing London loss streak",
+        trigger_data={"session": "London"},
+        sent_at=datetime.now(timezone.utc),
+        acknowledged=False,
+    ))
+    for ticket, close_time in [
+        (1261, datetime(2026, 5, 21, 8, 0, tzinfo=timezone.utc)),
+        (1262, datetime(2026, 5, 21, 9, 0, tzinfo=timezone.utc)),
+        (1263, datetime(2026, 5, 21, 10, 0, tzinfo=timezone.utc)),
+    ]:
+        db_session.add(_filled_buy(
+            ticket=ticket,
+            profit=-100.0,
+            close=True,
+            close_time=close_time,
+        ))
+    await db_session.commit()
+
+    event = _event(ticket=1263, close_price=1940.0, profit=-100.0)
+    await check_trade_alerts(db_session, event)
+
+    result = await db_session.execute(
+        select(Alert).where(Alert.type == "session_loss_streak")
+    )
+    assert len(result.scalars().all()) == 1
+
+
+def test_session_loss_streak_uses_utc_for_timezone_aware_close_times():
+    """Timezone-aware close times are grouped by UTC session hours."""
+    ict = timezone(timedelta(hours=7))
+    assert _sessions_for_close_time(datetime(2026, 5, 21, 14, 0, tzinfo=ict)) == ["London"]
+
+
+@pytest.mark.asyncio
+async def test_session_loss_streak_no_alert_with_fewer_than_three_losses(db_session):
+    """No alert until 3 closed real losses exist for the symbol."""
+    for ticket, close_time in [
+        (1301, datetime(2026, 5, 21, 8, 0, tzinfo=timezone.utc)),
+        (1302, datetime(2026, 5, 21, 9, 0, tzinfo=timezone.utc)),
+    ]:
+        db_session.add(_filled_buy(
+            ticket=ticket,
+            profit=-100.0,
+            close=True,
+            close_time=close_time,
+        ))
+    await db_session.commit()
+
+    event = _event(ticket=1302, close_price=1940.0, profit=-100.0)
+    await check_trade_alerts(db_session, event)
+
+    result = await db_session.execute(
+        select(Alert).where(Alert.type == "session_loss_streak")
+    )
+    assert result.scalars().all() == []
+
+
+@pytest.mark.asyncio
 async def test_equity_buffer_alert_fires(db_session):
     """Alert when free_margin below required buffer for open lots."""
     # 1 lot open: required = 1.0 * 10000 = 10000 USD
@@ -153,3 +312,225 @@ async def test_equity_buffer_no_alert_when_sufficient(db_session):
 
     result = await db_session.execute(select(Alert).where(Alert.type == "equity_buffer"))
     assert result.scalars().all() == []
+
+
+# ── large_adverse_move ────────────────────────────────────────────────────────
+
+from schemas.market_tick import MarketTickSchema
+from services.alert_manager import check_large_adverse_move
+
+
+def _market_tick(bid: float, ask: float, symbol: str = "XAUUSD") -> MarketTickSchema:
+    return MarketTickSchema(
+        timestamp=datetime.now(timezone.utc),
+        symbol=symbol,
+        bid=Decimal(str(bid)),
+        ask=Decimal(str(ask)),
+    )
+
+
+@pytest.mark.asyncio
+async def test_large_adverse_move_alert_fires_for_buy(db_session):
+    """Alert fires when buy trade has bid 200+ pts below entry."""
+    trade = _filled_buy(ticket=2001)
+    trade.open_price = Decimal("2000.00")
+    db_session.add(trade)
+    await db_session.commit()
+
+    tick = _market_tick(bid=1799.00, ask=1799.20)  # 201 pts adverse
+    await check_large_adverse_move(db_session, tick)
+
+    result = await db_session.execute(select(Alert).where(Alert.type == "large_adverse_move"))
+    alerts = result.scalars().all()
+    assert len(alerts) == 1
+    assert "2001" in alerts[0].message
+    assert alerts[0].trigger_data["direction"] == "buy"
+
+
+@pytest.mark.asyncio
+async def test_large_adverse_move_alert_fires_for_sell(db_session):
+    """Alert fires when sell trade has ask 200+ pts above entry."""
+    trade = Trade(
+        id=uuid.uuid4(),
+        ticket=2002,
+        symbol="XAUUSD",
+        direction=Direction.sell,
+        order_state=OrderState.filled,
+        open_price=Decimal("2000.00"),
+        volume=Decimal("1.00"),
+        open_time=datetime.now(timezone.utc),
+        is_paper=False,
+    )
+    db_session.add(trade)
+    await db_session.commit()
+
+    tick = _market_tick(bid=2200.80, ask=2201.00)  # 201 pts adverse for sell
+    await check_large_adverse_move(db_session, tick)
+
+    result = await db_session.execute(select(Alert).where(Alert.type == "large_adverse_move"))
+    alerts = result.scalars().all()
+    assert len(alerts) == 1
+    assert alerts[0].trigger_data["direction"] == "sell"
+
+
+@pytest.mark.asyncio
+async def test_large_adverse_move_no_alert_when_small_move(db_session):
+    """No alert when adverse move is under threshold."""
+    trade = _filled_buy(ticket=2003)
+    trade.open_price = Decimal("2000.00")
+    db_session.add(trade)
+    await db_session.commit()
+
+    tick = _market_tick(bid=1850.00, ask=1850.20)  # only 150 pts adverse
+    await check_large_adverse_move(db_session, tick)
+
+    result = await db_session.execute(select(Alert).where(Alert.type == "large_adverse_move"))
+    assert result.scalars().all() == []
+
+
+@pytest.mark.asyncio
+async def test_large_adverse_move_no_duplicate_within_cooldown(db_session):
+    """Only one alert fires per ticket within the cooldown window."""
+    trade = _filled_buy(ticket=2004)
+    trade.open_price = Decimal("2000.00")
+    db_session.add(trade)
+    await db_session.commit()
+
+    tick = _market_tick(bid=1799.00, ask=1799.20)
+    await check_large_adverse_move(db_session, tick)
+    await check_large_adverse_move(db_session, tick)  # second call same tick
+
+    result = await db_session.execute(select(Alert).where(Alert.type == "large_adverse_move"))
+    assert len(result.scalars().all()) == 1
+
+
+@pytest.mark.asyncio
+async def test_low_winrate_setup_alert_fires(db_session):
+    """Alert fires when setup+bias combo has < 40% win rate with 5+ trades."""
+    trades = []
+    for i in range(5):
+        trade = Trade(
+            id=uuid.uuid4(),
+            ticket=8000 + i,
+            symbol="XAUUSD",
+            direction=Direction.buy,
+            order_state=OrderState.filled,
+            open_price=Decimal("2000.00"),
+            open_time=datetime(2026, 5, 19, 10, i, tzinfo=timezone.utc),
+            close_time=datetime(2026, 5, 19, 11, i, tzinfo=timezone.utc),
+            profit=Decimal("-100.00"),
+            is_paper=False,
+            setup_pattern="double_top",
+            trade_bias="bullish",
+        )
+        db_session.add(trade)
+        trades.append(trade)
+    await db_session.commit()
+
+    await check_insight_alerts(db_session, trades, trades)
+
+    result = await db_session.execute(
+        select(Alert).where(Alert.type == "low_winrate_setup")
+    )
+    alerts = result.scalars().all()
+    assert len(alerts) == 1
+    assert "double_top" in alerts[0].message
+
+
+@pytest.mark.asyncio
+async def test_low_winrate_setup_no_alert_when_good_winrate(db_session):
+    """No alert when win rate is >= 40%."""
+    for i in range(5):
+        profit = Decimal("200.00") if i < 4 else Decimal("-100.00")
+        trade = Trade(
+            id=uuid.uuid4(),
+            ticket=8100 + i,
+            symbol="XAUUSD",
+            direction=Direction.buy,
+            order_state=OrderState.filled,
+            open_price=Decimal("2000.00"),
+            open_time=datetime(2026, 5, 19, 10, i, tzinfo=timezone.utc),
+            close_time=datetime(2026, 5, 19, 11, i, tzinfo=timezone.utc),
+            profit=profit,
+            is_paper=False,
+            setup_pattern="double_bottom",
+            trade_bias="bullish",
+        )
+        db_session.add(trade)
+    await db_session.commit()
+
+    tagged = (await db_session.execute(
+        select(Trade).where(Trade.setup_pattern.isnot(None))
+    )).scalars().all()
+
+    await check_insight_alerts(db_session, tagged, tagged)
+
+    result = await db_session.execute(
+        select(Alert).where(Alert.type == "low_winrate_setup")
+    )
+    assert result.scalars().all() == []
+
+
+@pytest.mark.asyncio
+async def test_rescue_ineffective_alert_fires(db_session):
+    """Alert fires when rescue win_rate < 35% and delta > 20pp vs initial."""
+    # 5 initial trades: 80% win rate
+    for i in range(4):
+        trade = Trade(
+            id=uuid.uuid4(),
+            ticket=9000 + i,
+            symbol="XAUUSD",
+            direction=Direction.buy,
+            order_state=OrderState.filled,
+            open_price=Decimal("2000.00"),
+            open_time=datetime(2026, 5, 19, 10, i, tzinfo=timezone.utc),
+            close_time=datetime(2026, 5, 19, 11, i, tzinfo=timezone.utc),
+            profit=Decimal("200.00"),
+            is_paper=False,
+            is_rescue=False,
+        )
+        db_session.add(trade)
+    trade = Trade(
+        id=uuid.uuid4(),
+        ticket=9004,
+        symbol="XAUUSD",
+        direction=Direction.buy,
+        order_state=OrderState.filled,
+        open_price=Decimal("2000.00"),
+        open_time=datetime(2026, 5, 19, 10, 4, tzinfo=timezone.utc),
+        close_time=datetime(2026, 5, 19, 11, 4, tzinfo=timezone.utc),
+        profit=Decimal("-100.00"),
+        is_paper=False,
+        is_rescue=False,
+    )
+    db_session.add(trade)
+
+    # 5 rescue trades: 0% win rate
+    for i in range(5):
+        trade = Trade(
+            id=uuid.uuid4(),
+            ticket=9100 + i,
+            symbol="XAUUSD",
+            direction=Direction.buy,
+            order_state=OrderState.filled,
+            open_price=Decimal("2000.00"),
+            open_time=datetime(2026, 5, 19, 12, i, tzinfo=timezone.utc),
+            close_time=datetime(2026, 5, 19, 13, i, tzinfo=timezone.utc),
+            profit=Decimal("-100.00"),
+            is_paper=False,
+            is_rescue=True,
+        )
+        db_session.add(trade)
+
+    await db_session.commit()
+
+    all_trades = (await db_session.execute(
+        select(Trade).where(Trade.is_paper == False)
+    )).scalars().all()
+    await check_insight_alerts(db_session, all_trades, all_trades)
+
+    result = await db_session.execute(
+        select(Alert).where(Alert.type == "rescue_ineffective")
+    )
+    alerts = result.scalars().all()
+    assert len(alerts) == 1

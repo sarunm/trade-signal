@@ -17,3 +17,4 @@ class Alert(Base):
     trigger_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     acknowledged: Mapped[bool] = mapped_column(Boolean, default=False)
+    trade_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)

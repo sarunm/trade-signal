@@ -41,7 +41,7 @@ export default function AccountBar({ data, error, lastUpdated }) {
                 ? floatPL >= 0 ? 'text-green-400' : 'text-red-400'
                 : 'text-white'
             }`}>
-              {value === '—' ? value : `$${value}`}
+              {value === '—' ? value : `฿${value}`}
             </p>
           </div>
         ))}

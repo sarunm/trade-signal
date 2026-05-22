@@ -70,3 +70,24 @@ async def test_acknowledge_alert_not_found(client):
     fake_id = uuid.uuid4()
     response = await client.patch(f"/api/alerts/{fake_id}/acknowledge")
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_acknowledge_all_marks_all_unacked(client, db_session):
+    for i in range(3):
+        db_session.add(Alert(
+            id=uuid.uuid4(),
+            type="consecutive_loss",
+            message=f"Loss alert {i}",
+            sent_at=datetime(2026, 5, 19, 10, i, tzinfo=timezone.utc),
+            acknowledged=False,
+        ))
+    await db_session.commit()
+
+    resp = await client.post("/api/alerts/acknowledge-all")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["acknowledged"] == 3
+
+    check = await client.get("/api/alerts?unacknowledged_only=true")
+    assert check.json() == []

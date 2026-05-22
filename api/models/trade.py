@@ -2,9 +2,9 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
-from sqlalchemy import String, Boolean, Numeric, BigInteger, Enum as SAEnum, DateTime
+from sqlalchemy import String, Boolean, Numeric, BigInteger, Enum as SAEnum, DateTime, Integer, JSON
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 import enum
 
 from database import Base
@@ -60,3 +60,17 @@ class Trade(Base):
     commission: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
     is_paper: Mapped[bool] = mapped_column(Boolean, default=False)
     paper_mode: Mapped[Optional[PaperMode]] = mapped_column(SAEnum(PaperMode), nullable=True)
+    paper_exit_strategy: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    paper_exit_reason: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    setup_pattern: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    trade_bias: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    near_fib_level: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    fib_distance_pts: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2), nullable=True)
+    entry_candle: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    entry_candle_tf: Mapped[Optional[str]] = mapped_column(String(5), nullable=True)
+    is_rescue: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    post_close_run_pts: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2), nullable=True)
+    account_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True, index=True)
+    entry_score: Mapped[Optional[int]] = mapped_column(Integer(), nullable=True)
+    entry_verdict: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    recovery_plan: Mapped[Optional[dict]] = mapped_column(JSONB().with_variant(JSON(), "sqlite"), nullable=True)

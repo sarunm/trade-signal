@@ -11,5 +11,6 @@ class AlertResponse(BaseModel):
     trigger_data: Optional[Any] = None
     sent_at: datetime
     acknowledged: bool
+    trade_id: Optional[UUID] = None
 
     model_config = {"from_attributes": True}
