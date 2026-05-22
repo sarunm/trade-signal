@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
-from sqlalchemy import String, Boolean, Numeric, BigInteger, Enum as SAEnum, DateTime
+from sqlalchemy import String, Boolean, Numeric, BigInteger, Enum as SAEnum, DateTime, Integer, JSON
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
 import enum
@@ -71,3 +71,6 @@ class Trade(Base):
     is_rescue: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     post_close_run_pts: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2), nullable=True)
     account_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True, index=True)
+    entry_score: Mapped[Optional[int]] = mapped_column(Integer(), nullable=True)
+    entry_verdict: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    recovery_plan: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
