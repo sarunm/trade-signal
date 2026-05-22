@@ -40,7 +40,7 @@
 
 | # | Task | Assignee | Priority | Status |
 |---|---|---|---|---|
-| 1 | Trader Profile MCP — Phase 1 | agy | 🟢 normal | pending |
+| 1 | Trader Profile MCP — Phase 1 | codex | 🟢 normal | done |
 | 2 | Trade Advisor — entry scoring + recovery map + live zone alerts | agy | 🟢 normal | pending |
 
 **Done tasks:** ดู [archive.md](archive.md)
@@ -92,8 +92,8 @@ exact commands
 
 ### TASK: Trader Profile MCP — Phase 1 implementation
 
-**assignee:** agy
-**status:** pending
+**assignee:** codex
+**status:** done
 **priority:** normal
 **remark:** spec + plan ครบแล้ว — `docs/superpowers/specs/2026-05-21-trader-profile-mcp-design.md` + `docs/superpowers/plans/2026-05-21-trader-profile-mcp.md`
 

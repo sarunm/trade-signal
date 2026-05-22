@@ -1,18 +1,18 @@
 # Active Agent State
 
-Updated: 2026-05-21
-Current owner: agy
-Branch: main
-Last task commit: feat: redesign Fibonacci levels to match ROM PP method
+Updated: 2026-05-22
+Current owner: codex
+Branch: codex/trader-profile-mcp-phase-1
+Last task commit: ef95353 feat: add trader profile MCP layer
 
 ## Current Goal
 
-None — Redesign Fib levels to match ROM indicator is completed.
+Trader Profile MCP — Phase 1 implementation.
 
 ## Status
 
-Idle — Waiting for new task assignment.
+Done — implementation verified and ready for Claude review.
 
 ## Next Step
 
-Claude: Review completed task and assign next task.
+Claude: Review Codex branch `codex/trader-profile-mcp-phase-1`.

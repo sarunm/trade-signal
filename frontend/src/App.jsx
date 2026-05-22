@@ -4,6 +4,7 @@ import AccountBar from './components/AccountBar'
 import AlertsPanel from './components/AlertsPanel'
 import InsightsPanel from './components/InsightsPanel'
 import FibPanel from './components/FibPanel'
+import TraderProfile from './components/TraderProfile'
 import OpenPositions from './components/OpenPositions'
 import ClosedTrades from './components/ClosedTrades'
 import DailyPLPanel from './components/DailyPLPanel'
@@ -33,6 +34,7 @@ export default function App() {
   )
   const fetchPnl = useCallback(() => get('/api/trades/pnl-history?days=30'), [])
   const fetchFib = useCallback(() => get('/api/fib-levels'), [])
+  const fetchTraderProfile = useCallback(() => get('/api/trader-profile'), [])
 
   const account = usePolling(fetchAccount)
   const alerts = usePolling(fetchAlerts)
@@ -42,6 +44,7 @@ export default function App() {
   const closedTrades = usePolling(fetchClosed)
   const pnlHistory = usePolling(fetchPnl)
   const fib = usePolling(fetchFib)
+  const traderProfile = usePolling(fetchTraderProfile, 60000)
 
   const acknowledgeAlert = useCallback(async (id) => {
     try {
@@ -64,6 +67,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 p-4 space-y-4">
       <AccountBar data={account.data} error={account.error} lastUpdated={account.lastUpdated} />
+      <TraderProfile data={traderProfile.data} error={traderProfile.error} />
       <DailyPLPanel
         data={dailyPL.data}
         error={dailyPL.error}
