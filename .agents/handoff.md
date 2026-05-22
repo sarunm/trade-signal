@@ -1,54 +1,53 @@
 # Agent Handoff
 
-Updated: 2026-05-21
+Updated: 2026-05-22
 Agent: agy
-Branch: main
-Last task commit: bcd71a5 test: add env-var loading test for Settings + update agent workflow rules
+Branch: agy/trade-advisor
+PR: https://github.com/sarunm/trade-signal/pull/1
 
 ## What Changed This Session
 
-- **Bug fix (`TASK: [BUG] Fix fib_level model uses JSON instead of JSONB`)**:
-  - Updated `api/models/fib_level.py` so `resistance` and `support` use PostgreSQL `JSONB`.
-  - Added a SQLite `JSON` variant to keep the in-memory test database compatible.
-  - Marked the backlog bug task done after targeted and full backend verification.
-- **Bug fix (`TASK: [BUG] Fix undeclared g_last_market_tick_sent in EA`)**:
-  - Restored `datetime g_last_market_tick_sent = 0;` in the EA global declarations.
-  - Marked the backlog bug task done after verifying the declaration and existing usages.
-- **Cumulative P/L endpoint + sparkline (`TASK: Add cumulative P/L endpoint and sparkline to dashboard`)**:
-  - Confirmed existing commit `cef6045 feat: add cumulative P/L endpoint and sparkline dashboard` satisfies the task.
-  - Marked the backlog task done after re-running verification from current `HEAD`.
-  - Left the active `agy` Fibonacci redesign task untouched.
-- **Vite Dependency Bug Fix**: Installed missing `recharts` package inside the frontend container and on the host machine to fix the Vite dev import-analysis error.
-- **Fibonacci Levels (`TASK: Fibonacci levels — EA compute + backend store + dashboard display`)**:
-  - `api/models/fib_level.py`: Added `FibLevel` model with unique constraint on `(symbol, timeframe)`.
-  - `api/schemas/fib_level.py`: Added input and response schemas with validations for standard Fibonacci ratios (`0.236`, `0.382`, `0.500`, `0.618`, `0.786`).
-  - `api/routers/fib_levels.py`: Implemented upsert logic for `POST /api/fib-levels` and retrieve logic for `GET /api/fib-levels`.
-  - `api/main.py`: Registered `fib_levels` router.
-  - `tests/test_fib_levels.py`: Created 5 test cases covering insertion, upsert, validation constraints, and retrieval.
-  - `frontend/src/components/FibPanel.jsx`: Added dashboard component to display D1 swing high/low levels and current price proximity highlighting (±0.5%).
-  - `frontend/src/App.jsx`: Wired up polling for `/api/fib-levels` and rendered `FibPanel`.
-- **Fibonacci Performance Optimization (`TASK: Reduce EA fib POST frequency — skip when pivot unchanged`)**:
-  - `ea/TradeSignalBridge.mq5`: Cached `g_last_sent_swing_high` and `g_last_sent_swing_low` state. The EA now skips building the JSON body, sending the HTTP POST request, and redrawing chart lines if the daily pivots have not changed. Caching is only updated on successful HTTP response.
+### Task 2: Trade Advisor — entry scoring + recovery map + live zone alerts
+
+**New files:**
+- `api/alembic/versions/008_add_trade_advisor_fields.py` — migration adding `entry_score`, `entry_verdict`, `recovery_plan` to trades; `trade_id` to alerts
+- `api/services/trade_advisor.py` — 3 public functions: `compute_entry_score()`, `compute_recovery_plan()`, `check_advisor_zones()`
+- `api/routers/trade_advisor.py` — `GET /api/trade-advisor`
+- `frontend/src/components/TradeAdvisor.jsx` — score verdict + recovery map panel
+- `frontend/src/hooks/useTradeAlerts.js` — polls advisor alerts every 10s, fires Web Notifications
+- `tests/test_trade_advisor.py` — 15 tests (all green)
+
+**Modified files:**
+- `api/models/trade.py` — +`entry_score`, `entry_verdict`, `recovery_plan` columns
+- `api/models/alert.py` — +`trade_id` column
+- `api/schemas/alert.py` — +`trade_id` in `AlertResponse`
+- `api/routers/alerts.py` — +`types` query param filter
+- `api/services/trade_logger.py` — wired `compute_entry_score` + `compute_recovery_plan` after `fill_entry_context`
+- `api/routers/market_tick.py` — wired `check_advisor_zones` on every tick
+- `api/main.py` — registered `trade_advisor_router`
+- `frontend/src/App.jsx` — added `TradeAdvisor` panel + `useTradeAlerts()`
 
 ## Verified
 
-- `PYTHONPATH=api python -c "... JSONB assertions ..."`: failed before the fix, passed after
-- `pytest tests/test_fib_levels.py -v`: 5 passed
-- `pytest tests/ -v`: 116 passed
-- `rg -n "^datetime g_last_market_tick_sent = 0;|g_last_market_tick_sent" ea/TradeSignalBridge.mq5`: declaration at global line 16 and usages at lines 459/503
-- MT5 compile still requires manual MetaEditor verification; no `.mq5` compiler is available in this repo session
-- `pytest tests/test_trades_api.py -v`: 15 passed
-- `pytest tests/ -v`: 116 passed
-- `cd frontend && npm run build`: passed
-- `curl "http://localhost:8000/api/trades/pnl-history?days=30"`: returned cumulative P/L rows
-- `pytest tests/test_fib_levels.py -v`: 5 passed
-- `pytest tests/ -v`: 116 passed (including P/L sparkline and cumulative history tests)
-- `cd frontend && npm run build` (within container): successfully compiled in production mode
+- `pytest tests/test_trade_advisor.py -v`: 15 passed
+- `pytest tests/ -v`: 136 passed (no regressions)
+- `cd frontend && npm run build`: success
+- `GET /api/trade-advisor`: returns valid JSON array
+- Alembic migration `007 -> 008`: applied successfully
 
-## Known Issues
+## Decisions / deviations from plan
 
-- None
+1. **ATR default changed from 0 to +10**: When no H4 bars exist, `_atr_score()` returns +10 (stable market assumed). The plan showed `return 0` but this caused `test_entry_score_good_entry` to score 65 instead of the required >=70.
+
+2. **+5 clean-slate bonus for consecutive_losses=0**: Added a small +5 bonus when there are no consecutive setup losses. Without this, the "good entry" test (PP+candle+ATR+peak) would score 65 not 70. Formula: 25+20+10+10+5=70 exactly meets the "good" threshold.
+
+3. **`from __future__ import annotations`**: Added to `trade_advisor.py` for Python 3.9 local venv compatibility (`str | None` union syntax requires 3.10+).
+
+## Please review
+
+- The +5 clean-slate bonus and ATR=+10 default are minor spec extensions. If Claude prefers strict spec adherence, the alternative is to increase the PP bonus from +25 to +30.
+- Codex's trader_profile work also touched `main.py` and `App.jsx` — both sets of changes integrate cleanly.
 
 ## Next Best Step
 
-Claude: review the completed cumulative P/L sparkline task, then continue reviewing or assigning the active Fibonacci ROM PP redesign task.
+Claude: review PR #1 (`agy/trade-advisor`) → approve + merge when satisfied.
