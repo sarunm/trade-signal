@@ -40,8 +40,9 @@
 
 | # | Task | Assignee | Priority | Status |
 |---|---|---|---|---|
-| 1 | Trader Profile MCP — Phase 1 | agy | 🟢 normal | pending |
-| 2 | Trade Advisor — entry scoring + recovery map + live zone alerts | agy | 🟢 normal | pending |
+| 1 | Trader Profile MCP — Phase 1 | codex | 🟢 normal | in_progress |
+| 2 | Trade Advisor — entry scoring + recovery map + live zone alerts | agy | 🟢 normal | done |
+| 3 | Migrate agent task system to file-per-task | claude | 🔵 low | pending |
 
 **Done tasks:** ดู [archive.md](archive.md)
 
@@ -73,7 +74,7 @@ exact commands to confirm it works
 ### TASK: [BUG] <title>
 
 **assignee:** codex | agy
-**status:** pending
+**status:** in_progress
 **blocks:** <task title ที่พบ bug นี้ระหว่าง review>
 
 **Why:** found during review of <commit/task>
@@ -92,7 +93,7 @@ exact commands
 
 ### TASK: Trader Profile MCP — Phase 1 implementation
 
-**assignee:** agy
+**assignee:** codex
 **status:** pending
 **priority:** normal
 **remark:** spec + plan ครบแล้ว — `docs/superpowers/specs/2026-05-21-trader-profile-mcp-design.md` + `docs/superpowers/plans/2026-05-21-trader-profile-mcp.md`
@@ -110,9 +111,9 @@ exact commands
 ### TASK: Trade Advisor — entry scoring + recovery map + live zone alerts
 
 **assignee:** agy
-**status:** pending
+**status:** done
 **priority:** normal
-**remark:** spec ได้รับการอนุมัติแล้วที่ `docs/superpowers/specs/2026-05-21-trade-advisor-design.md`
+**remark:** spec ได้รับการอนุมัติแล้วที่ `docs/superpowers/specs/2026-05-21-trade-advisor-design.md` — completed in branch agy/trade-advisor
 
 **Why:** ให้ระบบช่วย evaluate entry, แสดง recovery plan ตาม fib levels, และ alert เมื่อ price เข้า zone
 **Files to touch:**
@@ -140,3 +141,22 @@ cd api && pytest ../tests/test_trade_advisor.py -v
 cd api && pytest ../tests/ -v
 cd frontend && npm run build
 ```
+
+---
+
+### TASK: Migrate agent task system to file-per-task
+
+**assignee:** claude
+**status:** pending
+**priority:** low
+**remark:** ⚠️ ก่อนทำต้องคุยกับ user ละเอียดก่อน — ยังไม่ได้ตัดสินใจ design สุดท้าย (naming convention, rules file placement, migration strategy)
+
+**Why:** backlog.md เดียวทำให้ agent ต้องอ่านทั้งไฟล์เพื่อหา task ตัวเอง — file-per-task + status ใน filename ช่วยลด token ได้มาก
+**Files to touch:**
+- `.agents/tasks/` (new directory)
+- `.agents/backlog.md` (migrate + archive)
+- `.agents/RULES.md` (extract workflow rules)
+**Acceptance criteria:**
+- TBD — ออกแบบหลังคุยกับ user แล้ว
+**Verify:**
+- TBD
