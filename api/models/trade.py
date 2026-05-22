@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Optional
 from sqlalchemy import String, Boolean, Numeric, BigInteger, Enum as SAEnum, DateTime, Integer, JSON
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 import enum
 
 from database import Base
@@ -73,4 +73,4 @@ class Trade(Base):
     account_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True, index=True)
     entry_score: Mapped[Optional[int]] = mapped_column(Integer(), nullable=True)
     entry_verdict: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    recovery_plan: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    recovery_plan: Mapped[Optional[dict]] = mapped_column(JSONB().with_variant(JSON(), "sqlite"), nullable=True)
