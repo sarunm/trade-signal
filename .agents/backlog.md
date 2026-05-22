@@ -40,9 +40,10 @@
 
 | # | Task | Assignee | Priority | Status |
 |---|---|---|---|---|
-| 1 | Trader Profile MCP — Phase 1 | codex | 🟢 normal | in_progress |
+| 1 | Trader Profile MCP — Phase 1 | codex | 🟢 normal | done |
 | 2 | Trade Advisor — entry scoring + recovery map + live zone alerts | agy | 🟢 normal | done |
 | 3 | Migrate agent task system to file-per-task | claude | 🔵 low | pending |
+| 4 | Add missing MCP endpoints (account-snapshots, price-bars) | codex | 🔵 low | pending |
 
 **Done tasks:** ดู [archive.md](archive.md)
 
@@ -94,7 +95,7 @@ exact commands
 ### TASK: Trader Profile MCP — Phase 1 implementation
 
 **assignee:** codex
-**status:** pending
+**status:** done
 **priority:** normal
 **remark:** spec + plan ครบแล้ว — `docs/superpowers/specs/2026-05-21-trader-profile-mcp-design.md` + `docs/superpowers/plans/2026-05-21-trader-profile-mcp.md`
 
@@ -160,3 +161,29 @@ cd frontend && npm run build
 - TBD — ออกแบบหลังคุยกับ user แล้ว
 **Verify:**
 - TBD
+
+---
+
+### TASK: Add missing MCP endpoints (account-snapshots, price-bars)
+
+**assignee:** codex
+**status:** pending
+**priority:** low
+**remark:** codex flagged this in feedback.md — 2 MCP tools reference endpoints that don't exist yet: `/api/account-snapshots` and `/api/price-bars`. Tools work but return 404 until implemented.
+
+**Why:** `get_account_history` and `get_price_context` MCP tools call endpoints that aren't implemented — they 404 silently and return error strings
+**Files to touch:**
+- `api/routers/account.py` (Modify) — add `/api/account-snapshots?days=N` endpoint
+- `api/routers/price_tick.py` or new `price_bars.py` (Modify/New) — add `/api/price-bars?symbol=&tf=&limit=` endpoint
+- `tests/test_trader_profile.py` or new test file (Modify/New) — test the new endpoints
+**Acceptance criteria:**
+- [ ] `GET /api/account-snapshots?days=7` returns list of AccountSnapshot rows for the last N days, filtered by current account
+- [ ] `GET /api/price-bars?symbol=XAUUSD&tf=M15&limit=50` returns list of PriceBar rows
+- [ ] Both endpoints return empty list (not 404) when no data
+- [ ] MCP `get_account_history` and `get_price_context` tools return valid JSON
+**Verify:**
+```bash
+curl "http://localhost:8000/api/account-snapshots?days=7"
+curl "http://localhost:8000/api/price-bars?symbol=XAUUSD&tf=M15&limit=10"
+cd api && pytest ../tests/ -v
+```

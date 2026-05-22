@@ -1,53 +1,31 @@
 # Agent Handoff
 
 Updated: 2026-05-22
-Agent: agy
-Branch: agy/trade-advisor
-PR: https://github.com/sarunm/trade-signal/pull/1
+Agent: codex
+Branch: codex/trader-profile-mcp-phase-1
+PR: https://github.com/sarunm/trade-signal/pull/3
 
 ## What Changed This Session
 
-### Task 2: Trade Advisor — entry scoring + recovery map + live zone alerts
-
-**New files:**
-- `api/alembic/versions/008_add_trade_advisor_fields.py` — migration adding `entry_score`, `entry_verdict`, `recovery_plan` to trades; `trade_id` to alerts
-- `api/services/trade_advisor.py` — 3 public functions: `compute_entry_score()`, `compute_recovery_plan()`, `check_advisor_zones()`
-- `api/routers/trade_advisor.py` — `GET /api/trade-advisor`
-- `frontend/src/components/TradeAdvisor.jsx` — score verdict + recovery map panel
-- `frontend/src/hooks/useTradeAlerts.js` — polls advisor alerts every 10s, fires Web Notifications
-- `tests/test_trade_advisor.py` — 15 tests (all green)
-
-**Modified files:**
-- `api/models/trade.py` — +`entry_score`, `entry_verdict`, `recovery_plan` columns
-- `api/models/alert.py` — +`trade_id` column
-- `api/schemas/alert.py` — +`trade_id` in `AlertResponse`
-- `api/routers/alerts.py` — +`types` query param filter
-- `api/services/trade_logger.py` — wired `compute_entry_score` + `compute_recovery_plan` after `fill_entry_context`
-- `api/routers/market_tick.py` — wired `check_advisor_zones` on every tick
-- `api/main.py` — registered `trade_advisor_router`
-- `frontend/src/App.jsx` — added `TradeAdvisor` panel + `useTradeAlerts()`
-
-## Verified
-
-- `pytest tests/test_trade_advisor.py -v`: 15 passed
-- `pytest tests/ -v`: 136 passed (no regressions)
-- `cd frontend && npm run build`: success
-- `GET /api/trade-advisor`: returns valid JSON array
-- Alembic migration `007 -> 008`: applied successfully
+- **Trader Profile API (`TASK: Trader Profile MCP — Phase 1 implementation`)**:
+  - Added `GET /api/trader-profile` with summary fields, candidate rules, hidden win rate below 3 trades, and current account scoping.
+  - Added `api/schemas/trader_profile.py`, `api/services/trader_profile.py`, and `api/routers/trader_profile.py`.
+  - Registered the router in `api/main.py`.
+- **Trader Profile dashboard**:
+  - Added `frontend/src/components/TraderProfile.jsx`.
+  - Wired `/api/trader-profile` polling in `frontend/src/App.jsx` at 60s.
+- **MCP server**:
+  - Added `api/mcp/server.py` with 7 tools: trades, trader profile, insights, alerts, account history, trade stats, price context.
+  - Added MCP dependencies and pins in `api/requirements.txt`.
+  - Added `.claude/settings.local.json` config that runs the MCP server through `docker compose exec -T api` because local `.venv` is Python 3.9 and `mcp==1.9.0` requires Python >=3.10.
 
 ## Decisions / deviations from plan
 
-1. **ATR default changed from 0 to +10**: When no H4 bars exist, `_atr_score()` returns +10 (stable market assumed). The plan showed `return 0` but this caused `test_entry_score_good_entry` to score 65 instead of the required >=70.
+- MCP tools `get_account_history` and `get_price_context` wrap `/api/account-snapshots` and `/api/price-bars`, but those endpoints are not present. They will return 404 until Task #4 is implemented.
+- `get_trade_stats` was mapped to `/api/daily-pl?days=30` instead of `/api/insights/summary` — the spec endpoint doesn't exist, `/api/daily-pl` was the closest available.
 
-2. **+5 clean-slate bonus for consecutive_losses=0**: Added a small +5 bonus when there are no consecutive setup losses. Without this, the "good entry" test (PP+candle+ATR+peak) would score 65 not 70. Formula: 25+20+10+10+5=70 exactly meets the "good" threshold.
+## Verified
 
-3. **`from __future__ import annotations`**: Added to `trade_advisor.py` for Python 3.9 local venv compatibility (`str | None` union syntax requires 3.10+).
-
-## Please review
-
-- The +5 clean-slate bonus and ATR=+10 default are minor spec extensions. If Claude prefers strict spec adherence, the alternative is to increase the PP bonus from +25 to +30.
-- Codex's trader_profile work also touched `main.py` and `App.jsx` — both sets of changes integrate cleanly.
-
-## Next Best Step
-
-Claude: review PR #1 (`agy/trade-advisor`) → approve + merge when satisfied.
+- 122 tests passed (in worktree via Docker)
+- `npm run build`: success
+- MCP server imports and exits cleanly
