@@ -192,13 +192,15 @@ void SyncHistoryDeals(int days_back)
          // Use position ticket so this upserts onto the opening deal row (merges close data)
          ulong position_ticket = (ulong)HistoryDealGetInteger(deal_ticket, DEAL_POSITION_ID);
          ulong close_ticket = (position_ticket > 0) ? position_ticket : deal_ticket;
+         // ENTRY_OUT deal type is inverted from position direction — omit direction so the
+         // upsert preserves the correct direction set by the ENTRY_IN deal
          body = StringFormat(
             "{"
             "\"transaction_type\":\"DEAL_ADD\","
             "\"account_id\":%I64d,"
             "\"ticket\":%I64u,"
             "\"symbol\":\"%s\","
-            "\"direction\":\"%s\","
+            "\"direction\":null,"
             "\"order_type\":\"market\","
             "\"order_state\":\"filled\","
             "\"pending_price\":null,"
@@ -215,7 +217,7 @@ void SyncHistoryDeals(int days_back)
             "\"commission\":%.2f"
             "}",
             AccountInfoInteger(ACCOUNT_LOGIN),
-            close_ticket, InpSymbol, direction,
+            close_ticket, InpSymbol,
             F(deal_price), volume,
             NullOrStr(tp), NullOrStr(sl),
             ISOTime(deal_time),
@@ -360,6 +362,7 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
    datetime open_time = 0, fill_time = 0, close_time = 0;
    ENUM_ORDER_TYPE order_type_enum = ORDER_TYPE_BUY;
    ulong ticket = trans.order;
+   bool is_closing_deal = false;
 
    if(trans.type == TRADE_TRANSACTION_DEAL_ADD && trans.deal > 0) {
       if(HistoryDealSelect(trans.deal)) {
@@ -378,6 +381,7 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
             close_price = open_price;
             close_time  = fill_time;
             open_price  = 0;
+            is_closing_deal = true;
          }
       }
    }
@@ -392,13 +396,17 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
       if(volume == 0) volume = HistoryOrderGetDouble(trans.order, ORDER_VOLUME_INITIAL);
    }
 
+   // ENTRY_OUT deal type is inverted from position direction — send null so upsert
+   // preserves the correct direction set by the original ENTRY_IN deal
+   string direction_json = is_closing_deal ? "null" : "\"" + DirectionStr(order_type_enum) + "\"";
+
    string body = StringFormat(
       "{"
       "\"transaction_type\":\"%s\","
       "\"account_id\":%I64d,"
       "\"ticket\":%I64u,"
       "\"symbol\":\"%s\","
-      "\"direction\":\"%s\","
+      "\"direction\":%s,"
       "\"order_type\":\"%s\","
       "\"order_state\":\"%s\","
       "\"pending_price\":%s,"
@@ -415,7 +423,7 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
       "\"commission\":%.2f"
       "}",
       trans_type, AccountInfoInteger(ACCOUNT_LOGIN), ticket, InpSymbol,
-      DirectionStr(order_type_enum),
+      direction_json,
       OrderTypeStr(order_type_enum),
       order_state,
       NullOrStr(pending_price),

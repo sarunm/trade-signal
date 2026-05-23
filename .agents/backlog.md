@@ -44,6 +44,12 @@
 | 2 | Trade Advisor — entry scoring + recovery map + live zone alerts | agy | 🟢 normal | done |
 | 3 | Migrate agent task system to file-per-task | claude | 🔵 low | pending |
 | 4 | Add missing MCP endpoints (account-snapshots, price-bars) | codex | 🔵 low | pending |
+| 5 | Indicator Engine Infrastructure | codex | 🟢 normal | pending |
+| 6–7 | Indicator tasks: Trend (29) + Momentum (39) | codex | 🟢 normal | pending |
+| 8–12 | Indicator tasks: Volume/Volatility/S&R/Pattern/Cycle (74) | (ว่าง) | 🔵 low | pending |
+| BUG-1 | [BUG] Trade direction always wrong — EA sends ENTRY_OUT deal type | claude | 🔴 high | done |
+
+**Indicator tasks:** ดู [`.agents/indicators/`](.agents/indicators/README.md) — 1 indicator 1 task
 
 **Done tasks:** ดู [archive.md](archive.md)
 
@@ -186,4 +192,41 @@ cd frontend && npm run build
 curl "http://localhost:8000/api/account-snapshots?days=7"
 curl "http://localhost:8000/api/price-bars?symbol=XAUUSD&tf=M15&limit=10"
 cd api && pytest ../tests/ -v
+```
+
+---
+
+### TASK: Indicator Engine Infrastructure
+
+**assignee:** codex
+**status:** pending
+**priority:** normal
+**remark:** ต้องทำก่อน indicator tasks ทุกตัว — เป็น foundation ทั้งหมด
+
+**Why:** สร้าง foundation ให้ระบบคำนวณ indicator ทุกตัวแบบ event-driven ทุกครั้งที่ trade ปิด แล้วบันทึกว่า signal match กับ direction ของ trade หรือไม่
+**Files to touch:**
+- `api/alembic/versions/009_add_trade_indicator_signals.py` (New)
+- `api/models/indicator_signal.py` (New) — ORM model
+- `api/schemas/indicator_signal.py` (New) — Pydantic schema
+- `api/services/indicator_engine.py` (New) — REGISTRY + compute_all()
+- `api/services/indicators/__init__.py` (New)
+- `api/routers/indicator_signals.py` (New) — GET /api/indicator-signals/{trade_id}
+- `api/services/trade_logger.py` (Modify) — wire background task on trade close
+- `api/main.py` (Modify) — register router
+- `api/requirements.txt` (Modify) — เพิ่ม pandas-ta
+- `tests/test_indicator_engine.py` (New)
+**Acceptance criteria:**
+- [ ] Migration 009 สร้าง `trade_indicator_signals` table: `(id UUID, trade_id UUID FK, indicator_slug VARCHAR, timeframe VARCHAR, value FLOAT, direction VARCHAR, matched BOOL, metadata JSONB, calculated_at TIMESTAMPTZ)`
+- [ ] `IndicatorResult` dataclass มี field: `slug, value, direction, matched, timeframe, metadata`
+- [ ] `REGISTRY: dict[str, IndicatorFn]` + `@register("slug")` decorator ใช้งานได้
+- [ ] `compute_all(trade, bars_by_tf) -> list[IndicatorResult]` รันทุก indicator ใน REGISTRY
+- [ ] `trade_logger.py` เรียก `asyncio.create_task(compute_all(...))` เมื่อ `order_state = filled` หรือ `close_price is not None`
+- [ ] `GET /api/indicator-signals/{trade_id}` คืน list ของ signals ที่ match trade นั้น
+- [ ] `pip install pandas-ta` เพิ่มใน requirements.txt
+- [ ] pytest ผ่านทุก test (รวม regression)
+**Verify:**
+```bash
+cd api && alembic upgrade head
+cd api && pytest ../tests/ -v
+curl "http://localhost:8000/api/indicator-signals/{some-trade-id}"
 ```
