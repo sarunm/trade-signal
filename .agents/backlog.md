@@ -2,19 +2,22 @@
 
 **Obsidian Knowledge Base:** ก่อนเริ่ม task ใดก็ตาม ให้อ่าน `/Users/nick/Obsidian Vault/agents/INDEX.md` ก่อนเสมอ — ดูว่าต้องอ่านไฟล์ไหนต่อ แล้วอ่านเฉพาะไฟล์นั้น
 
-**Roles:** Claude — design + assign + PR review + merge. Codex / agy — implement only.
+**Persistent Rules:** อ่าน `.agents/RULES.md` ก่อนเริ่ม task เสมอ — มี lessons จาก bugs และ reviews ที่ผ่านมา
+
+**Roles:** Claude — design + assign + PR review + merge + retro. Codex / agy — implement only.
 
 **Workflow:**
 1. Claude assigns `assignee` (codex|agy) and sets `status: pending` before dispatching
 2. Agent picks **only** tasks where `assignee` matches their name
 3. Agent creates branch: `git checkout -b <assignee>/<task-slug>` และ updates `status: in_progress`
-4. Implements per acceptance criteria
-5. Runs all verify commands — **all must pass before continuing**
-6. Commits, opens PR to `main` via `gh pr create`
-7. Updates `status: done` + writes `.agents/handoff.md` พร้อม PR URL
-8. Claude reads `.agents/feedback.md` + reviews PR diff
-9. Approved → Claude merges PR + pushes
-10. Bugs found → Claude creates `[BUG]` task, requests changes on PR
+4. **Contract confirmation:** ก่อนเขียนโค้ด agent ต้อง output CONTRACT block ก่อนเสมอ (ดู format ด้านล่าง)
+5. Implements per acceptance criteria
+6. Runs all verify commands — **all must pass before continuing**
+7. Commits, opens PR to `main` via `gh pr create`
+8. Updates `status: done` + writes `.agents/handoff.md` พร้อม PR URL
+9. Claude reads `.agents/feedback.md` + reviews PR diff
+10. Approved → Claude merges PR + **runs retro** → เพิ่ม lessons ใน `.agents/RULES.md` ถ้ามี
+11. Bugs found → Claude creates `[BUG]` task, requests changes on PR
 
 **Branch naming:** `codex/<task-slug>` หรือ `agy/<task-slug>` เช่น `agy/fib-pp-weekly`
 
@@ -33,6 +36,19 @@
 **Feedback rule:** Agent เจอ task แปลกๆ, scope ไม่ชัด, มีข้อแนะนำ, หรือ risk → เขียนใน `.agents/feedback.md` ก่อน open PR เสมอ
 
 **Claude review:** Reads `.agents/feedback.md` → reviews PR → approves + merges หรือ requests changes
+
+**Retro rule (Claude):** หลัง merge ทุก PR — ถ้าพบ bug, gotcha, หรือ assumption ผิด ให้เพิ่ม rule ใน `.agents/RULES.md` ทันที ไม่ต้องรอสะสม format: `## RULE-N | <title>` + `**Lesson:**` + `**Apply when:**`
+
+**Contract format:** Agent ต้อง output block นี้ก่อนเขียนโค้ดเสมอ:
+```
+CONTRACT
+task: <task title>
+will touch: <files>
+will NOT touch: <files ที่ไม่แตะ>
+AC understood:
+  - <echo back แต่ละ AC item>
+assumptions: <ถ้ามี หรือ none>
+```
 
 ---
 
