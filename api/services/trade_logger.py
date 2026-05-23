@@ -1,9 +1,13 @@
+import asyncio
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from models.trade import Trade
+from models.trade import OrderState
 from schemas.trade_event import TradeEventSchema
 from services.entry_context import fill_entry_context
+from services.indicator_engine import compute_all
 from services.trade_advisor import compute_entry_score, compute_recovery_plan
 
 
@@ -42,6 +46,9 @@ async def upsert_trade(session: AsyncSession, event: TradeEventSchema) -> Trade:
         await fill_entry_context(session, trade)
         await compute_entry_score(session, trade)
         await compute_recovery_plan(session, trade)
+
+    if event.order_state == OrderState.filled or event.close_price is not None:
+        asyncio.create_task(compute_all(trade, {}))
 
     await session.commit()
     await session.refresh(trade)

@@ -1,18 +1,18 @@
 # Active Agent State
 
-Updated: 2026-05-22
+Updated: 2026-05-23
 Current owner: codex
-Branch: codex/trader-profile-mcp-phase-1
-Last task commit: 8914263 feat: add trader profile MCP layer
+Branch: codex/indicator-engine-infrastructure
+Last task commit: 4d47ca9 feat: add indicator engine infrastructure
 
 ## Current Goal
 
-Trader Profile MCP — Phase 1 implementation.
+Indicator Engine Infrastructure.
 
 ## Status
 
-Done — implementation verified and ready for Claude review.
+Done — implementation verified locally and in Docker; PR opened for Claude review.
 
 ## Next Step
 
-Claude: Review Codex branch `codex/trader-profile-mcp-phase-1`.
+Claude: Review PR https://github.com/sarunm/trade-signal/pull/4.

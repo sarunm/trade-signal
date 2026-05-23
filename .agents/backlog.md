@@ -215,7 +215,7 @@ cd api && pytest ../tests/ -v
 ### TASK: Indicator Engine Infrastructure
 
 **assignee:** codex
-**status:** pending
+**status:** done
 **priority:** normal
 **remark:** ต้องทำก่อน indicator tasks ทุกตัว — เป็น foundation ทั้งหมด
 
