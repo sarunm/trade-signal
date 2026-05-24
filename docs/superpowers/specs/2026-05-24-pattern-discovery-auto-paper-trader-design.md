@@ -36,7 +36,11 @@ trade จริง → indicator signals (Phase 2)
 ### Algorithm (รัน daily cron หลัง market close)
 
 ```
-1. ดึง trades ที่ปิดแล้วใน 14 วันล่าสุด พร้อม indicator signals ของแต่ละตัว
+1. ดึง trades ที่ปิดแล้ว โดยใช้ window แบบ dual-constraint:
+     cutoff_by_count = timestamp ของ trade ที่ปิดล่าสุด DISCOVERY_WINDOW_TRADES ตัว
+     cutoff_by_age   = now() - DISCOVERY_WINDOW_MAX_DAYS days
+     cutoff = max(cutoff_by_count, cutoff_by_age)  ← เอาที่ recent กว่า (window เล็กกว่า)
+   พร้อม indicator signals ของแต่ละตัว
 2. สำหรับแต่ละ trade: collect set ของ indicator slugs ที่ matched=True
 3. generate combinations ขนาด 2–5 slugs จาก matched slugs ของแต่ละ trade
 4. สำหรับแต่ละ combination:
@@ -58,12 +62,23 @@ trade จริง → indicator signals (Phase 2)
 
 ### Stability Thresholds (calibrated สำหรับ 5 trades/day)
 
-| Parameter | Value | เหตุผล |
-|-----------|-------|--------|
-| min sample | 10 trades | ~7–10 วัน ขึ้นอยู่กับ pattern frequency |
-| min win rate | 60% | สูงกว่า random แต่ reachable |
-| rolling window | 14 วัน | responsive ต่อ market conditions ปัจจุบัน |
-| consecutive stable days | 3 วัน | ยืนยันว่าไม่ใช่ statistical noise |
+| Parameter | Config Key | Default | เหตุผล |
+|-----------|-----------|---------|--------|
+| min sample | `DISCOVERY_MIN_SAMPLE` | 10 trades | statistical floor ก่อน promote |
+| min win rate | `DISCOVERY_MIN_WIN_RATE` | 0.60 | ต้องดีกว่า random |
+| window — max trades | `DISCOVERY_WINDOW_TRADES` | 50 | statistical power คงที่ ไม่ขึ้นกับ trading frequency |
+| window — max age | `DISCOVERY_WINDOW_MAX_DAYS` | 30 | ป้องกัน pattern เก่าจาก market condition ที่ต่างไป |
+| consecutive stable days | `DISCOVERY_STABLE_DAYS` | 3 | ยืนยันว่าไม่ใช่ statistical noise |
+
+Window ใช้ "last 50 trades แต่ไม่เกิน 30 วัน" — whichever is the smaller set:
+```python
+# api/services/pattern_discovery.py
+DISCOVERY_WINDOW_TRADES  = int(os.getenv("DISCOVERY_WINDOW_TRADES", 50))
+DISCOVERY_WINDOW_MAX_DAYS = int(os.getenv("DISCOVERY_WINDOW_MAX_DAYS", 30))
+DISCOVERY_MIN_SAMPLE     = int(os.getenv("DISCOVERY_MIN_SAMPLE", 10))
+DISCOVERY_MIN_WIN_RATE   = float(os.getenv("DISCOVERY_MIN_WIN_RATE", 0.60))
+DISCOVERY_STABLE_DAYS    = int(os.getenv("DISCOVERY_STABLE_DAYS", 3))
+```
 
 ### Deduplication
 
