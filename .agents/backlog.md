@@ -64,6 +64,8 @@ assumptions: <ถ้ามี หรือ none>
 | 6–7 | Indicator tasks: Trend (29) + Momentum (39) | codex | 🟢 normal | pending |
 | 8–12 | Indicator tasks: Volume/Volatility/S&R/Pattern/Cycle (74) | (ว่าง) | 🔵 low | pending |
 | BUG-1 | [BUG] Trade direction always wrong — EA sends ENTRY_OUT deal type | claude | 🔴 high | done |
+| 13 | Pattern Discovery Engine (Phase 3) | codex | 🟢 normal | pending |
+| 14 | Auto Paper Trader (Phase 4) | codex | 🟢 normal | pending |
 
 **Indicator tasks:** ดู [`.agents/indicators/`](.agents/indicators/README.md) — 1 indicator 1 task
 
@@ -247,4 +249,83 @@ cd api && pytest ../tests/ -v
 cd api && alembic upgrade head
 cd api && pytest ../tests/ -v
 curl "http://localhost:8000/api/indicator-signals/{some-trade-id}"
+```
+
+---
+
+### TASK: Pattern Discovery Engine (Phase 3)
+
+**assignee:** codex
+**status:** pending
+**priority:** normal
+**remark:** blocks กับ Task #5–12 (Indicator Engine ต้องเสร็จและมี entry-time signals สะสมไว้พอก่อน) — spec อยู่ที่ `docs/superpowers/specs/2026-05-24-pattern-discovery-auto-paper-trader-design.md`
+
+**Why:** วิเคราะห์ entry-time indicator signals หา combinations ที่ correlate กับ winning trades แล้ว spawn paper_trader_rules อัตโนมัติ
+**Files to touch:**
+- `api/alembic/versions/010_add_patterns.py` (New) — patterns + paper_trader_rules tables
+- `api/models/pattern.py` (New) — Pattern, PaperTraderRule ORM
+- `api/schemas/pattern.py` (New) — Pydantic schemas
+- `api/services/pattern_discovery.py` (New) — discovery algorithm + dedup
+- `api/routers/patterns.py` (New) — GET /api/patterns, /api/paper-trader-rules
+- `api/main.py` (Modify) — APScheduler cron + register router
+- `api/requirements.txt` (Modify) — เพิ่ม apscheduler
+- `tests/test_pattern_discovery.py` (New)
+**Acceptance criteria:**
+- [ ] Migration 010 สร้าง `patterns` table: `(id UUID, indicator_slugs VARCHAR[], timeframe VARCHAR, win_rate FLOAT, sample_count INT, consecutive_stable_days INT, status VARCHAR, discovered_at TIMESTAMPTZ, promoted_at TIMESTAMPTZ)`
+- [ ] Migration 010 สร้าง `paper_trader_rules` table: `(id UUID, pattern_id UUID FK, status VARCHAR, spawned_at TIMESTAMPTZ, total_trades INT, win_count INT)`
+- [ ] Window ใช้ dual-constraint: last `DISCOVERY_WINDOW_TRADES` (default 50) trades แต่ไม่เกิน `DISCOVERY_WINDOW_MAX_DAYS` (default 30) วัน — เอา cutoff ที่ recent กว่า
+- [ ] ทั้ง 5 threshold config ผ่าน env vars: `DISCOVERY_WINDOW_TRADES`, `DISCOVERY_WINDOW_MAX_DAYS`, `DISCOVERY_MIN_SAMPLE` (10), `DISCOVERY_MIN_WIN_RATE` (0.60), `DISCOVERY_STABLE_DAYS` (3)
+- [ ] `run_pattern_discovery()` generate combinations ขนาด 2–5 slugs จาก matched signals ของแต่ละ trade
+- [ ] combinations ที่ sample < `DISCOVERY_MIN_SAMPLE` หรือ win_rate < `DISCOVERY_MIN_WIN_RATE` ไม่ถูก promote
+- [ ] `consecutive_stable_days` เพิ่มขึ้นทุกวันที่ผ่าน threshold, reset เป็น 0 เมื่อไม่ผ่าน
+- [ ] pattern ที่ `consecutive_stable_days >= DISCOVERY_STABLE_DAYS` → promote เป็น `status=active`
+- [ ] Dedup: Jaccard similarity > 0.8 กับ active paper_trader_rule ใดก็ตาม → skip
+- [ ] pattern active ใหม่ที่ผ่าน dedup → สร้าง `paper_trader_rule` status=active อัตโนมัติ
+- [ ] APScheduler รัน `run_pattern_discovery()` ทุกวันตอน 00:00 UTC
+- [ ] `GET /api/patterns` และ `GET /api/paper-trader-rules` คืนข้อมูลถูกต้อง
+- [ ] pytest ผ่านทุก test รวม regression
+**Verify:**
+```bash
+cd api && alembic upgrade head
+cd api && pytest ../tests/test_pattern_discovery.py -v
+cd api && pytest ../tests/ -v
+curl "http://localhost:8000/api/patterns"
+curl "http://localhost:8000/api/paper-trader-rules"
+```
+
+---
+
+### TASK: Auto Paper Trader (Phase 4)
+
+**assignee:** codex
+**status:** pending
+**priority:** normal
+**remark:** blocks กับ Task #13 (Pattern Discovery ต้องเสร็จและมี active paper_trader_rules ก่อน) — spec อยู่ที่ `docs/superpowers/specs/2026-05-24-pattern-discovery-auto-paper-trader-design.md`
+
+**Why:** monitor live prices ทุก 60 วินาที auto entry paper trade เมื่อ pattern conditions ครบ และ exit ด้วย Hybrid strategy (S/R TP + momentum flip + ATR SL)
+**Files to touch:**
+- `api/services/paper_trader.py` (New) — in-memory cache + signal monitor + exit manager
+- `api/routers/market_tick.py` (Modify) — เพิ่ม `asyncio.create_task(_run_paper_trader())`
+- `api/routers/patterns.py` (Modify) — เพิ่ม `GET /api/paper-trades`
+- `tests/test_paper_trader.py` (New)
+**Acceptance criteria:**
+- [ ] `_run_paper_trader()` ถูก trigger เป็น background task ทุกครั้งที่ POST /api/market-tick
+- [ ] in-memory rule cache: load active rules จาก DB เฉพาะเมื่อ TTL expired (1 ชั่วโมง) ไม่ใช่ทุก tick
+- [ ] Signal Monitor compute เฉพาะ indicator slugs ที่อยู่ใน active rules เท่านั้น (ไม่ใช่ทั้ง 142)
+- [ ] Entry guard: ไม่สร้าง paper trade ถ้า rule นั้นมี open paper trade อยู่แล้ว (1 rule = 1 open trade)
+- [ ] TP คำนวณจาก nearest pivot S/R level ในทิศที่ถูกต้อง (R1/R2 สำหรับ buy, S1/S2 สำหรับ sell)
+- [ ] SL = ATR(14) × 1.5 จาก entry price
+- [ ] Exit Manager เช็ค TP/SL ก่อน (O(1)) แล้วค่อยเช็ค momentum flip
+- [ ] paper trade ปิดเมื่อ price hit TP (win), hit SL (loss), หรือ momentum indicator พลิก (early exit)
+- [ ] `paper_trader_rules.win_count` และ `total_trades` อัปเดตเมื่อ trade ปิด
+- [ ] `GET /api/paper-trades` คืน list paper trades (open + closed) พร้อม rule_id
+- [ ] tick processing รวม < 2 วินาที (วัดจาก test ที่ mock bars และ mock rules)
+- [ ] pytest ผ่านทุก test รวม regression
+**Verify:**
+```bash
+cd api && pytest ../tests/test_paper_trader.py -v
+cd api && pytest ../tests/ -v
+curl "http://localhost:8000/api/paper-trades"
+# ส่ง mock tick แล้วเช็คว่า background task รัน:
+curl -X POST http://localhost:8000/api/market-tick -H "Content-Type: application/json" -d '{...}'
 ```
