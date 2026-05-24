@@ -3,7 +3,7 @@
 //| Sends trade events and price bars to Trade Signal Partner API    |
 //+------------------------------------------------------------------+
 #property copyright "Trade Signal Partner"
-#property version   "1.03"
+#property version   "1.04"
 #property strict
 
 input string InpServerURL  = "http://127.0.0.1:8000";
