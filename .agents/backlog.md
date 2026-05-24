@@ -219,7 +219,7 @@ cd api && pytest ../tests/ -v
 **priority:** normal
 **remark:** ต้องทำก่อน indicator tasks ทุกตัว — เป็น foundation ทั้งหมด
 
-**Why:** สร้าง foundation ให้ระบบคำนวณ indicator ทุกตัวแบบ event-driven ทุกครั้งที่ trade ปิด แล้วบันทึกว่า signal match กับ direction ของ trade หรือไม่
+**Why:** สร้าง foundation ให้ระบบคำนวณ indicator ทุกตัวแบบ event-driven ทุกครั้งที่ trade เปิด แล้วบันทึกว่า signal match กับ direction ของ trade หรือไม่ — ใช้ bars ณ เวลา entry เพื่อให้ Phase 3 (Pattern Discovery) ใช้ข้อมูลที่ถูกต้อง
 **Files to touch:**
 - `api/alembic/versions/009_add_trade_indicator_signals.py` (New)
 - `api/models/indicator_signal.py` (New) — ORM model
@@ -227,7 +227,7 @@ cd api && pytest ../tests/ -v
 - `api/services/indicator_engine.py` (New) — REGISTRY + compute_all()
 - `api/services/indicators/__init__.py` (New)
 - `api/routers/indicator_signals.py` (New) — GET /api/indicator-signals/{trade_id}
-- `api/services/trade_logger.py` (Modify) — wire background task on trade close
+- `api/services/trade_logger.py` (Modify) — wire background task on entry only
 - `api/main.py` (Modify) — register router
 - `api/requirements.txt` (Modify) — เพิ่ม pandas-ta
 - `tests/test_indicator_engine.py` (New)
@@ -236,7 +236,9 @@ cd api && pytest ../tests/ -v
 - [ ] `IndicatorResult` dataclass มี field: `slug, value, direction, matched, timeframe, metadata`
 - [ ] `REGISTRY: dict[str, IndicatorFn]` + `@register("slug")` decorator ใช้งานได้
 - [ ] `compute_all(trade, bars_by_tf) -> list[IndicatorResult]` รันทุก indicator ใน REGISTRY
-- [ ] `trade_logger.py` เรียก `asyncio.create_task(compute_all(...))` เมื่อ `order_state = filled` หรือ `close_price is not None`
+- [ ] `trade_logger.py` เรียก `asyncio.create_task(compute_all(...))` เฉพาะเมื่อ `order_state = filled` AND `open_price is not None` AND `close_price is None` — trigger ที่ entry เท่านั้น ห้าม trigger ซ้ำตอน close
+- [ ] `bars_by_tf` ที่ส่งเข้า `compute_all` ต้องเป็น bars ที่ fetch โดยใช้ `trade.open_time` เป็น anchor — ไม่ใช่ bars ล่าสุด ณ เวลา compute
+- [ ] ถ้า trade นั้นมี `trade_indicator_signals` อยู่แล้ว (recompute กรณี history sync) → ลบของเก่าแล้วเขียนใหม่แทน overwrite ไม่ได้แค่ append
 - [ ] `GET /api/indicator-signals/{trade_id}` คืน list ของ signals ที่ match trade นั้น
 - [ ] `pip install pandas-ta` เพิ่มใน requirements.txt
 - [ ] pytest ผ่านทุก test (รวม regression)
