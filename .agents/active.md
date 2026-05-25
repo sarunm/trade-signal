@@ -3,7 +3,7 @@
 Updated: 2026-05-25
 Current owner: codex
 Branch: codex/indicators-trend-momentum
-Last task commit: pending
+Last task commit: 0c43e9d feat: add trend and momentum indicators
 
 ## Current Goal
 
@@ -15,4 +15,4 @@ Done — Trend/Momentum indicators implemented and backlog verify commands passe
 
 ## Next Step
 
-Claude: Review PR after Codex opens it.
+Claude: Review PR https://github.com/sarunm/trade-signal/pull/5.
