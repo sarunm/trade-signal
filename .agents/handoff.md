@@ -1,53 +1,32 @@
 # Agent Handoff
 
-Updated: 2026-05-22
-Agent: agy
-Branch: agy/trade-advisor
-PR: https://github.com/sarunm/trade-signal/pull/1
+Updated: 2026-05-25
+Agent: codex
+Branch: codex/indicators-trend-momentum
+PR: https://github.com/sarunm/trade-signal/pull/5
 
 ## What Changed This Session
 
-### Task 2: Trade Advisor — entry scoring + recovery map + live zone alerts
+- **Indicator tasks — Trend (29) + Momentum (39)**:
+  - Added all 29 Trend indicator slugs under `api/services/indicators/trend/`.
+  - Added all 39 Momentum indicator slugs under `api/services/indicators/momentum/`.
+  - Added shared indicator formula/registration helpers in `api/services/indicators/common.py`.
+  - Wired `services.indicators` into `indicator_engine` import path so the REGISTRY is populated before `compute_all()`.
+  - Added group tests for registration, result contract, matched semantics, and representative SMA/MACD/RSI/MOM behavior.
+  - Marked backlog + Trend/Momentum task files done.
 
-**New files:**
-- `api/alembic/versions/008_add_trade_advisor_fields.py` — migration adding `entry_score`, `entry_verdict`, `recovery_plan` to trades; `trade_id` to alerts
-- `api/services/trade_advisor.py` — 3 public functions: `compute_entry_score()`, `compute_recovery_plan()`, `check_advisor_zones()`
-- `api/routers/trade_advisor.py` — `GET /api/trade-advisor`
-- `frontend/src/components/TradeAdvisor.jsx` — score verdict + recovery map panel
-- `frontend/src/hooks/useTradeAlerts.js` — polls advisor alerts every 10s, fires Web Notifications
-- `tests/test_trade_advisor.py` — 15 tests (all green)
+## Decisions / Notes
 
-**Modified files:**
-- `api/models/trade.py` — +`entry_score`, `entry_verdict`, `recovery_plan` columns
-- `api/models/alert.py` — +`trade_id` column
-- `api/schemas/alert.py` — +`trade_id` in `AlertResponse`
-- `api/routers/alerts.py` — +`types` query param filter
-- `api/services/trade_logger.py` — wired `compute_entry_score` + `compute_recovery_plan` after `fill_entry_context`
-- `api/routers/market_tick.py` — wired `check_advisor_zones` on every tick
-- `api/main.py` — registered `trade_advisor_router`
-- `frontend/src/App.jsx` — added `TradeAdvisor` panel + `useTradeAlerts()`
+- Each slug has its own module and registers through `@register("slug")` via `register_indicator(...)`.
+- The formulas are implemented in shared helpers to keep 68 modules thin and avoid copy/paste drift.
+- Indicators with ambiguous task wording, such as directionless reversal/trending signals, return `"neutral"` unless the available price context gives a concrete bullish/bearish direction.
+- Existing unrelated local changes in `.agents/feedback.md`, `.claude/settings.local.json`, `.antigravitycli/`, and `Obsidian-Dashboard.md` were not staged.
 
 ## Verified
 
-- `pytest tests/test_trade_advisor.py -v`: 15 passed
-- `pytest tests/ -v`: 136 passed (no regressions)
-- `cd frontend && npm run build`: success
-- `GET /api/trade-advisor`: returns valid JSON array
-- Alembic migration `007 -> 008`: applied successfully
-
-## Decisions / deviations from plan
-
-1. **ATR default changed from 0 to +10**: When no H4 bars exist, `_atr_score()` returns +10 (stable market assumed). The plan showed `return 0` but this caused `test_entry_score_good_entry` to score 65 instead of the required >=70.
-
-2. **+5 clean-slate bonus for consecutive_losses=0**: Added a small +5 bonus when there are no consecutive setup losses. Without this, the "good entry" test (PP+candle+ATR+peak) would score 65 not 70. Formula: 25+20+10+10+5=70 exactly meets the "good" threshold.
-
-3. **`from __future__ import annotations`**: Added to `trade_advisor.py` for Python 3.9 local venv compatibility (`str | None` union syntax requires 3.10+).
-
-## Please review
-
-- The +5 clean-slate bonus and ATR=+10 default are minor spec extensions. If Claude prefers strict spec adherence, the alternative is to increase the PP bonus from +25 to +30.
-- Codex's trader_profile work also touched `main.py` and `App.jsx` — both sets of changes integrate cleanly.
-
-## Next Best Step
-
-Claude: review PR #1 (`agy/trade-advisor`) → approve + merge when satisfied.
+- RED: `cd api && pytest ../tests/test_indicators_trend.py ../tests/test_indicators_momentum.py -v` failed with missing Trend/Momentum slugs in `REGISTRY`.
+- GREEN: `cd api && pytest ../tests/test_indicators_trend.py ../tests/test_indicators_momentum.py -v` — 4 passed.
+- Regression: `cd api && pytest ../tests/test_indicator_engine.py -v` — 5 passed.
+- Local full suite: `cd api && pytest ../tests/ -v --tb=short` — 146 passed.
+- Backlog verify 1: `docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api sh -c "cd /app && pytest tests/test_indicators_trend.py tests/test_indicators_momentum.py -v"` — 4 passed.
+- Backlog verify 2: `docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api sh -c "cd /app && pytest tests/ -v --tb=short"` — 146 passed.

@@ -15,6 +15,7 @@ from routers.trades import router as trades_router
 from routers.fib_levels import router as fib_levels_router
 from routers.trader_profile import router as trader_profile_router
 from routers.trade_advisor import router as trade_advisor_router
+from routers.indicator_signals import router as indicator_signals_router
 
 
 @asynccontextmanager
@@ -44,6 +45,7 @@ app.include_router(trades_router)
 app.include_router(fib_levels_router)
 app.include_router(trader_profile_router)
 app.include_router(trade_advisor_router)
+app.include_router(indicator_signals_router)
 
 
 @app.get("/health")

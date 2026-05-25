@@ -1,18 +1,18 @@
 # Active Agent State
 
-Updated: 2026-05-21
-Current owner: agy
-Branch: main
-Last task commit: feat: redesign Fibonacci levels to match ROM PP method
+Updated: 2026-05-25
+Current owner: codex
+Branch: codex/indicators-trend-momentum
+Last task commit: 0c43e9d feat: add trend and momentum indicators
 
 ## Current Goal
 
-None — Redesign Fib levels to match ROM indicator is completed.
+Indicator tasks — Trend (29) + Momentum (39).
 
 ## Status
 
-Idle — Waiting for new task assignment.
+Done — Trend/Momentum indicators implemented and backlog verify commands passed locally and in Docker.
 
 ## Next Step
 
-Claude: Review completed task and assign next task.
+Claude: Review PR https://github.com/sarunm/trade-signal/pull/5.
