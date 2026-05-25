@@ -1,9 +1,10 @@
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, JSON, String
-from sqlalchemy.dialects.postgresql import ARRAY, UUID
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, JSON, Numeric, String
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database import Base
@@ -42,3 +43,16 @@ class PaperTraderRule(Base):
     )
     total_trades: Mapped[int] = mapped_column(Integer, default=0)
     win_count: Mapped[int] = mapped_column(Integer, default=0)
+
+    mode: Mapped[str] = mapped_column(String(20), default="strict")
+    virtual_balance_start: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("5000"))
+    virtual_balance_current: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("5000"))
+    score_weights: Mapped[Optional[dict]] = mapped_column(JSONB().with_variant(JSON(), "sqlite"), nullable=True)
+    filters: Mapped[list] = mapped_column(JSONB().with_variant(JSON(), "sqlite"), default=list)
+    shadow_of_rule_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    gate_status: Mapped[dict] = mapped_column(JSONB().with_variant(JSON(), "sqlite"), default=dict)
+    promoted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    consecutive_stable_days_rule: Mapped[int] = mapped_column(
+        "consecutive_stable_days", Integer, default=0
+    )
+    last_signal_status: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
