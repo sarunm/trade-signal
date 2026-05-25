@@ -7,8 +7,58 @@ from sqlalchemy import select
 
 from models.indicator_signal import TradeIndicatorSignal
 from models.pattern import PaperTraderRule, Pattern
-from models.trade import Direction, Trade
+from models.trade import Direction, OrderState, OrderType, Trade
 from services import pattern_discovery
+from services.pattern_discovery import (
+    BASKET_CLOSE_GAP_SEC,
+    MINING_MAX_BASKET_SIZE,
+    group_into_baskets,
+)
+
+
+def _real_trade(close_time, profit, volume="0.10", ticket=None):
+    return Trade(
+        ticket=ticket or int(close_time.timestamp() * 1000) % 10**9,
+        symbol="XAUUSD",
+        direction=Direction.buy,
+        order_type=OrderType.market,
+        order_state=OrderState.filled,
+        open_time=close_time - timedelta(minutes=5),
+        close_time=close_time,
+        open_price=Decimal("1950.00"),
+        close_price=Decimal("1955.00"),
+        volume=Decimal(volume),
+        profit=Decimal(str(profit)),
+        is_paper=False,
+    )
+
+
+def test_group_into_baskets_close_within_gap():
+    base = datetime(2026, 5, 25, 12, 0, 0, tzinfo=timezone.utc)
+    a = _real_trade(base, profit=10, volume="0.01", ticket=1)
+    b = _real_trade(base + timedelta(seconds=1), profit=-5, volume="0.05", ticket=2)
+    baskets = group_into_baskets([(a, set()), (b, set())])
+    assert len(baskets) == 1
+    assert {t.ticket for t, _ in baskets[0]} == {1, 2}
+
+
+def test_group_into_baskets_far_apart():
+    base = datetime(2026, 5, 25, 12, 0, 0, tzinfo=timezone.utc)
+    a = _real_trade(base, profit=10, ticket=1)
+    b = _real_trade(base + timedelta(seconds=10), profit=20, ticket=2)
+    baskets = group_into_baskets([(a, set()), (b, set())])
+    assert len(baskets) == 2
+
+
+def test_group_into_baskets_max_size():
+    base = datetime(2026, 5, 25, 12, 0, 0, tzinfo=timezone.utc)
+    trades = [
+        _real_trade(base + timedelta(milliseconds=i * 200), profit=1, ticket=i + 1)
+        for i in range(MINING_MAX_BASKET_SIZE + 2)
+    ]
+    baskets = group_into_baskets([(t, set()) for t in trades])
+    sizes = [len(b) for b in baskets]
+    assert max(sizes) == MINING_MAX_BASKET_SIZE
 
 
 def _trade(profit: float, close_time: datetime, ticket: int = 0) -> Trade:

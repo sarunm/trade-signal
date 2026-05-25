@@ -33,6 +33,37 @@ def _ensure_aware(dt: datetime) -> datetime:
     return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
 
 
+BASKET_CLOSE_GAP_SEC = float(os.getenv("MINING_BASKET_CLOSE_GAP_SEC", "1.0"))
+MINING_MAX_BASKET_SIZE = int(os.getenv("MINING_MAX_BASKET_SIZE", "2"))
+
+
+def group_into_baskets(
+    population: list[tuple[Trade, set[str]]],
+) -> list[list[tuple[Trade, set[str]]]]:
+    """Group trades whose close_times are within BASKET_CLOSE_GAP_SEC into baskets.
+
+    Caps each basket at MINING_MAX_BASKET_SIZE — extra concurrent closes start a new basket.
+    Population is assumed to already be filtered for close_time is not None.
+    """
+    if not population:
+        return []
+    ordered = sorted(
+        population,
+        key=lambda pair: _ensure_aware(pair[0].close_time),
+    )
+    baskets: list[list[tuple[Trade, set[str]]]] = [[ordered[0]]]
+    for trade, slugs in ordered[1:]:
+        last = baskets[-1][-1][0]
+        gap = (
+            _ensure_aware(trade.close_time) - _ensure_aware(last.close_time)
+        ).total_seconds()
+        if gap <= BASKET_CLOSE_GAP_SEC and len(baskets[-1]) < MINING_MAX_BASKET_SIZE:
+            baskets[-1].append((trade, slugs))
+        else:
+            baskets.append([(trade, slugs)])
+    return baskets
+
+
 async def _window_cutoff(session: AsyncSession, now: datetime) -> datetime:
     age_cutoff = now - timedelta(days=DISCOVERY_WINDOW_MAX_DAYS)
     result = await session.execute(
