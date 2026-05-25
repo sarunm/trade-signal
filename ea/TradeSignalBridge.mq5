@@ -3,7 +3,7 @@
 //| Sends trade events and price bars to Trade Signal Partner API    |
 //+------------------------------------------------------------------+
 #property copyright "Trade Signal Partner"
-#property version   "1.08"
+#property version   "1.09"
 #property strict
 
 input string InpServerURL  = "http://127.0.0.1:8000";
@@ -301,7 +301,7 @@ int OnInit()
 {
    // Tools → Options → Expert Advisors → Allow WebRequest for: http://127.0.0.1:8000
    EventSetTimer(InpTimerSec);
-   Print("TradeSignalBridge v1.08 started. Sending to: ", InpServerURL, " | Symbol: ", InpSymbol);
+   Print("TradeSignalBridge v1.09 started. Sending to: ", InpServerURL, " | Symbol: ", InpSymbol);
    CheckHealth();
    SyncOpenPositions();
    SyncHistoryDeals(InpSyncDays);
@@ -513,6 +513,22 @@ void SendPriceTick()
    PostJSON("/api/price-tick", body);
 }
 
+void SendHeartbeat()
+{
+   long account_id = AccountInfoInteger(ACCOUNT_LOGIN);
+   string ts = ISOTime(TimeCurrent());
+   string body = StringFormat(
+      "{"
+      "\"account_id\":%I64d,"
+      "\"version\":\"1.09\","
+      "\"symbol\":\"%s\","
+      "\"timestamp\":\"%s\""
+      "}",
+      account_id, InpSymbol, ts
+   );
+   PostJSON("/api/ea-heartbeat", body);
+}
+
 void OnTick()
 {
    if(TimeCurrent() - g_last_market_tick_sent < InpMarketTickSec) return;
@@ -622,4 +638,5 @@ void OnTimer()
 {
    SendPriceTick();
    ComputeFibLevels();
+   SendHeartbeat();
 }
