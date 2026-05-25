@@ -129,9 +129,16 @@
   <div class="subtitle">Design Spec</div>
   <div class="meta">
     <span class="badge">2026-05-25</span>
+    <span class="badge warn">🔒 FROZEN — revision 1</span>
     <span class="badge warn">Supersedes 2026-05-24 spec</span>
     <span class="badge">Depends on Indicator Engine</span>
   </div>
+</div>
+
+<div class="callout warn" style="margin-top:24px">
+<strong>🔒 FROZEN REVISION — DO NOT EDIT.</strong>
+This document is a frozen snapshot of the design decisions made on 2026-05-25.
+Future changes must go in a new spec file (e.g. <code>2026-XX-XX-paper-trade-system-redesign-v2.md</code>) that supersedes this one. Keep this file as a historical record of decisions.
 </div>
 
 <div class="toc">
@@ -145,6 +152,8 @@
     <li><a href="#c4">Component 4 — Promotion Pipeline (4 Gates)</a></li>
     <li><a href="#c5">Component 5 — Signal Broadcaster + UI</a></li>
     <li><a href="#data">Data Model Changes</a></li>
+    <li><a href="#perf">Performance — design constraints</a></li>
+    <li><a href="#recovery">Recovery — restart safety</a></li>
     <li><a href="#config">Config (env vars)</a></li>
     <li><a href="#build">Build Sequence</a></li>
     <li><a href="#scope">Out of Scope</a></li>
@@ -254,24 +263,51 @@
   <tr><th>เก่า</th><th>ใหม่</th></tr>
   <tr>
     <td>Mining จาก trade ทั้งหมด หา combo winrate สูง</td>
-    <td>Mining จาก <strong>trade ของ user ที่กำไร</strong> หา combo ที่ user ใช้บ่อย</td>
+    <td>Mining จาก <strong>basket ของ user ที่ปิดเป็น net profit</strong> โดย anchor ที่ <strong>ไม้แรก</strong> ของ basket</td>
   </tr>
 </table>
 
-<pre><code># pseudo
-winning_user_trades = SELECT * FROM trades
-                      WHERE is_paper = false
-                        AND profit > 0
-                        AND open_time > cutoff
-                      ORDER BY close_time DESC
-                      LIMIT DISCOVERY_WINDOW_TRADES
+<h4>Step 1 — Group trades เป็น basket</h4>
+<p>User เปิดไม้แก้แล้วรวบปิดทีเดียว — ถ้านับเป็น trade เดี่ยวๆ จะเข้าใจผิด เลยต้อง group ก่อน</p>
+<pre><code># trades ที่ close_time ห่างกัน ≤ BASKET_CLOSE_GAP_SEC (default 1) = basket เดียวกัน
+def group_into_baskets(real_trades, gap_sec=1):
+    sorted_trades = sorted(real_trades, key=lambda t: t.close_time)
+    baskets, current = [], [sorted_trades[0]]
+    for t in sorted_trades[1:]:
+        if (t.close_time - current[-1].close_time).total_seconds() &lt;= gap_sec:
+            current.append(t)
+        else:
+            baskets.append(current); current = [t]
+    baskets.append(current)
+    return baskets</code></pre>
 
-for trade in winning_user_trades:
-    matched_slugs = matched indicators ของ trade นั้น
-    for combo in combinations(matched_slugs, size=2..5):
-        combo_count[combo] += 1
+<h4>Step 2 — Mining anchor ที่ไม้แรก, weight ตาม basket size</h4>
+<table>
+  <tr><th>Basket size</th><th>ความหมาย</th><th>Mining weight</th></tr>
+  <tr><td>1</td><td>เปิดแล้วบวกเลย — clean signal</td><td>1.0</td></tr>
+  <tr><td>2</td><td>ต้องแก้ 1 ครั้ง — penalize เล็กน้อย</td><td>0.7</td></tr>
+  <tr><td>≥ 3</td><td>abnormal (user เองยังบอกว่าผิดปกติ)</td><td>ทิ้ง</td></tr>
+</table>
 
-candidates = [combo where count >= MIN_OCCURRENCE (default 5)]</code></pre>
+<pre><code>winning_baskets = [b for b in group_into_baskets(real_trades)
+                   if sum(t.profit for t in b) > 0]
+
+for basket in winning_baskets:
+    if len(basket) > MINING_MAX_BASKET_SIZE:   # default 2 → ทิ้ง basket ใหญ่
+        continue
+
+    weight = 1.0 if len(basket) == 1 else 0.7
+
+    first_trade = min(basket, key=lambda t: t.open_time)
+    matched_slugs = matched indicators ของไม้แรก
+    for combo in combinations(matched_slugs, size=2..MINING_MAX_COMBO_SIZE):
+        combo_score[combo] += weight
+
+candidates = [combo where score >= MIN_OCCURRENCE (default 5)]</code></pre>
+
+<div class="callout">
+<strong>ทำไมใช้ไม้แรก:</strong> entry decision ของ pattern อยู่ที่ไม้แรก ไม้แก้คือ recovery decision (คนละเรื่อง) — pattern ที่อยากให้ EA เลียนแบบในอนาคตคือ "เปิดไม้แรกตอนไหนถึงมักจะรอด"
+</div>
 
 <h3>Spawn — 2 Variants ต่อ Combo</h3>
 <div class="grid-2">
@@ -423,7 +459,7 @@ candidates = [combo where count >= MIN_OCCURRENCE (default 5)]</code></pre>
 │ Total: N active | Today: ฿X | Lifetime: ฿Y    │
 └────────────────────────────────────────────────┘
 
-🟢 Pattern A — RSI&lt;40 + S1 + Engulfing
+🟢 Pattern A — RSI&lt;40 + S1 + Engulfing  [3d]
 Score: 82 | Winrate: 68% (47 trades) | Active
 Virtual: ฿5,000 → ฿6,240 (+฿1,240)
 Mode: basket
@@ -432,14 +468,18 @@ Mode: basket
 Net basket: +฿60
 Promotion: 3/4 gates passed
 
-🟡 Pattern B — MACD cross + R1 reject  (Pending)
+🟡 Pattern B — MACD cross + R1 reject  [12h]  (Pending)
 Score: 64 | Winrate: 71%
 Virtual: ฿5,830
 Match: 3/4 (Missing: BB squeeze)
 
-✅ Pattern D — EA candidate
+✅ Pattern D — EA candidate  [45d]
 72% winrate | 156 trades | 45 days | All gates pass
 [View Details] [Generate EA]</code></pre>
+
+<div class="callout">
+<strong>Age chip <code>[3d]</code> ที่ header:</strong> แสดง relative age จาก <code>paper_trader_rules.spawned_at</code> — hover → tooltip แสดง absolute timestamp. ใช้ <code>Intl.RelativeTimeFormat</code> ฝั่ง frontend ก็พอ ไม่ต้อง backend compute
+</div>
 
 <h3>Browser Notifications</h3>
 <ul>
@@ -461,7 +501,19 @@ Match: 3/4 (Missing: BB squeeze)
   shadow_of_rule_id UUID NULL,
   gate_status JSONB DEFAULT '{}',
   promoted_at TIMESTAMPTZ NULL,
-  consecutive_stable_days INT DEFAULT 0;</code></pre>
+  consecutive_stable_days INT DEFAULT 0,
+  last_signal_status VARCHAR;     -- restart-safe signal state</code></pre>
+
+<h3>Modify <code>trades</code> (denormalize for performance)</h3>
+<pre><code>ALTER TABLE trades ADD COLUMN paper_trader_rule_id UUID NULL;
+CREATE INDEX idx_trades_open_paper_rule ON trades(paper_trader_rule_id)
+    WHERE close_time IS NULL AND is_paper = true;</code></pre>
+
+<h3>New: <code>ea_status</code></h3>
+<pre><code>account_id BIGINT PK
+last_seen_at TIMESTAMPTZ
+version VARCHAR
+symbol VARCHAR</code></pre>
 
 <h3>New: <code>paper_signals</code></h3>
 <pre><code>id UUID PK
@@ -472,7 +524,11 @@ matched_conditions VARCHAR[]
 missing_conditions VARCHAR[]
 score NUMERIC
 suggested_lot NUMERIC
-emitted_at TIMESTAMPTZ</code></pre>
+emitted_at TIMESTAMPTZ
+
+-- TimescaleDB hypertable + retention
+SELECT create_hypertable('paper_signals', 'emitted_at');
+SELECT add_retention_policy('paper_signals', INTERVAL '30 days');</code></pre>
 
 <h3>New: <code>score_calibrations</code></h3>
 <pre><code>id UUID PK
@@ -489,6 +545,9 @@ calibrated_at TIMESTAMPTZ</code></pre>
   <tr><td><code>DISCOVERY_WINDOW_TRADES</code></td><td>50</td><td>จำนวน trade ล่าสุดที่ใช้ mining</td></tr>
   <tr><td><code>DISCOVERY_WINDOW_MAX_DAYS</code></td><td>30</td><td>cap ตามวัน</td></tr>
   <tr><td><code>DISCOVERY_MIN_OCCURRENCE</code></td><td>5</td><td>combo ต้องเจอ ≥ N ครั้ง</td></tr>
+  <tr><td><code>BASKET_CLOSE_GAP_SEC</code></td><td>1</td><td>close_time ห่างกัน ≤ N วิ = basket เดียวกัน</td></tr>
+  <tr><td><code>MINING_MAX_BASKET_SIZE</code></td><td>2</td><td>basket > นี้ = abnormal, ทิ้ง</td></tr>
+  <tr><td><code>MINING_MAX_COMBO_SIZE</code></td><td>4</td><td>combinations(2..N) — กัน explosion</td></tr>
   <tr><td><code>PAPER_VIRTUAL_BUDGET</code></td><td>5000</td><td>virtual balance ต่อ basket</td></tr>
   <tr><td><code>PAPER_HARD_STOP_PCT</code></td><td>1.0</td><td>100% loss = blown</td></tr>
   <tr><td><code>PAPER_RECOVERY_FALLBACK_PCT</code></td><td>0.30</td><td>floating loss ≥ 30% → force recovery</td></tr>
@@ -503,16 +562,142 @@ calibrated_at TIMESTAMPTZ</code></pre>
   <tr><td><code>ADAPTIVE_LOSS_RATE_GAP</code></td><td>0.20</td><td>threshold เสนอ filter</td></tr>
   <tr><td><code>SIGNAL_NEAR_THRESHOLD</code></td><td>0.80</td><td>match_pct = near</td></tr>
   <tr><td><code>SIGNAL_PENDING_THRESHOLD</code></td><td>0.50</td><td>match_pct = pending</td></tr>
+  <tr><td><code>INDICATOR_COMPUTE_INTERVAL_SEC</code></td><td>15</td><td>slow-path: indicator compute interval</td></tr>
+  <tr><td><code>EA_HEARTBEAT_INTERVAL_SEC</code></td><td>60</td><td>EA → API heartbeat</td></tr>
+  <tr><td><code>EA_GAP_THRESHOLD_SEC</code></td><td>60</td><td>gap > นี้ → trigger replay</td></tr>
+  <tr><td><code>EA_DISCONNECT_UI_THRESHOLD_SEC</code></td><td>120</td><td>banner "EA disconnected"</td></tr>
+  <tr><td><code>PAPER_SIGNALS_RETENTION_DAYS</code></td><td>30</td><td>TimescaleDB drop policy</td></tr>
 </table>
+
+<h2 id="perf">9.5 Performance — design constraints</h2>
+
+<p>EA ส่ง market-tick ทุก <strong>1 วินาที</strong> + ไม่จำกัด spawn → ต้อง design ให้ scale ถึง 100+ active rules ตั้งแต่ day 1</p>
+
+<h3>P1 — Shared indicator compute cache (ต่อ tick)</h3>
+<div class="callout warn">
+<strong>ปัญหา:</strong> Naive loop = O(rules × indicators) → 100 rules × 3 indicators × 20ms = 6 sec/tick → budget แตก
+</div>
+<p>ทุก tick → compute (slug, timeframe) ครั้งเดียว เก็บใน dict, rule check = O(1) lookup</p>
+
+<pre><code>unique_keys = {(slug, rule.timeframe)
+               for rule in rules for slug in rule.indicator_slugs}
+
+# compute เพียงครั้งเดียวต่อ tick
+indicator_cache = {}
+for slug, tf in unique_keys:
+    indicator_cache[(slug, tf)] = compute(slug, bars_cache[tf])
+
+for rule in rules:
+    results = [indicator_cache[(s, rule.timeframe)] for s in rule.indicator_slugs]</code></pre>
+
+<p>ลด complexity: O(rules × slugs) → O(unique slug-tf combos)</p>
+
+<h3>P2 — Fast/slow tick path split</h3>
+<table>
+  <tr><th>Path</th><th>Frequency</th><th>Workload</th></tr>
+  <tr><td><strong>Fast</strong></td><td>every tick (1s)</td><td>TP/SL touch, hard_stop, basket net P/L — O(open_trades)</td></tr>
+  <tr><td><strong>Slow</strong></td><td>every 15s / on bar close</td><td>indicator compute, signal status emit, entry decision</td></tr>
+</table>
+<p>RSI/MACD ไม่เปลี่ยนใน 1 วิ — compute ทุก 15 วิเพียงพอ</p>
+
+<h3>P3 — paper_signals: write only on status change</h3>
+<div class="callout warn">
+<strong>ปัญหา:</strong> ถ้าเขียนทุก tick = 100 rules × 86,400 sec = <strong>8.6M rows/day</strong>
+</div>
+<ul>
+  <li>เขียนเฉพาะตอน status เปลี่ยน (idle ↔ pending ↔ near ↔ active ↔ exited)</li>
+  <li>Last status เก็บ in-memory dict + persist ใน <code>paper_trader_rules.last_signal_status</code> เพื่อ restart-safe</li>
+  <li>TimescaleDB hypertable + retention policy 30 วัน</li>
+</ul>
+
+<h3>P4 — Denormalize <code>paper_trader_rule_id</code> ลง trades</h3>
+<p>ปัจจุบัน filter open paper trades ผ่าน <code>recovery_plan-&gt;&gt;'paper_trader_rule_id'</code> (JSONB) → scan ทุก row<br>
+แก้: เพิ่ม column + partial index <code>WHERE close_time IS NULL AND is_paper = true</code> → query O(N) → O(log N)</p>
+
+<h3>P5 — Pattern discovery combinatorics</h3>
+<p><code>combinations(2..5)</code> of 20 slugs = 21,679 combos/trade × 50 = 1M ops<br>
+แก้: <code>MINING_MAX_COMBO_SIZE=4</code> + pre-filter slugs ที่ปรากฏ ≥ 3 baskets ก่อน combine</p>
+
+<h3>Performance budget</h3>
+<table>
+  <tr><th>Operation</th><th>Budget</th><th>Notes</th></tr>
+  <tr><td>Fast path (tick)</td><td>&lt; 50ms</td><td>TP/SL/hard_stop only</td></tr>
+  <tr><td>Slow path (15s)</td><td>&lt; 2s</td><td>indicator compute + signal emit</td></tr>
+  <tr><td>Pattern discovery cron</td><td>&lt; 60s</td><td>offline, 00:00 UTC</td></tr>
+  <tr><td>Adaptive tuning cron</td><td>&lt; 30s</td><td>offline</td></tr>
+</table>
+
+<h2 id="recovery">9.6 Recovery — restart safety</h2>
+
+<p>ระบบต้อง survive 3 scenarios: API restart, EA disconnect, full docker compose down</p>
+
+<h3>R1 — API restart</h3>
+<div class="grid-2">
+  <div class="card">
+    <h4>State ที่ปลอดภัย (อยู่ใน DB)</h4>
+    <ul>
+      <li>active rules</li>
+      <li>open paper trades</li>
+      <li>baskets, virtual_balance</li>
+      <li>win_count, total_trades</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>State in-memory ที่หาย → recovery</h4>
+    <ul>
+      <li><code>_rule_cache</code> → reload จาก DB on first tick (TTL 1 hr)</li>
+      <li><code>last_signal_status</code> → persist ใน column</li>
+      <li>Recovery cooldown → derive จาก <code>trades.open_time</code></li>
+    </ul>
+  </div>
+</div>
+
+<pre><code>def can_open_recovery(basket_trades, now, cooldown_min=30):
+    if not basket_trades:
+        return True
+    latest = max(t.open_time for t in basket_trades)
+    return (now - latest).total_seconds() / 60 >= cooldown_min</code></pre>
+
+<div class="callout ok">restart-safe โดย default — ไม่มี state แยกที่ต้อง sync</div>
+
+<h3>R2 — EA disconnect / reconnect (gap)</h3>
+<p><strong>Detection:</strong> EA ส่ง heartbeat ที่ <code>POST /api/ea-heartbeat</code> ทุก 60s → เก็บ <code>last_seen_at</code> ใน <code>ea_status</code></p>
+
+<p><strong>Policy: Replay TP/SL ตามราคา reconnect</strong></p>
+<div class="step"><span class="step-num">1</span> Detect gap = <code>now - last_tick_time &gt; 60s</code></div>
+<div class="step"><span class="step-num">2</span> สำหรับทุก open paper trade → check TP/SL touch ที่ <strong>level เดิม</strong> (ไม่ใช่ราคา reconnect)
+  <ul>
+    <li>buy: bid ≥ tp → close at <code>tp</code>; bid ≤ sl → close at <code>sl</code></li>
+    <li>sell: mirror</li>
+  </ul>
+</div>
+<div class="step"><span class="step-num">3</span> ถ้า level อยู่ระหว่าง gap → assume touched, exit ที่ level นั้น (realistic)</div>
+<div class="step"><span class="step-num">4</span> Log <code>paper_exit_reason='replayed_after_gap'</code> เพื่อ audit</div>
+
+<div class="callout">
+<strong>ทำไมเลือก replay:</strong> force-close ตัด opportunity, ignore gap ทำ P/L เพี้ยน — replay ที่ level ที่ตั้งไว้คือ middle ground
+</div>
+
+<h3>R3 — UI: EA connection status</h3>
+<ul>
+  <li>Dashboard header: <code>🟢 EA connected (last seen: 5s ago)</code> หรือ <code>🔴 EA disconnected (3 min)</code></li>
+  <li>Paper Console banner: <code>⚠️ EA disconnected — paper trades paused</code> ถ้า last_seen &gt; 2 min</li>
+  <li>Frontend poll <code>/api/ea-status</code> ทุก 10s</li>
+</ul>
+
+<h3>R4 — Full docker compose down</h3>
+<p>ทุก container ดับ → ขึ้นมาใหม่: DB ยังอยู่ (volume persist) → state ทั้งหมดยังอยู่. API restart = R1 + EA reconnect = R2. ไม่ต้องทำอะไรเพิ่ม</p>
 
 <h2 id="build">10. Build Sequence</h2>
 
-<div class="step"><span class="step-num">1</span> <strong>Migration 011</strong> — schema changes (paper_trader_rules + paper_signals + score_calibrations)</div>
-<div class="step"><span class="step-num">2</span> <strong>Component 1 — Mirror redesign</strong><br><span style="color:#718096;font-size:13px">small, isolated; ship first to validate exit logic</span></div>
-<div class="step"><span class="step-num">3</span> <strong>Component 2 — Auto Discovery rewrite + Score sizing</strong><br><span style="color:#718096;font-size:13px">core; ใช้ exit logic จาก step 2</span></div>
-<div class="step"><span class="step-num">4</span> <strong>Component 5 — Signal Broadcaster + UI</strong><br><span style="color:#718096;font-size:13px">visible feedback; depends on step 3</span></div>
-<div class="step"><span class="step-num">5</span> <strong>Component 4 — Promotion Gate</strong><br><span style="color:#718096;font-size:13px">depends on step 3 data accumulation</span></div>
-<div class="step"><span class="step-num">6</span> <strong>Component 3 — Adaptive Tuning</strong><br><span style="color:#718096;font-size:13px">last; needs ≥ 30 trades per rule</span></div>
+<div class="step"><span class="step-num">1</span> <strong>Migration 011</strong> — paper_trader_rules + paper_signals + score_calibrations</div>
+<div class="step"><span class="step-num">2</span> <strong>Migration 014</strong> — ea_status table + denormalized columns (trades.paper_trader_rule_id, last_signal_status)</div>
+<div class="step"><span class="step-num">3</span> <strong>Recovery foundation</strong> (R1+R2+R3)<br><span style="color:#718096;font-size:13px">heartbeat endpoint + EA heartbeat + UI badge — ship early so subsequent components inherit gap-safe behavior</span></div>
+<div class="step"><span class="step-num">4</span> <strong>Component 1 — Mirror redesign</strong><br><span style="color:#718096;font-size:13px">small, isolated; validate exit logic</span></div>
+<div class="step"><span class="step-num">5</span> <strong>Component 2 — Auto Discovery rewrite + Score sizing</strong><br><span style="color:#718096;font-size:13px">core — ต้องมี shared compute cache (P1) ตั้งแต่แรก ห้าม optimize ทีหลัง</span></div>
+<div class="step"><span class="step-num">6</span> <strong>Component 5 — Signal Broadcaster + UI</strong><br><span style="color:#718096;font-size:13px">status emit เฉพาะ change, age chip, EA status banner</span></div>
+<div class="step"><span class="step-num">7</span> <strong>Component 4 — Promotion Gate</strong><br><span style="color:#718096;font-size:13px">depends on Component 2 data accumulation</span></div>
+<div class="step"><span class="step-num">8</span> <strong>Component 3 — Adaptive Tuning</strong><br><span style="color:#718096;font-size:13px">last; needs ≥ 30 trades per rule</span></div>
 
 <h2 id="scope">11. Out of Scope</h2>
 <ul>

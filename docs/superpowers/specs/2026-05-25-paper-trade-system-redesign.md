@@ -1,6 +1,12 @@
 # Paper Trade System Redesign — Design Spec
 
+> 🔒 **FROZEN REVISION — DO NOT EDIT**
+> This document is a frozen revision of the design as decided on 2026-05-25.
+> Future changes must go in a new spec file (e.g. `2026-XX-XX-paper-trade-system-redesign-v2.md`)
+> that supersedes this one. Keep this file as historical record of decisions.
+
 **Date:** 2026-05-25
+**Status:** FROZEN (revision 1)
 **Supersedes:** `2026-05-24-pattern-discovery-auto-paper-trader-design.md` (Phase 3 + Phase 4)
 **Depends on:** Phase 2 Indicator Engine (142 indicators), `trade_indicator_signals` table
 
@@ -75,27 +81,53 @@ User trading style:
 
 ### Mining (รื้อ direction)
 **เปลี่ยนจาก**: mining จาก trade ทั้งหมด หา combo winrate สูง
-**เป็น**: mining จาก **trade ของ user ที่กำไร** (real, profit > 0) หา combo บ่อยที่สุด
+**เป็น**: mining จาก **basket ของ user ที่ปิดเป็น net profit** หา combo บ่อยที่สุด
+
+#### Basket grouping
+User ปกติเปิดไม้แก้แล้วรวบปิดทีเดียว — ถ้านับแต่ละ trade แยกกัน mining จะเข้าใจผิด เลยต้อง group ก่อน
 
 ```python
-# pseudo
-winning_user_trades = SELECT * FROM trades
-                      WHERE is_paper = false
-                        AND profit > 0
-                        AND open_time > cutoff
-                        AND order_state = 'filled'
-                      ORDER BY close_time DESC
-                      LIMIT DISCOVERY_WINDOW_TRADES
-
-for trade in winning_user_trades:
-    matched_slugs = SELECT indicator_slug FROM trade_indicator_signals
-                    WHERE trade_id = trade.id AND matched = true
-    for combo in combinations(matched_slugs, size=2..5):
-        combo_count[combo] += 1
-
-candidates = [combo for combo, count in combo_count.items()
-              if count >= MIN_OCCURRENCE]  # default 5
+def group_into_baskets(real_trades, gap_sec=BASKET_CLOSE_GAP_SEC):
+    sorted_trades = sorted(real_trades, key=lambda t: t.close_time)
+    baskets, current = [], [sorted_trades[0]]
+    for t in sorted_trades[1:]:
+        if (t.close_time - current[-1].close_time).total_seconds() <= gap_sec:
+            current.append(t)
+        else:
+            baskets.append(current); current = [t]
+    baskets.append(current)
+    return baskets
 ```
+
+#### Mining algorithm — anchor ที่ "ไม้แรก", weight ตาม basket size
+
+User insight: basket ใหญ่ = pattern ไม่ดี (ต้องแก้หลายไม้). Basket > 2 ไม้ = abnormal — user เองยังบอกว่าผิดปกติ → ทิ้ง
+
+```python
+winning_baskets = [b for b in group_into_baskets(real_trades)
+                   if sum(t.profit for t in b) > 0]
+
+for basket in winning_baskets:
+    if len(basket) > MINING_MAX_BASKET_SIZE:   # default 2
+        continue                                # abnormal — skip
+
+    weight = 1.0 if len(basket) == 1 else 0.7  # size 2 = penalize เล็กน้อย
+
+    first_trade = min(basket, key=lambda t: t.open_time)
+    matched_slugs = SELECT indicator_slug FROM trade_indicator_signals
+                    WHERE trade_id = first_trade.id AND matched = true
+    for combo in combinations(matched_slugs, size=2..MINING_MAX_COMBO_SIZE):
+        combo_score[combo] += weight
+
+candidates = [combo for combo, score in combo_score.items()
+              if score >= MIN_OCCURRENCE]  # default 5 (ใช้ score ไม่ใช่ count)
+```
+
+**ทำไมใช้ไม้แรก:** entry decision ของ pattern อยู่ที่ไม้แรก ไม้แก้คือ recovery (คนละเรื่อง) — pattern ที่อยากเลียนแบบใน EA คือ "เปิดไม้แรกตอนไหนถึงมักจะรอด"
+
+**Basket size 1:** weight = 1.0 (clean signal — เปิดแล้วบวกเลย)
+**Basket size 2:** weight = 0.7 (ต้องแก้ 1 ครั้ง — penalize เล็กน้อย)
+**Basket size ≥ 3:** ทิ้ง (abnormal เกิน)
 
 ### Spawn (ใหม่ — 2 variants ต่อ combo)
 ทุก combo ที่ผ่าน threshold → สร้าง 2 `paper_trader_rule` rows:
@@ -242,7 +274,7 @@ Daily cron หลัง pattern discovery
 
 Per-rule card (one card per active paper_trader_rule):
 ┌──────────────────────────────────────────────────────┐
-│ {status_emoji} Pattern {name} — {indicator_slugs}    │
+│ {status_emoji} Pattern {name} — {indicator_slugs}  [{age}]│
 │ Score: {s} | Winrate: {w}% ({n} trades) | {status}  │
 │ Virtual: ฿{start} → ฿{current} ({delta})            │
 │ Mode: {strict|basket}                                │
@@ -258,6 +290,11 @@ Per-rule card (one card per active paper_trader_rule):
 
 Sticky badge for promoted rules: "✅ EA candidate — ready"
 ```
+
+**Age chip ที่ header:**
+- แสดง relative age (`3d`, `12h`, `2w`) จาก `paper_trader_rules.spawned_at`
+- Tooltip on hover → absolute timestamp (`2026-05-22 14:30 UTC`)
+- ใช้ `Intl.RelativeTimeFormat` ฝั่ง frontend ก็พอ ไม่ต้อง backend compute
 
 ### Browser notifications (Web Notifications API)
 - `score ≥ 90 AND status = 'near'` → "Signal {name} — 95% match, missing X"
@@ -290,6 +327,24 @@ ALTER TABLE paper_trader_rules ADD COLUMN shadow_of_rule_id UUID NULL;
 ALTER TABLE paper_trader_rules ADD COLUMN gate_status JSONB DEFAULT '{}';
 ALTER TABLE paper_trader_rules ADD COLUMN promoted_at TIMESTAMPTZ NULL;
 ALTER TABLE paper_trader_rules ADD COLUMN consecutive_stable_days INT DEFAULT 0;
+ALTER TABLE paper_trader_rules ADD COLUMN last_signal_status VARCHAR;  -- restart-safe signal state
+```
+
+### Modify `trades` (denormalize for performance)
+```sql
+ALTER TABLE trades ADD COLUMN paper_trader_rule_id UUID NULL;
+CREATE INDEX idx_trades_open_paper_rule ON trades(paper_trader_rule_id)
+    WHERE close_time IS NULL AND is_paper = true;
+```
+
+### New table: `ea_status`
+```sql
+CREATE TABLE ea_status (
+    account_id BIGINT PRIMARY KEY,
+    last_seen_at TIMESTAMPTZ NOT NULL,
+    version VARCHAR,
+    symbol VARCHAR
+);
 ```
 
 ### New table: `paper_signals`
@@ -306,6 +361,10 @@ CREATE TABLE paper_signals (
     emitted_at TIMESTAMPTZ DEFAULT now()
 );
 CREATE INDEX idx_paper_signals_rule_emitted ON paper_signals(rule_id, emitted_at DESC);
+
+-- TimescaleDB hypertable + retention
+SELECT create_hypertable('paper_signals', 'emitted_at');
+SELECT add_retention_policy('paper_signals', INTERVAL '30 days');
 ```
 
 ### New table: `score_calibrations` (for Component 2 self-tuning)
@@ -322,12 +381,139 @@ CREATE TABLE score_calibrations (
 
 ---
 
+## Performance — design constraints
+
+EA ส่ง market-tick ทุก **1 วินาที** + ไม่จำกัด spawn → ต้อง design ให้ scale ได้ถึง 100+ active rules ตั้งแต่ day 1
+
+### P1 — Shared indicator compute cache (ต่อ tick)
+**ปัญหา:** Naive loop = O(rules × indicators) → 100 rules × 3 indicators × 20ms = 6 sec/tick → budget แตก
+
+**วิธี:** ทุก tick → compute (slug, timeframe) ครั้งเดียว เก็บใน dict, rule check = O(1) lookup
+
+```python
+async def run_paper_trader(session, tick):
+    rules = await load_active_rules(session)
+    unique_keys = {(slug, rule.timeframe)
+                   for rule in rules for slug in rule.indicator_slugs}
+
+    # compute เพียงครั้งเดียวต่อ tick
+    bars_cache: dict[str, list[PriceBar]] = {}
+    indicator_cache: dict[tuple[str, str], IndicatorResult] = {}
+    for slug, tf in unique_keys:
+        if tf not in bars_cache:
+            bars_cache[tf] = await fetch_bars(session, tick.symbol, tf)
+        indicator_cache[(slug, tf)] = compute(slug, bars_cache[tf])
+
+    for rule in rules:
+        results = [indicator_cache[(s, rule.timeframe)] for s in rule.indicator_slugs]
+        # ... entry/exit logic
+```
+
+ลด complexity จาก O(rules × slugs) → O(unique slug-tf combos)
+
+### P2 — Fast/slow tick path split
+- **Fast path (every tick, 1s):** TP/SL touch, hard_stop check, basket net P/L → O(open_trades) เท่านั้น ไม่ touch indicators
+- **Slow path (every `INDICATOR_COMPUTE_INTERVAL_SEC=15`s, หรือเมื่อ bar close):** indicator compute, signal status emit, entry decision
+
+Indicators เช่น RSI/MACD ไม่เปลี่ยนใน 1 วิ — compute ทุก 15 วิเพียงพอ
+
+### P3 — paper_signals table — write only on status change
+**ปัญหา:** ถ้าเขียนทุก tick = 100 rules × 86,400 sec = 8.6M rows/day
+
+**วิธี:**
+- เขียน **เฉพาะตอน status เปลี่ยน** (idle ↔ pending ↔ near ↔ active ↔ exited)
+- Last status เก็บ in-memory dict + persist ใน `paper_trader_rules.last_signal_status` เพื่อ restart-safe
+- TimescaleDB hypertable + retention policy 30 วัน (drop old rows อัตโนมัติ)
+
+### P4 — Denormalize `paper_trader_rule_id` ลง trades
+**ปัจจุบัน:** filter open paper trades ผ่าน `recovery_plan->>'paper_trader_rule_id'` (JSONB) → ไม่ใช้ index, scan ทุก row
+
+**วิธี:** เพิ่ม column `trades.paper_trader_rule_id UUID NULL` + index `(paper_trader_rule_id) WHERE close_time IS NULL` → query ลด O(N) → O(log N)
+
+### P5 — Pattern discovery combinatorics
+`combinations(2..5)` of 20 matched slugs = 21,679 combos/trade × 50 trades = 1M ops
+
+**วิธี:** จำกัด `MINING_MAX_COMBO_SIZE=4` (ค่า default ใหม่) + pre-filter slugs ที่ปรากฏใน ≥ 3 baskets ก่อน combine
+
+### Performance budget
+| Operation | Budget | Notes |
+|---|---|---|
+| Fast path (tick) | < 50ms | TP/SL/hard_stop only |
+| Slow path (15s) | < 2s | indicator compute + signal emit |
+| Pattern discovery cron (daily) | < 60s | offline, cron 00:00 UTC |
+| Adaptive tuning cron (daily) | < 30s | offline |
+
+---
+
+## Recovery — restart safety
+
+ระบบต้อง survive 3 scenarios: API restart, EA disconnect, full docker compose down
+
+### R1 — API restart (FastAPI ดับ + ขึ้นใหม่)
+**State ที่อยู่ใน DB อยู่แล้ว (safe):** active rules, open paper trades, baskets, virtual_balance, win_count
+
+**State in-memory ที่หาย:**
+- `_rule_cache` → reload จาก DB on first tick (TTL 1 hr อยู่แล้ว)
+- `last_signal_status` per rule → persist ใน column `paper_trader_rules.last_signal_status`
+- Recovery cooldown timer (30 min ระหว่างไม้แก้) → **derive จาก `trades.open_time` ของไม้ล่าสุดใน basket** ไม่ต้อง persist
+
+```python
+def can_open_recovery(basket_trades, now, cooldown_min=30):
+    if not basket_trades:
+        return True
+    latest = max(t.open_time for t in basket_trades)
+    return (now - latest).total_seconds() / 60 >= cooldown_min
+```
+
+restart-safe โดย default — ไม่มี state แยกที่ต้อง sync
+
+### R2 — EA disconnect / reconnect (gap)
+**Detection:** EA ส่ง heartbeat ที่ `POST /api/ea-heartbeat` ทุก 60s → เก็บ `last_seen_at` ใน table `ea_status`
+
+**Policy: Replay TP/SL ตามราคา reconnect**
+ตอน first market-tick หลัง gap (gap > 60s):
+1. Detect gap = `now - last_tick_time > 60s`
+2. สำหรับทุก open paper trade:
+   - ถ้า direction=buy AND `tick.bid >= tp` → close at `tp` (level-based, ไม่ใช่ราคา reconnect)
+   - ถ้า direction=buy AND `tick.bid <= sl` → close at `sl`
+   - sell ทำ mirror
+3. ถ้า level อยู่ระหว่าง gap → assume touched, exit ที่ level นั้น (realistic, ใกล้กับสิ่งที่จะเกิดถ้าระบบไม่หยุด)
+4. Log `paper_exit_reason='replayed_after_gap'` เพื่อ audit
+
+**ทำไมเลือกแบบนี้:** force-close ตัด opportunity, ignore gap ทำ P/L เพี้ยน — replay ที่ level ที่ตั้งไว้คือ middle ground
+
+### R3 — UI: EA connection status
+- Dashboard header แสดง `🟢 EA connected (last seen: 5s ago)` หรือ `🔴 EA disconnected (3 min)`
+- Paper Console banner: `⚠️ EA disconnected — paper trades paused` ถ้า last_seen > 2 min
+- ใช้ `last_seen_at` จาก heartbeat — frontend poll `/api/ea-status` ทุก 10s
+
+### R4 — Full docker compose down
+ทุก container ดับ → ขึ้นมาใหม่:
+- DB ยังอยู่ (volume persist) → state ทั้งหมดยังอยู่
+- API restart → R1
+- EA reconnect → R2
+- ไม่ต้องทำอะไรเพิ่ม
+
+### Files to touch (recovery)
+- `api/routers/ea_status.py` (new) — `POST /api/ea-heartbeat`, `GET /api/ea-status`
+- `api/models/ea_status.py` (new) — single-row table `(account_id PK, last_seen_at, version)`
+- `api/services/paper_trader.py` (modify) — gap detection + replay logic ใน entrypoint
+- `ea/TradeSignalBridge.mq5` (modify) — เพิ่ม heartbeat call ทุก 60s
+- `frontend/src/components/EAStatusBadge.jsx` (new)
+- `frontend/src/hooks/useEAStatus.js` (new)
+- `api/alembic/versions/014_*.py` (new) — ea_status table + last_signal_status column
+
+---
+
 ## Config (env vars)
 
 ```
 DISCOVERY_WINDOW_TRADES=50
 DISCOVERY_WINDOW_MAX_DAYS=30
 DISCOVERY_MIN_OCCURRENCE=5
+BASKET_CLOSE_GAP_SEC=1            # close_time ห่างกัน ≤ 1 วิ = basket เดียวกัน
+MINING_MAX_BASKET_SIZE=2          # basket > นี้ = abnormal, ทิ้ง
+MINING_MAX_COMBO_SIZE=4           # combinations(2..4) — กัน combinatorial explosion
 PAPER_VIRTUAL_BUDGET=5000
 PAPER_HARD_STOP_PCT=1.0           # 100% of budget = blown
 PAPER_RECOVERY_FALLBACK_PCT=0.30  # floating loss ≥ 30% → force recovery
@@ -346,18 +532,25 @@ ADAPTIVE_FILTER_MIN_TRADES=30
 ADAPTIVE_LOSS_RATE_GAP=0.20
 SIGNAL_NEAR_THRESHOLD=0.80
 SIGNAL_PENDING_THRESHOLD=0.50
+INDICATOR_COMPUTE_INTERVAL_SEC=15  # slow-path: indicator compute interval
+EA_HEARTBEAT_INTERVAL_SEC=60       # EA → API heartbeat
+EA_GAP_THRESHOLD_SEC=60            # gap > นี้ → trigger replay
+EA_DISCONNECT_UI_THRESHOLD_SEC=120 # banner "EA disconnected"
+PAPER_SIGNALS_RETENTION_DAYS=30    # TimescaleDB drop policy
 ```
 
 ---
 
 ## Build sequence
 
-1. **Migration 011** — schema changes (paper_trader_rules + paper_signals + score_calibrations)
-2. **Component 1 — Mirror redesign** (small, isolated; ship first to validate exit logic)
-3. **Component 2 — Auto Discovery rewrite + Score sizing** (core; depends on 1's exit logic)
-4. **Component 5 — Signal Broadcaster + UI** (visible feedback to user; depends on 2)
-5. **Component 4 — Promotion Gate** (depends on 2's data accumulation)
-6. **Component 3 — Adaptive Tuning** (last; needs ≥ 30 trades per rule)
+1. **Migration 011** — paper_trader_rules + paper_signals + score_calibrations
+2. **Migration 014** — ea_status + denormalized columns (trades.paper_trader_rule_id, last_signal_status)
+3. **Recovery foundation** (R1+R2+R3) — heartbeat endpoint + EA heartbeat + UI badge — ship early so subsequent components inherit gap-safe behavior
+4. **Component 1 — Mirror redesign** (small, isolated; validate exit logic)
+5. **Component 2 — Auto Discovery rewrite + Score sizing** (core; ต้องมี shared compute cache ตั้งแต่แรก ห้าม optimize ทีหลัง)
+6. **Component 5 — Signal Broadcaster + UI** (status emit เฉพาะ change, age chip, EA status banner)
+7. **Component 4 — Promotion Gate** (depends on 2's data accumulation)
+8. **Component 3 — Adaptive Tuning** (last; needs ≥ 30 trades per rule)
 
 Each step has its own task in backlog with own tests + acceptance criteria.
 
