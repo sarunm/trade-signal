@@ -1,6 +1,6 @@
 # Agent Handoff
 
-Updated: 2026-05-23
+Updated: 2026-05-25
 Agent: codex
 Branch: codex/indicator-engine-infrastructure
 PR: https://github.com/sarunm/trade-signal/pull/4
