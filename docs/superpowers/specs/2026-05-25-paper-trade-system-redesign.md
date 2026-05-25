@@ -104,6 +104,11 @@ candidates = [combo for combo, count in combo_count.items()
 
 ทั้งคู่ใช้ entry trigger เดียวกัน (combo conditions) แต่ exit/risk ต่างกัน → A/B compare
 
+### No spawn cap
+**ไม่จำกัดจำนวน rules ที่ระบบ spawn ได้** — ยิ่งเยอะยิ่งดี เพราะแต่ละ rule = สถานการณ์จำลองที่ต่างกัน ระบบต้องเก็บข้อมูลให้ได้หลากหลาย combo เพื่อให้ promotion gate (Component 4) มีตัวเลือกพอที่จะคัด "ตัวที่ดีจริง"
+
+Dedup: ถ้า combo ซ้ำกับ rule เดิมที่ active อยู่ → skip (อย่าสร้างซ้ำ) แต่ถ้ายังไม่เคยมี → สร้างเลย ไม่ต้องสนใจว่ามี rule อยู่กี่ตัวแล้ว
+
 ### Sizing — Score-based (ใหม่)
 
 ```

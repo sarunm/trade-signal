@@ -295,6 +295,11 @@ candidates = [combo where count >= MIN_OCCURRENCE (default 5)]</code></pre>
 
 <p>ทั้งคู่ใช้ entry trigger เดียวกัน แต่ exit/risk ต่างกัน → A/B compare</p>
 
+<div class="callout ok">
+<strong>ไม่จำกัดจำนวน rules ที่ spawn:</strong> ยิ่งเยอะยิ่งดี — แต่ละ rule = สถานการณ์จำลองที่ต่างกัน ระบบต้องเก็บข้อมูลหลากหลายเพื่อให้ Promotion Gate (Component 4) คัดตัวที่ดีจริงได้<br><br>
+<strong>Dedup เท่านั้น:</strong> ถ้า combo ซ้ำกับ rule ที่ active อยู่ → skip ไม่ให้ซ้ำ
+</div>
+
 <h3>Sizing — Score-based</h3>
 <table>
   <tr><th>Score</th><th>Lot</th><th>หมายเหตุ</th></tr>
