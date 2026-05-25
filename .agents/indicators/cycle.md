@@ -1,6 +1,6 @@
 # Cycle / Statistical Indicators — 13 Tasks
 
-**assignee:** (ว่าง — ใครหยิบได้) | **priority:** low | **group:** cycle
+**assignee:** claude | **status:** done | **priority:** low | **group:** cycle
 
 ทุก task block กับ **Indicator Engine Infrastructure**
 
