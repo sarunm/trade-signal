@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
+import pytest_asyncio
 from sqlalchemy import select
 
 from models.indicator_signal import TradeIndicatorSignal
@@ -13,6 +14,7 @@ from services.pattern_discovery import (
     BASKET_CLOSE_GAP_SEC,
     MINING_MAX_BASKET_SIZE,
     group_into_baskets,
+    run_pattern_discovery,
 )
 
 
@@ -174,9 +176,10 @@ async def test_run_promotes_after_stable_days_and_spawns_rule(db_session, monkey
     assert rsi_macd.promoted_at is not None
 
     rules = (await db_session.execute(select(PaperTraderRule))).scalars().all()
-    assert len(rules) == 1
-    assert rules[0].pattern_id == rsi_macd.id
-    assert rules[0].status == "active"
+    assert len(rules) == 3
+    assert all(r.pattern_id == rsi_macd.id for r in rules)
+    assert all(r.status == "active" for r in rules)
+    assert sorted(r.mode for r in rules) == ["basket_50k", "basket_5k", "strict"]
 
 
 @pytest.mark.asyncio
@@ -362,3 +365,58 @@ def test_basket_outcome_size_weighted_loss():
     rescue = _real_trade(base + timedelta(seconds=1), profit=-100, volume="0.10", ticket=2)
     from services.pattern_discovery import _basket_outcome
     assert _basket_outcome([(starter, set()), (rescue, set())]) is False
+
+
+@pytest_asyncio.fixture
+async def db_session():
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+    from sqlalchemy.pool import StaticPool
+
+    from database import Base
+
+    eng = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    async with eng.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    Session = async_sessionmaker(eng, expire_on_commit=False)
+    async with Session() as s:
+        yield s
+    await eng.dispose()
+
+
+async def _seed_basket_runs(session, n_baskets: int, all_win: bool, slugs: tuple[str, ...]):
+    base = datetime(2026, 5, 25, tzinfo=timezone.utc)
+    for i in range(n_baskets):
+        close_time = base + timedelta(hours=i)
+        a = _real_trade(close_time, profit=20 if all_win else -20, ticket=i * 10 + 1)
+        b = _real_trade(close_time + timedelta(milliseconds=200),
+                         profit=10 if all_win else -10, ticket=i * 10 + 2)
+        session.add_all([a, b])
+        await session.flush()
+        for slug in slugs:
+            session.add(TradeIndicatorSignal(
+                trade_id=a.id, indicator_slug=slug, matched=True, timeframe="H1",
+            ))
+    await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_promotion_spawns_three_variants(db_session):
+    await _seed_basket_runs(
+        db_session, n_baskets=15, all_win=True, slugs=("ema_50_h1", "rsi_14_h1"),
+    )
+    # Run 3 days for stability
+    base = datetime(2026, 5, 28, tzinfo=timezone.utc)
+    for i in range(3):
+        await run_pattern_discovery(db_session, now=base + timedelta(days=i))
+
+    rules = (await db_session.execute(select(PaperTraderRule))).scalars().all()
+    modes = sorted(r.mode for r in rules)
+    assert modes == ["basket_50k", "basket_5k", "strict"]
+    by_mode = {r.mode: r for r in rules}
+    assert by_mode["strict"].virtual_balance_start == Decimal("5000")
+    assert by_mode["basket_5k"].virtual_balance_start == Decimal("5000")
+    assert by_mode["basket_50k"].virtual_balance_start == Decimal("50000")

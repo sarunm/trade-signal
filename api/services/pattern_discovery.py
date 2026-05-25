@@ -23,6 +23,15 @@ DISCOVERY_STABLE_DAYS = int(os.getenv("DISCOVERY_STABLE_DAYS", 3))
 DEDUP_JACCARD_THRESHOLD = 0.8
 COMBINATION_SIZES = (2, 3, 4, 5)
 
+USER_STYLE_BUDGET = Decimal(os.getenv("PAPER_VIRTUAL_BUDGET_USER_STYLE", "50000"))
+DEFAULT_BUDGET = Decimal("5000")
+
+VARIANT_SPECS: tuple[tuple[str, Decimal], ...] = (
+    ("strict", DEFAULT_BUDGET),
+    ("basket_5k", DEFAULT_BUDGET),
+    ("basket_50k", USER_STYLE_BUDGET),
+)
+
 
 def jaccard(a: set[str], b: set[str]) -> float:
     if not a and not b:
@@ -231,7 +240,16 @@ async def _run(session: AsyncSession, now: datetime) -> None:
             pattern.status = "active"
             pattern.promoted_at = now
             await session.flush()
-            session.add(PaperTraderRule(pattern_id=pattern.id, status="active"))
+            for mode, budget in VARIANT_SPECS:
+                session.add(
+                    PaperTraderRule(
+                        pattern_id=pattern.id,
+                        status="active",
+                        mode=mode,
+                        virtual_balance_start=budget,
+                        virtual_balance_current=budget,
+                    )
+                )
             active_rule_slugs.append(set(combo_key))
 
     for key, pattern in existing.items():
