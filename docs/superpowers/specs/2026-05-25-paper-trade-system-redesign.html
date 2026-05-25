@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Paper Trade System Redesign — Design Spec</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Sukhumvit Set', sans-serif;
+    background: #0f1117; color: #e2e8f0; line-height: 1.75;
+    font-size: 15px;
+  }
+
+  .container { max-width: 880px; margin: 0 auto; padding: 60px 32px 100px; }
+
+  .header { margin-bottom: 48px; padding-bottom: 24px; border-bottom: 2px solid #2d3748; }
+  h1 { font-size: 32px; font-weight: 800; color: #fff; margin-bottom: 12px; line-height: 1.3; }
+  .subtitle { color: #718096; font-size: 14px; }
+
+  .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+  .badge {
+    background: #1a2035; border: 1px solid #2d3748; border-radius: 6px;
+    padding: 4px 12px; font-size: 12px; color: #a0aec0;
+  }
+  .badge.warn { border-color: #d69e2e; color: #f6e05e; }
+  .badge.ok { border-color: #38a169; color: #68d391; }
+
+  h2 {
+    font-size: 22px; font-weight: 700; color: #fff;
+    margin: 56px 0 16px; padding-bottom: 10px; border-bottom: 1px solid #2d3748;
+  }
+  h3 {
+    font-size: 17px; font-weight: 700; color: #63b3ed;
+    margin: 32px 0 12px;
+  }
+  h4 {
+    font-size: 14px; font-weight: 600; color: #a0aec0;
+    margin: 20px 0 8px; text-transform: uppercase; letter-spacing: 0.05em;
+  }
+
+  p { margin-bottom: 14px; }
+
+  ul, ol { margin: 8px 0 16px 22px; }
+  li { margin-bottom: 6px; }
+  li ul, li ol { margin-top: 6px; }
+
+  strong { color: #fff; font-weight: 600; }
+  em { color: #f6e05e; font-style: normal; }
+
+  code {
+    background: #1a2035; border: 1px solid #2d3748; border-radius: 4px;
+    padding: 1px 6px; font-family: 'SF Mono', Menlo, monospace;
+    font-size: 13px; color: #f6ad55;
+  }
+
+  pre {
+    background: #161b27; border: 1px solid #2d3748; border-radius: 8px;
+    padding: 16px 20px; margin: 14px 0 20px;
+    overflow-x: auto; font-size: 13px; line-height: 1.6;
+  }
+  pre code {
+    background: transparent; border: 0; padding: 0; color: #cbd5e0;
+  }
+
+  .callout {
+    background: #1a2035; border-left: 3px solid #4f80ff; border-radius: 6px;
+    padding: 14px 18px; margin: 16px 0;
+  }
+  .callout.warn { border-left-color: #d69e2e; }
+  .callout.danger { border-left-color: #e53e3e; }
+  .callout.ok { border-left-color: #38a169; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+  .card {
+    background: #161b27; border: 1px solid #2d3748; border-radius: 8px;
+    padding: 16px 20px;
+  }
+  .card h4 { margin-top: 0; color: #63b3ed; }
+
+  .flow {
+    background: #161b27; border: 1px solid #2d3748; border-radius: 8px;
+    padding: 24px; margin: 16px 0;
+    font-family: 'SF Mono', Menlo, monospace; font-size: 13px;
+    color: #cbd5e0; line-height: 1.8; white-space: pre;
+    overflow-x: auto;
+  }
+
+  table {
+    border-collapse: collapse; width: 100%; margin: 16px 0;
+    background: #161b27; border-radius: 8px; overflow: hidden;
+  }
+  th, td {
+    text-align: left; padding: 10px 14px; font-size: 13px;
+    border-bottom: 1px solid #2d3748;
+  }
+  th {
+    background: #1a2035; color: #a0aec0; font-weight: 600;
+    text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em;
+  }
+  td { color: #cbd5e0; }
+  tr:last-child td { border-bottom: 0; }
+
+  .toc {
+    background: #161b27; border: 1px solid #2d3748; border-radius: 8px;
+    padding: 18px 24px; margin: 24px 0 40px;
+  }
+  .toc h4 { margin-top: 0; color: #a0aec0; }
+  .toc ol { margin-left: 20px; }
+  .toc a { color: #63b3ed; text-decoration: none; }
+  .toc a:hover { color: #90cdf4; text-decoration: underline; }
+
+  .step {
+    background: #161b27; border: 1px solid #2d3748; border-radius: 8px;
+    padding: 18px 22px; margin: 12px 0;
+  }
+  .step-num {
+    display: inline-block; background: #4f80ff; color: white;
+    width: 24px; height: 24px; border-radius: 50%; text-align: center;
+    line-height: 24px; font-weight: 700; font-size: 12px; margin-right: 10px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="header">
+  <h1>Paper Trade System Redesign</h1>
+  <div class="subtitle">Design Spec</div>
+  <div class="meta">
+    <span class="badge">2026-05-25</span>
+    <span class="badge warn">Supersedes 2026-05-24 spec</span>
+    <span class="badge">Depends on Indicator Engine</span>
+  </div>
+</div>
+
+<div class="toc">
+  <h4>สารบัญ</h4>
+  <ol>
+    <li><a href="#why">ทำไมต้องรื้อใหม่</a></li>
+    <li><a href="#arch">ภาพรวมระบบ</a></li>
+    <li><a href="#c1">Component 1 — Mirror Paper</a></li>
+    <li><a href="#c2">Component 2 — Auto Discovery + Spawn</a></li>
+    <li><a href="#c3">Component 3 — Adaptive Tuning</a></li>
+    <li><a href="#c4">Component 4 — Promotion Pipeline (4 Gates)</a></li>
+    <li><a href="#c5">Component 5 — Signal Broadcaster + UI</a></li>
+    <li><a href="#data">Data Model Changes</a></li>
+    <li><a href="#config">Config (env vars)</a></li>
+    <li><a href="#build">Build Sequence</a></li>
+    <li><a href="#scope">Out of Scope</a></li>
+  </ol>
+</div>
+
+<h2 id="why">1. ทำไมต้องรื้อใหม่</h2>
+
+<p>ระบบ paper trade เดิม<strong>ไม่ตรงกับ trading style ของ user</strong> เลยใช้สะท้อนระบบจริงเพื่อทำเป็น EA ในอนาคตไม่ได้</p>
+
+<h3>Trading style ของ user (สรุป)</h3>
+<div class="grid-2">
+  <div class="card">
+    <h4>Entry</h4>
+    <ul>
+      <li>S/R levels</li>
+      <li>Chart patterns: double top/bottom, triple top/bottom, wedges</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>Win Exit</h4>
+    <ul>
+      <li>ปิดเองตอน "ชน R/S ฝั่งตรงข้ามไม่ผ่าน"</li>
+      <li>~400 pip / ~฿500–1,000</li>
+      <li>ไม่รอ TP</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>Loss Handling</h4>
+    <ul>
+      <li><strong>ไม่ตั้ง SL</strong></li>
+      <li>วางไม้แก้ที่ S/R เพิ่ม</li>
+      <li>Lot เท่าเดิมทุกไม้ (ไม่ Martingale)</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>Basket Close</h4>
+    <ul>
+      <li>เมื่อ net positions บวก → รวบปิด เริ่มใหม่</li>
+      <li>ทนการวิ่งสวน &gt; 5,000 pip</li>
+    </ul>
+  </div>
+</div>
+
+<div class="callout danger">
+<strong>ระบบเก่าทำผิด direction:</strong> ใช้ ATR-based SL + single trade per rule + indicator-consensus entry — และ pattern discovery <strong>mining จาก trade ทุกอันรวมกัน</strong> ไม่ใช่จาก trade ของ user
+</div>
+
+<h2 id="arch">2. ภาพรวมระบบ</h2>
+
+<div class="flow">Real Trade (MT5)
+   │
+   ├──→ [1] Mirror Paper (live)
+   │       เปิดพร้อม user, exit ใช้ R/S+momentum
+   │       → วัด "early exit cost"
+   │
+   ├──→ [2] Auto Discovery (daily cron)
+   │       Mining: indicator combos ตอน user ชนะ
+   │       → spawn 2 paper variants ต่อ combo
+   │           A. single + SL (strict)
+   │           B. basket recovery + ฿5,000 budget
+   │       → score-based lot sizing
+   │
+   ├──→ [3] Adaptive Tuning (daily cron)
+   │       ดู paper ที่แพ้ → เสนอ filter เพิ่ม
+   │       → A/B test → apply
+   │
+   └──→ [4] Promotion Pipeline (4 gates)
+           Stable + Validated → "EA candidate"
+           → broadcast signal ขึ้น dashboard + noti</div>
+
+<h2 id="c1">3. Component 1 — Mirror Paper</h2>
+
+<h3>Goal</h3>
+<p>ทุกครั้งที่ user เปิด real order → spawn 1 paper ที่ entry/lot/direction <strong>เหมือนกัน</strong> แต่ exit ใช้ rule ของระบบ → วัดว่า "ถ้าไม่ปิดเอง จะได้/เสียเท่าไหร่"</p>
+
+<h3>Trigger</h3>
+<p><code>trade_logger.py</code> หลัง upsert real trade ที่ <code>order_state=filled AND open_price IS NOT NULL AND close_price IS NULL</code> → spawn mirror paper async</p>
+
+<h3>Exit Logic (ใหม่)</h3>
+<p>ทุก market tick:</p>
+<ol>
+  <li><strong>Take profit:</strong> ราคาแตะ R1/R2 (buy) หรือ S1/S2 (sell) <em>AND</em> momentum indicator แสดง weakening</li>
+  <li><strong>Momentum reversal:</strong> indicator พลิกทิศ (เช่น RSI > 70 → < 60 บน buy)</li>
+  <li><strong>Hard stop:</strong> floating loss ≥ ฿2,500 (50% ของ mirror budget)</li>
+</ol>
+
+<div class="callout warn">
+ลบ logic <code>_average_offset</code> เก่าใน <code>mirror_trader.py</code> ทิ้ง — ไม่ใช่ rule ที่สะท้อนระบบ user
+</div>
+
+<h3>Outputs</h3>
+<ul>
+  <li><code>paper_exit_reason</code>: <code>tp_pivot</code> | <code>momentum_flip</code> | <code>hard_stop</code></li>
+  <li><strong>early_exit_cost</strong> = mirror.profit − real.profit
+    <ul>
+      <li>+: user ปิดเร็วเสีย opportunity</li>
+      <li>−: user ปิดถูกจังหวะ</li>
+    </ul>
+  </li>
+</ul>
+
+<h2 id="c2">4. Component 2 — Auto Discovery + Spawn</h2>
+
+<h3>Mining Direction (รื้อ)</h3>
+<table>
+  <tr><th>เก่า</th><th>ใหม่</th></tr>
+  <tr>
+    <td>Mining จาก trade ทั้งหมด หา combo winrate สูง</td>
+    <td>Mining จาก <strong>trade ของ user ที่กำไร</strong> หา combo ที่ user ใช้บ่อย</td>
+  </tr>
+</table>
+
+<pre><code># pseudo
+winning_user_trades = SELECT * FROM trades
+                      WHERE is_paper = false
+                        AND profit > 0
+                        AND open_time > cutoff
+                      ORDER BY close_time DESC
+                      LIMIT DISCOVERY_WINDOW_TRADES
+
+for trade in winning_user_trades:
+    matched_slugs = matched indicators ของ trade นั้น
+    for combo in combinations(matched_slugs, size=2..5):
+        combo_count[combo] += 1
+
+candidates = [combo where count >= MIN_OCCURRENCE (default 5)]</code></pre>
+
+<h3>Spawn — 2 Variants ต่อ Combo</h3>
+<div class="grid-2">
+  <div class="card">
+    <h4>Variant A — Strict</h4>
+    <ul>
+      <li>Single trade</li>
+      <li>SL = ATR × 2</li>
+      <li>No recovery</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>Variant B — Basket</h4>
+    <ul>
+      <li>Recovery basket ที่ S/R</li>
+      <li>No SL</li>
+      <li>Virtual budget ฿5,000</li>
+    </ul>
+  </div>
+</div>
+
+<p>ทั้งคู่ใช้ entry trigger เดียวกัน แต่ exit/risk ต่างกัน → A/B compare</p>
+
+<h3>Sizing — Score-based</h3>
+<table>
+  <tr><th>Score</th><th>Lot</th><th>หมายเหตุ</th></tr>
+  <tr><td>0–40</td><td>0.01</td><td>จุดไม่สวย</td></tr>
+  <tr><td>40–70</td><td>0.02</td><td>default ของ user</td></tr>
+  <tr><td>70–90</td><td>0.05</td><td>จุดสวย</td></tr>
+  <tr><td>90+</td><td>0.10</td><td>จุดสวยมาก</td></tr>
+</table>
+
+<p>Score formula:</p>
+<pre><code>score = 0.25 × indicator_count_normalized   # จำนวน indicator match (2→0, 5→1)
+      + 0.40 × pattern_winrate              # winrate ในอดีต
+      + 0.20 × indicator_strength           # avg strength (เช่น RSI distance from 50)
+      + 0.15 × confluence                   # มี S/R + Fib + indicator พร้อมกันไหม</code></pre>
+
+<div class="callout">
+<strong>Cold start:</strong> ใช้ uniform 0.02 จนครบ 100 trades แล้วค่อย calibrate ตาม actual winrate
+</div>
+
+<h3>Basket Recovery Logic (Variant B)</h3>
+<div class="step"><span class="step-num">1</span> Entry signal match → open ไม้แรก (lot ตาม score)</div>
+<div class="step"><span class="step-num">2</span> ราคาวิ่งสวน → wait</div>
+<div class="step"><span class="step-num">3</span> <strong>Recovery trigger</strong> (อันใดอันหนึ่ง):
+  <ul>
+    <li><strong>Primary:</strong> ราคาแตะ S/R ถัดไปฝั่งสวน → open ไม้แก้</li>
+    <li><strong>Fallback:</strong> floating loss ≥ 30% ของ virtual budget (฿1,500) <em>AND</em> ไม่มีไม้แก้ใหม่ใน 30 นาทีล่าสุด → force open ไม้แก้ที่ราคาปัจจุบัน</li>
+  </ul>
+  ทุกไม้แก้ใช้ lot เท่าไม้แรก
+</div>
+<div class="step"><span class="step-num">4</span> ทุก tick เช็ค net basket P/L:
+  <ul>
+    <li>ถ้า net ≥ 0 <em>AND</em> ชน R/S ตรงข้ามไม่ผ่าน → close all (basket win)</li>
+    <li>ถ้า floating loss > ฿5,000 → force close all (basket blown)</li>
+  </ul>
+</div>
+<div class="step"><span class="step-num">5</span> หลังปิด → reset, รอ entry signal ใหม่</div>
+
+<div class="callout warn">
+<strong>Fallback rationale:</strong> ถ้าระบบรอแต่ S/R และราคา drift ผ่าน level โดยไม่ touch (gap, fast move, S/R ห่างเกิน) basket จะ blown โดยไม่ได้ recover เลย → fallback กัน edge case นี้ คุ้มกว่ารอ "perfect entry" แล้วโดน blown
+</div>
+
+<h2 id="c3">5. Component 3 — Adaptive Tuning</h2>
+
+<h3>Goal</h3>
+<p>ดู paper ที่แพ้ของแต่ละ pattern → หา feature ที่แยก loss vs win → เสนอ filter เพิ่ม</p>
+
+<h3>Algorithm</h3>
+<pre><code>สำหรับแต่ละ active rule ที่มี ≥ 30 trades:
+    หา features ที่แยก loss vs win ได้ชัด:
+      - session (London/NY/Asia)
+      - volatility regime (ATR percentile)
+      - day of week / hour bucket
+      - indicator state อื่นๆ
+
+    ถ้า feature X มี:
+      loss_rate(X=true) − loss_rate(X=false) > 0.20
+    → propose filter "ห้าม trade ถ้า X=true"
+    → สร้าง shadow rule (active=false) ทดลอง 30 วัน
+    → ถ้า shadow winrate > original + 5% → promote shadow แทน</code></pre>
+
+<h2 id="c4">6. Component 4 — Promotion Pipeline (4 Gates)</h2>
+
+<p>Paper จะ "พร้อมทำเป็น EA" ก็ต่อเมื่อผ่าน <strong>ครบทั้ง 4 gates</strong></p>
+
+<div class="step">
+  <h4 style="margin-top: 0;">Gate 1 — Sample Sufficiency</h4>
+  <ul>
+    <li>total_trades ≥ 50</li>
+    <li>Active ≥ 30 วัน</li>
+    <li>Cover ทั้ง 3 sessions (≥ 5 trades ต่อ session)</li>
+  </ul>
+</div>
+
+<div class="step">
+  <h4 style="margin-top: 0;">Gate 2 — Performance</h4>
+  <ul>
+    <li>winrate ≥ 0.60</li>
+    <li>profit_factor ≥ 1.5 (gross_win / gross_loss)</li>
+    <li>max_drawdown ≤ ฿2,500</li>
+    <li>avg R-multiple ≥ 1.5</li>
+  </ul>
+</div>
+
+<div class="step">
+  <h4 style="margin-top: 0;">Gate 3 — Stability</h4>
+  <ul>
+    <li>≥ 7 วันติดที่ผ่าน Gate 2</li>
+    <li>ถ้า last-14-day winrate ตก > 15% จาก lifetime → reset stable counter</li>
+  </ul>
+</div>
+
+<div class="step">
+  <h4 style="margin-top: 0;">Gate 4 — Walk-forward Validation</h4>
+  <ul>
+    <li>แบ่ง trades 70/30 (chronological)</li>
+    <li>Train 70% → confirm winrate ≥ 0.60</li>
+    <li>Test 30% → confirm winrate ≥ 0.55 (max 10% drop allowed)</li>
+  </ul>
+</div>
+
+<div class="callout ok">
+ผ่านครบ 4 gates → set <code>status='ea_candidate'</code> → broadcast noti → user review → สร้าง MQL5 EA
+</div>
+
+<h2 id="c5">7. Component 5 — Signal Broadcaster + Paper Console UI</h2>
+
+<h3>Backend</h3>
+<p>ทุก market tick:</p>
+<table>
+  <tr><th>match_pct</th><th>Status</th><th>Action</th></tr>
+  <tr><td>≥ 1.00</td><td><strong style="color:#68d391">active</strong></td><td>Paper เปิด + ping noti</td></tr>
+  <tr><td>≥ 0.80</td><td><strong style="color:#f6e05e">near</strong></td><td>Score≥90 → ping noti</td></tr>
+  <tr><td>≥ 0.50</td><td><strong style="color:#90cdf4">pending</strong></td><td>แสดงบน dashboard</td></tr>
+  <tr><td>< 0.50</td><td>idle</td><td>ไม่แสดง</td></tr>
+</table>
+
+<h3>Frontend — Paper Trade Console (route ใหม่ <code>/paper-trades</code>)</h3>
+
+<pre><code>┌────────────────────────────────────────────────┐
+│ Paper Trade Console                            │
+│ Total: N active | Today: ฿X | Lifetime: ฿Y    │
+└────────────────────────────────────────────────┘
+
+🟢 Pattern A — RSI&lt;40 + S1 + Engulfing
+Score: 82 | Winrate: 68% (47 trades) | Active
+Virtual: ฿5,000 → ฿6,240 (+฿1,240)
+Mode: basket
+  • BUY 4502 @ 0.05 | TP 4515 | now: +฿80
+  • BUY 4498 @ 0.05 | recovery | now: −฿20
+Net basket: +฿60
+Promotion: 3/4 gates passed
+
+🟡 Pattern B — MACD cross + R1 reject  (Pending)
+Score: 64 | Winrate: 71%
+Virtual: ฿5,830
+Match: 3/4 (Missing: BB squeeze)
+
+✅ Pattern D — EA candidate
+72% winrate | 156 trades | 45 days | All gates pass
+[View Details] [Generate EA]</code></pre>
+
+<h3>Browser Notifications</h3>
+<ul>
+  <li><strong>Score ≥ 90 + status=near</strong> → "Signal {name} — 95% match, missing X"</li>
+  <li><strong>status → active</strong> → "Paper {name} opened: {direction} {price}"</li>
+  <li><strong>status → ea_candidate</strong> → "🎉 {name} promoted — review for EA"</li>
+  <li><strong>virtual_balance ≤ 0</strong> → "⚠️ Paper {name} blown — reset"</li>
+</ul>
+
+<h2 id="data">8. Data Model Changes</h2>
+
+<h3>Modify <code>paper_trader_rules</code></h3>
+<pre><code>ALTER TABLE paper_trader_rules ADD COLUMN
+  mode VARCHAR DEFAULT 'strict',          -- 'strict' | 'basket'
+  virtual_balance_start NUMERIC DEFAULT 5000,
+  virtual_balance_current NUMERIC DEFAULT 5000,
+  score_weights JSONB,
+  filters JSONB DEFAULT '[]',
+  shadow_of_rule_id UUID NULL,
+  gate_status JSONB DEFAULT '{}',
+  promoted_at TIMESTAMPTZ NULL,
+  consecutive_stable_days INT DEFAULT 0;</code></pre>
+
+<h3>New: <code>paper_signals</code></h3>
+<pre><code>id UUID PK
+rule_id UUID FK
+status VARCHAR             -- pending | near | active | exited
+match_pct NUMERIC
+matched_conditions VARCHAR[]
+missing_conditions VARCHAR[]
+score NUMERIC
+suggested_lot NUMERIC
+emitted_at TIMESTAMPTZ</code></pre>
+
+<h3>New: <code>score_calibrations</code></h3>
+<pre><code>id UUID PK
+score_tier VARCHAR         -- '0-40' | '40-70' | '70-90' | '90+'
+expected_winrate NUMERIC
+actual_winrate NUMERIC
+sample_count INT
+calibrated_at TIMESTAMPTZ</code></pre>
+
+<h2 id="config">9. Config (env vars)</h2>
+
+<table>
+  <tr><th>Variable</th><th>Default</th><th>Purpose</th></tr>
+  <tr><td><code>DISCOVERY_WINDOW_TRADES</code></td><td>50</td><td>จำนวน trade ล่าสุดที่ใช้ mining</td></tr>
+  <tr><td><code>DISCOVERY_WINDOW_MAX_DAYS</code></td><td>30</td><td>cap ตามวัน</td></tr>
+  <tr><td><code>DISCOVERY_MIN_OCCURRENCE</code></td><td>5</td><td>combo ต้องเจอ ≥ N ครั้ง</td></tr>
+  <tr><td><code>PAPER_VIRTUAL_BUDGET</code></td><td>5000</td><td>virtual balance ต่อ basket</td></tr>
+  <tr><td><code>PAPER_HARD_STOP_PCT</code></td><td>1.0</td><td>100% loss = blown</td></tr>
+  <tr><td><code>PAPER_RECOVERY_FALLBACK_PCT</code></td><td>0.30</td><td>floating loss ≥ 30% → force recovery</td></tr>
+  <tr><td><code>PAPER_RECOVERY_COOLDOWN_MIN</code></td><td>30</td><td>cooldown ระหว่างไม้แก้ (นาที)</td></tr>
+  <tr><td><code>SCORE_COLD_START_TRADES</code></td><td>100</td><td>ใช้ uniform 0.02 ก่อน N trades</td></tr>
+  <tr><td><code>PROMOTION_MIN_TRADES</code></td><td>50</td><td>Gate 1</td></tr>
+  <tr><td><code>PROMOTION_MIN_DAYS</code></td><td>30</td><td>Gate 1</td></tr>
+  <tr><td><code>PROMOTION_MIN_WINRATE</code></td><td>0.60</td><td>Gate 2</td></tr>
+  <tr><td><code>PROMOTION_MIN_PROFIT_FACTOR</code></td><td>1.5</td><td>Gate 2</td></tr>
+  <tr><td><code>PROMOTION_STABLE_DAYS</code></td><td>7</td><td>Gate 3</td></tr>
+  <tr><td><code>ADAPTIVE_FILTER_MIN_TRADES</code></td><td>30</td><td>เริ่ม adaptive ต่อ rule</td></tr>
+  <tr><td><code>ADAPTIVE_LOSS_RATE_GAP</code></td><td>0.20</td><td>threshold เสนอ filter</td></tr>
+  <tr><td><code>SIGNAL_NEAR_THRESHOLD</code></td><td>0.80</td><td>match_pct = near</td></tr>
+  <tr><td><code>SIGNAL_PENDING_THRESHOLD</code></td><td>0.50</td><td>match_pct = pending</td></tr>
+</table>
+
+<h2 id="build">10. Build Sequence</h2>
+
+<div class="step"><span class="step-num">1</span> <strong>Migration 011</strong> — schema changes (paper_trader_rules + paper_signals + score_calibrations)</div>
+<div class="step"><span class="step-num">2</span> <strong>Component 1 — Mirror redesign</strong><br><span style="color:#718096;font-size:13px">small, isolated; ship first to validate exit logic</span></div>
+<div class="step"><span class="step-num">3</span> <strong>Component 2 — Auto Discovery rewrite + Score sizing</strong><br><span style="color:#718096;font-size:13px">core; ใช้ exit logic จาก step 2</span></div>
+<div class="step"><span class="step-num">4</span> <strong>Component 5 — Signal Broadcaster + UI</strong><br><span style="color:#718096;font-size:13px">visible feedback; depends on step 3</span></div>
+<div class="step"><span class="step-num">5</span> <strong>Component 4 — Promotion Gate</strong><br><span style="color:#718096;font-size:13px">depends on step 3 data accumulation</span></div>
+<div class="step"><span class="step-num">6</span> <strong>Component 3 — Adaptive Tuning</strong><br><span style="color:#718096;font-size:13px">last; needs ≥ 30 trades per rule</span></div>
+
+<h2 id="scope">11. Out of Scope</h2>
+<ul>
+  <li>Detecting chart patterns (double top/bottom, wedges) อัตโนมัติ — defer; ใช้ S/R + indicator combo เป็น proxy ก่อน</li>
+  <li>Generating MQL5 EA code จาก promoted rules — แยก spec</li>
+  <li>News-based filters ใน Adaptive Tuning</li>
+  <li>Real-time WebSocket streaming — polling พอแล้ว</li>
+</ul>
+
+<div style="margin-top: 80px; padding-top: 24px; border-top: 1px solid #2d3748; color: #4a5568; font-size: 12px; text-align: center;">
+  Spec — Trade Signal Partner — 2026-05-25
+</div>
+
+</div>
+</body>
+</html>

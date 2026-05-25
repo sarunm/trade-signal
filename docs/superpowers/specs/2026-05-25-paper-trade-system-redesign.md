@@ -15,7 +15,7 @@ User trading style:
 - **Win exit**: ปิดเองตอนชน R/S ฝั่งตรงข้ามไม่ผ่าน (~400 pip / ~฿500–1,000)
 - **Loss handling**: วางไม้แก้ที่ S/R เพิ่ม (lot เท่าเดิม) — ไม่ตั้ง SL
 - **Basket close**: เมื่อ net positions บวกแล้ว → รวบปิด เริ่มใหม่
-- **Risk capacity**: ทนการวิ่งสวน ~10,000 pip ในบัญชีจริง
+- **Risk capacity**: ทนการวิ่งสวน > 5,000 pip ในบัญชีจริง
 
 ระบบเก่าใช้ ATR-based SL + single trade per rule + indicator-consensus entry — ไม่จับ style นี้เลย และ pattern discovery ทำ direction ผิด (mining จาก trade ทุกอันรวมกัน ไม่ใช่ของ user)
 
@@ -126,12 +126,18 @@ weights default: `w1=0.25, w2=0.40, w3=0.20, w4=0.15`
 ```
 1. Entry signal match → open ไม้แรก (lot ตาม score)
 2. ถ้าราคาวิ่งสวน → wait
-3. ราคาแตะ S/R ฝั่งสวน → open ไม้แก้ (lot เท่าไม้แรก)
+3. Recovery trigger (อันใดอันหนึ่ง):
+     a. PRIMARY: ราคาแตะ S/R ถัดไปฝั่งสวน → open ไม้แก้
+     b. FALLBACK: floating loss ≥ 30% ของ virtual budget (฿1,500)
+        AND ไม่มีไม้แก้ใหม่ใน 30 นาทีล่าสุด → force open ไม้แก้ที่ราคาปัจจุบัน
+   ทุกไม้แก้ใช้ lot เท่าไม้แรก
 4. ทุก tick เช็ค net basket P/L:
      - ถ้า net ≥ 0 AND ชน R/S ตรงข้ามไม่ผ่าน → close all (basket win)
      - ถ้า floating loss > ฿5,000 → force close all (basket blown)
 5. หลังปิด → reset, รอ entry signal ใหม่
 ```
+
+**Fallback rationale:** ถ้าระบบรอแต่ S/R และราคา drift ผ่าน level โดยไม่ touch (gap, fast move, S/R ห่างเกิน) basket จะ blown โดยไม่ได้ recover เลย → fallback กัน edge case นี้ คุ้มกว่ารอ "perfect entry" แล้วโดน blown
 
 ### Files to touch
 - `api/services/pattern_discovery.py` — rewrite mining direction
@@ -318,7 +324,9 @@ DISCOVERY_WINDOW_TRADES=50
 DISCOVERY_WINDOW_MAX_DAYS=30
 DISCOVERY_MIN_OCCURRENCE=5
 PAPER_VIRTUAL_BUDGET=5000
-PAPER_HARD_STOP_PCT=1.0          # 100% of budget = blown
+PAPER_HARD_STOP_PCT=1.0           # 100% of budget = blown
+PAPER_RECOVERY_FALLBACK_PCT=0.30  # floating loss ≥ 30% → force recovery
+PAPER_RECOVERY_COOLDOWN_MIN=30    # cooldown ระหว่างไม้แก้ (นาที)
 SCORE_COLD_START_TRADES=100
 SCORE_W_INDICATOR_COUNT=0.25
 SCORE_W_PATTERN_WINRATE=0.40
