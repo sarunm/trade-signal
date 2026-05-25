@@ -130,3 +130,6 @@ async def recompute_trade_indicators_by_id(trade_id: UUID) -> list[IndicatorResu
         results = await recompute_trade_indicators(session, trade)
         await session.commit()
         return results
+
+
+from services import indicators as _indicators  # noqa: E402,F401

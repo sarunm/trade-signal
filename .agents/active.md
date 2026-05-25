@@ -2,17 +2,17 @@
 
 Updated: 2026-05-25
 Current owner: codex
-Branch: codex/indicator-engine-infrastructure
-Last task commit: ae1c843 fix: align indicator engine with entry-time signals
+Branch: codex/indicators-trend-momentum
+Last task commit: pending
 
 ## Current Goal
 
-Indicator Engine Infrastructure.
+Indicator tasks — Trend (29) + Momentum (39).
 
 ## Status
 
-Done — PR patch verified locally; PR opened for Claude review.
+Done — Trend/Momentum indicators implemented and backlog verify commands passed locally and in Docker.
 
 ## Next Step
 
-Claude: Review PR https://github.com/sarunm/trade-signal/pull/4.
+Claude: Review PR after Codex opens it.

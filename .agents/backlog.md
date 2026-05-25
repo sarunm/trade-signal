@@ -253,6 +253,33 @@ curl "http://localhost:8000/api/indicator-signals/{some-trade-id}"
 
 ---
 
+### TASK: Indicator tasks — Trend (29) + Momentum (39)
+
+**assignee:** codex
+**status:** done
+**priority:** normal
+**remark:** อ่าน `.agents/indicators/README.md` ก่อน — มี Pickup Rule + architecture. Task files อยู่ที่ `.agents/indicators/trend.md` (IND-T-01..29) และ `.agents/indicators/momentum.md` (IND-M-01..39) — หยิบทีละ group, อัปเดต assignee+status ในไฟล์นั้นก่อน start. Infrastructure (REGISTRY, IndicatorResult, compute_all) เสร็จแล้วจาก Task #5.
+
+**Why:** ต้องมี indicator logic ครบ 68 ตัวใน REGISTRY เพื่อให้ Phase 3 Pattern Discovery มีข้อมูลพอวิเคราะห์ pattern
+**Files to touch:**
+- `api/services/indicators/trend/{slug}.py` (New × 29) — ดู slug ในแต่ละ task ใน trend.md
+- `api/services/indicators/momentum/{slug}.py` (New × 39) — ดู slug ในแต่ละ task ใน momentum.md
+- `tests/test_indicators_trend.py` (New) — รวม tests ของ trend group ทั้งหมด
+- `tests/test_indicators_momentum.py` (New) — รวม tests ของ momentum group ทั้งหมด
+**Acceptance criteria:**
+- [ ] ทุก indicator ลงทะเบียนใน REGISTRY ด้วย `@register("slug")`
+- [ ] ทุก indicator คืน `IndicatorResult` ที่มี `slug, value, direction, matched, timeframe, metadata` ครบ
+- [ ] `matched=True` เมื่อ direction ตรงกับ trade direction ตามเงื่อนไขใน task file แต่ละตัว
+- [ ] `direction` คืน `"bullish"` | `"bearish"` | `"neutral"` เท่านั้น
+- [ ] pytest ผ่านทุก test รวม regression (ใช้คำสั่ง Verify ด้านล่าง)
+**Verify:**
+```bash
+docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api sh -c "cd /app && pytest tests/test_indicators_trend.py tests/test_indicators_momentum.py -v"
+docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api sh -c "cd /app && pytest tests/ -v --tb=short"
+```
+
+---
+
 ### TASK: Pattern Discovery Engine (Phase 3)
 
 **assignee:** codex
