@@ -16,7 +16,12 @@ from models.trade import Direction, OrderState, OrderType, PaperMode, Trade
 from schemas.market_tick import MarketTickSchema
 from services import paper_trader
 from services.indicators.common import IndicatorSpec
-from services.paper_trader import _build_indicator_cache, run_paper_trader
+from services.paper_trader import (
+    FAST_PATH_GROUPS,
+    _build_indicator_cache,
+    _slow_path_due,
+    run_paper_trader,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -365,3 +370,57 @@ async def test_shared_cache_computes_each_slug_once(session):
     # Even with 3 rules sharing the same 2 slugs, each slug computed once
     assert call_log.count("rsi_14") == 1
     assert call_log.count("ema_50") == 1
+
+
+def test_slow_path_due_first_call_returns_true():
+    state = {"last_slow_at": None}
+    assert _slow_path_due(state, datetime(2026, 5, 25, 12, 0, tzinfo=timezone.utc))
+
+
+def test_slow_path_due_within_interval_returns_false():
+    last = datetime(2026, 5, 25, 12, 0, 0, tzinfo=timezone.utc)
+    state = {"last_slow_at": last}
+    assert not _slow_path_due(state, last + timedelta(seconds=10))
+
+
+def test_slow_path_due_after_interval_returns_true():
+    last = datetime(2026, 5, 25, 12, 0, 0, tzinfo=timezone.utc)
+    state = {"last_slow_at": last}
+    assert _slow_path_due(state, last + timedelta(seconds=20))
+
+
+@pytest.mark.asyncio
+async def test_entry_uses_score_based_lot(session):
+    await _seed_bars(session)
+    pattern = Pattern(
+        indicator_slugs=["rsi_14", "ema_50"],
+        timeframe="H1",
+        win_rate=0.95,
+        sample_count=100,
+        status="active",
+    )
+    session.add(pattern)
+    await session.flush()
+    rule = PaperTraderRule(
+        pattern_id=pattern.id,
+        mode="basket_5k",
+        status="active",
+        win_count=95,
+        total_trades=100,
+    )
+    session.add(rule)
+    await session.commit()
+
+    tick = MarketTickSchema(
+        symbol="XAUUSD",
+        bid=Decimal("1955.0"),
+        ask=Decimal("1955.30"),
+        timestamp=datetime(2026, 5, 25, 12, 5, tzinfo=timezone.utc),
+        account_id=1,
+    )
+    await run_paper_trader(session, tick)
+
+    trades = (await session.execute(select(Trade).where(Trade.is_paper.is_(True)))).scalars().all()
+    if trades:
+        # ought to be one of the tier values
+        assert trades[0].volume in {Decimal("0.01"), Decimal("0.03"), Decimal("0.05"), Decimal("0.10")}

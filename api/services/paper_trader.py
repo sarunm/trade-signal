@@ -25,6 +25,11 @@ from services.indicators.common import (
     _atr,
     _to_frame,
 )
+from services.scoring import (
+    SignalQualityInputs,
+    compute_score,
+    score_to_lot,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +41,32 @@ DEFAULT_VOLUME = Decimal("0.10")
 XAUUSD_CONTRACT_SIZE = Decimal("100")
 SL_ATR_MULTIPLIER = Decimal("1.5")
 ATR_LENGTH = 14
+
+SLOW_PATH_INTERVAL_SEC = int(os.getenv("PAPER_TRADER_SLOW_PATH_SEC", "15"))
+FAST_PATH_GROUPS = {"momentum", "support_resistance"}
+SLOW_PATH_GROUPS = {"trend", "volatility", "volume", "pattern", "cycle"}
+
+
+_slow_path_state: dict[str, Optional[datetime]] = {"last_slow_at": None}
+_slow_path_cache: dict[tuple[str, str], tuple[Optional[float], str, dict]] = {}
+
+
+def reset_slow_path() -> None:
+    global _slow_path_state, _slow_path_cache
+    _slow_path_state = {"last_slow_at": None}
+    _slow_path_cache = {}
+
+
+def _slow_path_due(state: dict, now: datetime) -> bool:
+    last = state.get("last_slow_at")
+    if last is None:
+        return True
+    return (now - last).total_seconds() >= SLOW_PATH_INTERVAL_SEC
+
+
+def _is_fast_slug(slug: str) -> bool:
+    spec = ALL_SPECS.get(slug)
+    return spec is not None and spec.group in FAST_PATH_GROUPS
 
 ALL_SPECS: dict[str, IndicatorSpec] = {
     **TREND_SPECS,
@@ -129,12 +160,12 @@ def _compute(slug: str, bars: list[PriceBar]) -> tuple[Optional[float], str, dic
 def _build_indicator_cache(
     rules: list[_RuleSnapshot],
     bars_by_tf: dict[str, list[PriceBar]],
+    now: Optional[datetime] = None,
 ) -> dict[tuple[str, str], tuple[Optional[float], str, dict]]:
-    """Compute each (slug, timeframe) exactly once across all rules.
-
-    Returns {(slug, tf): (value, direction, metadata)}.
-    """
+    now = now or datetime.now(timezone.utc)
+    refresh_slow = _slow_path_due(_slow_path_state, now)
     cache: dict[tuple[str, str], tuple[Optional[float], str, dict]] = {}
+
     for rule in rules:
         bars = bars_by_tf.get(rule.timeframe) or bars_by_tf.get(DEFAULT_TIMEFRAME)
         if not bars:
@@ -143,7 +174,16 @@ def _build_indicator_cache(
             key = (slug, rule.timeframe)
             if key in cache:
                 continue
-            cache[key] = _compute(slug, bars)
+            if _is_fast_slug(slug):
+                cache[key] = _compute(slug, bars)
+            else:
+                if refresh_slow or key not in _slow_path_cache:
+                    _slow_path_cache[key] = _compute(slug, bars)
+                cache[key] = _slow_path_cache[key]
+
+    if refresh_slow:
+        _slow_path_state["last_slow_at"] = now
+
     return cache
 
 
@@ -287,6 +327,31 @@ async def _check_entries(
         direction = _consensus_direction(directions)
         if direction is None:
             continue
+        cached = [
+            cache.get((slug, rule.timeframe)) or cache.get((slug, DEFAULT_TIMEFRAME))
+            for slug in rule.indicator_slugs
+        ]
+        matched = sum(1 for c in cached if c is not None and c[1] != "neutral")
+        if matched == 0:
+            continue
+        avg_strength = sum(
+            min(abs(c[0] or 0.0) / 100.0, 1.0) for c in cached if c is not None
+        ) / max(len(cached), 1)
+        rule_row = await session.get(PaperTraderRule, rule.rule_id)
+        winrate = (
+            (rule_row.win_count / rule_row.total_trades)
+            if rule_row and rule_row.total_trades
+            else 0.0
+        )
+        score = compute_score(
+            SignalQualityInputs(
+                matched_count=matched,
+                total_count=len(rule.indicator_slugs),
+                avg_indicator_strength=avg_strength,
+                rule_winrate=winrate,
+            )
+        )
+        lot = score_to_lot(score)
         entry = (tick.ask if direction == Direction.buy else tick.bid)
         atr = _compute_atr(bars)
         if atr is None:
@@ -297,12 +362,10 @@ async def _check_entries(
             continue
         tp = _quantize(tp_raw)
         trade = _build_paper_trade(
-            tick, rule, direction, entry, tp, sl,
-            volume=DEFAULT_VOLUME,  # score-based volume comes in Task 6
+            tick, rule, direction, entry, tp, sl, volume=lot,
         )
         session.add(trade)
         await session.flush()
-        rule_row = await session.get(PaperTraderRule, rule.rule_id)
         if rule_row is not None:
             rule_row.total_trades += 1
         opened.append(trade)
@@ -433,7 +496,7 @@ async def run_paper_trader(
     for tf in timeframes:
         bars_by_tf[tf] = await _fetch_bars(session, tick.symbol, tf, tick.timestamp)
 
-    cache = _build_indicator_cache(rules, bars_by_tf)
+    cache = _build_indicator_cache(rules, bars_by_tf, now=tick.timestamp)
     open_by_rule = await _open_papers_for_rules(session, [r.rule_id for r in rules])
     closed = await _check_exits(session, tick, rules, bars_by_tf, open_by_rule, cache)
     opened = await _check_entries(session, tick, rules, bars_by_tf, open_by_rule, cache)
