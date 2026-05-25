@@ -1,6 +1,6 @@
 # Pattern-Based Indicators — 9 Tasks
 
-**assignee:** (ว่าง — ใครหยิบได้) | **priority:** low | **group:** pattern
+**assignee:** claude | **status:** done | **priority:** low | **group:** pattern
 
 ทุก task block กับ **Indicator Engine Infrastructure**
 
