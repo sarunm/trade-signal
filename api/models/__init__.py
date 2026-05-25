@@ -5,6 +5,7 @@ from .insight import Insight
 from .alert import Alert
 from .fib_level import FibLevel
 from .indicator_signal import TradeIndicatorSignal
+from .pattern import Pattern, PaperTraderRule
 
 __all__ = [
     "Trade",
@@ -14,4 +15,6 @@ __all__ = [
     "Alert",
     "FibLevel",
     "TradeIndicatorSignal",
+    "Pattern",
+    "PaperTraderRule",
 ]
