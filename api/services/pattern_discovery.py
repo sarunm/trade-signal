@@ -2,6 +2,7 @@ import itertools
 import logging
 import os
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Iterable, Optional
 
 from sqlalchemy import select
@@ -64,6 +65,28 @@ def group_into_baskets(
     return baskets
 
 
+def _basket_anchor_slugs(basket: list[tuple[Trade, set[str]]]) -> set[str]:
+    """First trade in the basket holds the original entry signals."""
+    if not basket:
+        return set()
+    return set(basket[0][1])
+
+
+def _basket_outcome(basket: list[tuple[Trade, set[str]]]) -> bool:
+    """Win = size-weighted net P/L > 0. Volume-weighted protects against
+    a tiny starter outvoting a large rescue or vice versa."""
+    total_volume = Decimal("0")
+    weighted_profit = Decimal("0")
+    for trade, _ in basket:
+        if trade.volume is None or trade.profit is None:
+            continue
+        total_volume += trade.volume
+        weighted_profit += trade.profit
+    if total_volume <= 0:
+        return False
+    return weighted_profit > 0
+
+
 async def _window_cutoff(session: AsyncSession, now: datetime) -> datetime:
     age_cutoff = now - timedelta(days=DISCOVERY_WINDOW_MAX_DAYS)
     result = await session.execute(
@@ -107,15 +130,21 @@ async def _load_window(
 
 
 def _score_combinations(
-    population: list[tuple[Trade, set[str]]]
+    population: list[tuple[Trade, set[str]]],
 ) -> dict[frozenset[str], tuple[int, int]]:
-    """Return {combo: (sample_count, win_count)}."""
+    """Return {combo: (basket_count, win_count)} weighted by basket outcome.
+
+    Uses first-trade slugs as anchor (only those signals were present at entry).
+    Outcome is size-weighted net P/L (basket > 0 => win).
+    """
+    baskets = group_into_baskets(population)
     scores: dict[frozenset[str], list[int]] = {}
-    for trade, slugs in population:
-        if len(slugs) < 2:
+    for basket in baskets:
+        anchor = _basket_anchor_slugs(basket)
+        if len(anchor) < 2:
             continue
-        is_win = trade.profit is not None and float(trade.profit) > 0
-        ordered = sorted(slugs)
+        is_win = _basket_outcome(basket)
+        ordered = sorted(anchor)
         for size in COMBINATION_SIZES:
             if size > len(ordered):
                 break

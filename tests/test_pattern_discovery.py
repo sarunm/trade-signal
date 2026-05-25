@@ -336,3 +336,29 @@ async def test_api_returns_patterns_and_rules(client, db_session):
     assert len(rules) == 1
     assert rules[0]["total_trades"] == 4
     assert rules[0]["win_rate"] == pytest.approx(0.75)
+
+
+def test_basket_anchor_is_first_trade_slugs():
+    base = datetime(2026, 5, 25, 12, 0, 0, tzinfo=timezone.utc)
+    a = _real_trade(base, profit=-50, volume="0.01", ticket=1)
+    b = _real_trade(base + timedelta(seconds=1), profit=200, volume="0.10", ticket=2)
+    population = [(a, {"ema_50_h1", "rsi_14_h1"}), (b, {"macd_h1", "atr_h1"})]
+    baskets = group_into_baskets(population)
+    from services.pattern_discovery import _basket_anchor_slugs, _basket_outcome
+    assert _basket_anchor_slugs(baskets[0]) == {"ema_50_h1", "rsi_14_h1"}
+
+
+def test_basket_outcome_size_weighted_win():
+    base = datetime(2026, 5, 25, 12, 0, 0, tzinfo=timezone.utc)
+    starter = _real_trade(base, profit=-50, volume="0.01", ticket=1)
+    rescue = _real_trade(base + timedelta(seconds=1), profit=200, volume="0.10", ticket=2)
+    from services.pattern_discovery import _basket_outcome
+    assert _basket_outcome([(starter, set()), (rescue, set())]) is True
+
+
+def test_basket_outcome_size_weighted_loss():
+    base = datetime(2026, 5, 25, 12, 0, 0, tzinfo=timezone.utc)
+    starter = _real_trade(base, profit=10, volume="0.01", ticket=1)
+    rescue = _real_trade(base + timedelta(seconds=1), profit=-100, volume="0.10", ticket=2)
+    from services.pattern_discovery import _basket_outcome
+    assert _basket_outcome([(starter, set()), (rescue, set())]) is False
