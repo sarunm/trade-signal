@@ -74,3 +74,6 @@ class Trade(Base):
     entry_score: Mapped[Optional[int]] = mapped_column(Integer(), nullable=True)
     entry_verdict: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     recovery_plan: Mapped[Optional[dict]] = mapped_column(JSONB().with_variant(JSON(), "sqlite"), nullable=True)
+    paper_trader_rule_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), nullable=True, index=True
+    )
