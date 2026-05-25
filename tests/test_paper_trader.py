@@ -1,15 +1,22 @@
+import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from unittest.mock import patch
 
 import pytest
+import pytest_asyncio
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.pool import StaticPool
 
+from database import Base
 from models.pattern import PaperTraderRule, Pattern
 from models.price_bar import PriceBar, Timeframe
 from models.trade import Direction, OrderState, OrderType, PaperMode, Trade
 from schemas.market_tick import MarketTickSchema
 from services import paper_trader
 from services.indicators.common import IndicatorSpec
+from services.paper_trader import _build_indicator_cache, run_paper_trader
 
 
 @pytest.fixture(autouse=True)
@@ -282,3 +289,79 @@ async def test_paper_trades_endpoint_returns_open_and_closed(client, db_session,
     resp_open = await client.get("/api/paper-trades?status=open")
     assert resp_open.status_code == 200
     assert len(resp_open.json()) == 1
+
+
+@pytest_asyncio.fixture
+async def session():
+    eng = create_async_engine(
+        "sqlite+aiosqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    async with eng.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    Session = async_sessionmaker(eng, expire_on_commit=False)
+    async with Session() as s:
+        yield s
+    await eng.dispose()
+
+
+def _bar_local(t: datetime, close: float = 1950.0, tf: Timeframe = Timeframe.H1) -> PriceBar:
+    return PriceBar(
+        symbol="XAUUSD",
+        timeframe=tf,
+        time=t,
+        open=Decimal(str(close)),
+        high=Decimal(str(close + 1)),
+        low=Decimal(str(close - 1)),
+        close=Decimal(str(close)),
+        volume=Decimal("100"),
+    )
+
+
+async def _seed_bars_local(session, count: int = 300):
+    base = datetime(2026, 5, 25, 0, 0, tzinfo=timezone.utc)
+    for i in range(count):
+        session.add(_bar_local(base + timedelta(hours=i), close=1950 + (i % 10)))
+    await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_shared_cache_computes_each_slug_once(session):
+    await _seed_bars_local(session)
+    pattern = Pattern(
+        indicator_slugs=["rsi_14", "ema_50"],
+        timeframe="H1",
+        win_rate=0.7,
+        sample_count=20,
+        status="active",
+    )
+    session.add(pattern)
+    await session.flush()
+    for mode in ("strict", "basket_5k", "basket_50k"):
+        session.add(PaperTraderRule(
+            pattern_id=pattern.id, mode=mode, status="active",
+        ))
+    await session.commit()
+
+    tick = MarketTickSchema(
+        symbol="XAUUSD",
+        bid=Decimal("1955.0"),
+        ask=Decimal("1955.30"),
+        timestamp=datetime(2026, 5, 25, 12, 5, tzinfo=timezone.utc),
+        account_id=1,
+    )
+
+    call_log: list[str] = []
+    real_compute = _build_indicator_cache.__globals__["_compute"]
+
+    def spy(slug, bars):
+        call_log.append(slug)
+        return real_compute(slug, bars)
+
+    with patch("services.paper_trader._compute", side_effect=spy):
+        await run_paper_trader(session, tick)
+
+    # Even with 3 rules sharing the same 2 slugs, each slug computed once
+    assert call_log.count("rsi_14") == 1
+    assert call_log.count("ema_50") == 1
