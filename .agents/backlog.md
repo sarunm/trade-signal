@@ -60,9 +60,9 @@ assumptions: <ถ้ามี หรือ none>
 | 2 | Trade Advisor — entry scoring + recovery map + live zone alerts | agy | 🟢 normal | done |
 | 3 | Migrate agent task system to file-per-task | claude | 🔵 low | pending |
 | 4 | Add missing MCP endpoints (account-snapshots, price-bars) | codex | 🔵 low | pending |
-| 5 | Indicator Engine Infrastructure | codex | 🟢 normal | pending |
-| 6–7 | Indicator tasks: Trend (29) + Momentum (39) | codex | 🟢 normal | pending |
-| 8–12 | Indicator tasks: Volume/Volatility/S&R/Pattern/Cycle (74) | (ว่าง) | 🔵 low | pending |
+| 5 | Indicator Engine Infrastructure | codex | 🟢 normal | done |
+| 6–7 | Indicator tasks: Trend (29) + Momentum (39) | codex | 🟢 normal | done |
+| 8–12 | Indicator tasks: Volume/Volatility/S&R/Pattern/Cycle (74) | codex | 🔵 low | in_progress |
 | BUG-1 | [BUG] Trade direction always wrong — EA sends ENTRY_OUT deal type | claude | 🔴 high | done |
 | 13 | Pattern Discovery Engine (Phase 3) | codex | 🟢 normal | pending |
 | 14 | Auto Paper Trader (Phase 4) | codex | 🟢 normal | pending |
@@ -275,6 +275,35 @@ curl "http://localhost:8000/api/indicator-signals/{some-trade-id}"
 **Verify:**
 ```bash
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api sh -c "cd /app && pytest tests/test_indicators_trend.py tests/test_indicators_momentum.py -v"
+docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api sh -c "cd /app && pytest tests/ -v --tb=short"
+```
+
+---
+
+### TASK: Indicator tasks — Volume (19) + Volatility (15) + S&R (18) + Pattern (9) + Cycle (13)
+
+**assignee:** codex
+**status:** in_progress
+**priority:** low
+**remark:** แต่ละ group ทำ parallel ได้ — agent หยิบได้ทีละ 1 group ตาม Pickup Rule ใน `.agents/indicators/README.md`. อัปเดต assignee+status ในไฟล์ group นั้นก่อน start ห้าม parallel ภายใน group เดียวกัน. Infrastructure (REGISTRY, IndicatorResult, common.py pattern) เสร็จแล้ว ดู `api/services/indicators/trend/` เป็น reference.
+
+**Why:** ครบ 142 indicators ใน REGISTRY เพื่อให้ Phase 3 Pattern Discovery มีข้อมูลครบสำหรับวิเคราะห์ทุก combination
+**Files to touch (per group):**
+- Volume: `api/services/indicators/volume/{slug}.py` (×19) — ดู `.agents/indicators/volume.md`
+- Volatility: `api/services/indicators/volatility/{slug}.py` (×15) — ดู `.agents/indicators/volatility.md`
+- S&R: `api/services/indicators/sr/{slug}.py` (×18) — ดู `.agents/indicators/sr.md`
+- Pattern: `api/services/indicators/pattern/{slug}.py` (×9) — ดู `.agents/indicators/pattern.md`
+- Cycle: `api/services/indicators/cycle/{slug}.py` (×13) — ดู `.agents/indicators/cycle.md`
+- `tests/test_indicators_{group}.py` (New per group)
+**Acceptance criteria:**
+- [ ] ทุก indicator ลงทะเบียนใน REGISTRY ด้วย `@register("slug")`
+- [ ] ทุก indicator คืน `IndicatorResult` ที่มี `slug, value, direction, matched, timeframe, metadata` ครบ
+- [ ] `matched=True` ตามเงื่อนไขในแต่ละ task file
+- [ ] `direction` คืน `"bullish"` | `"bearish"` | `"neutral"` เท่านั้น
+- [ ] pytest ผ่านทุก test รวม regression
+**Verify:**
+```bash
+docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api sh -c "cd /app && pytest tests/test_indicators_{group}.py -v"
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api sh -c "cd /app && pytest tests/ -v --tb=short"
 ```
 

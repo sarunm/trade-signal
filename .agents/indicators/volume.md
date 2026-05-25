@@ -1,6 +1,6 @@
 # Volume Indicators — 19 Tasks
 
-**assignee:** (ว่าง — ใครหยิบได้) | **priority:** low | **group:** volume
+**assignee:** codex | **status:** done | **priority:** low | **group:** volume
 
 > **หมายเหตุ:** MT5 ส่ง tick_volume (ไม่ใช่ real volume) ใช้ได้แต่ accuracy ต่ำกว่า stock market
 
