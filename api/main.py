@@ -21,6 +21,7 @@ from routers.trade_advisor import router as trade_advisor_router
 from routers.indicator_signals import router as indicator_signals_router
 from routers.patterns import router as patterns_router
 from routers.price_bars import router as price_bars_router
+from routers.ea_status import router as ea_status_router
 from services.pattern_discovery import run_pattern_discovery
 
 logger = logging.getLogger(__name__)
@@ -77,6 +78,7 @@ app.include_router(trade_advisor_router)
 app.include_router(indicator_signals_router)
 app.include_router(patterns_router)
 app.include_router(price_bars_router)
+app.include_router(ea_status_router)
 
 
 @app.get("/health")
