@@ -1707,3 +1707,240 @@ PATTERN_SPECS = {
     "tlb": IndicatorSpec("tlb", "pattern", _pat_tlb),
     "rei_pattern": IndicatorSpec("rei_pattern", "pattern", _pat_rei_pattern),
 }
+
+
+def _insufficient(slug_metadata: Optional[dict] = None):
+    metadata = {"reason": "insufficient_bars"}
+    if slug_metadata:
+        metadata.update(slug_metadata)
+    return None, "neutral", metadata
+
+
+def _cyc_correlation(df):
+    period = 20
+    if len(df) < period:
+        return _insufficient()
+    sma = _sma(df["close"], period)
+    window = df["close"].tail(period)
+    sma_window = sma.tail(period)
+    if sma_window.isna().any():
+        return _insufficient()
+    corr = float(window.corr(sma_window))
+    direction = _direction(corr, lambda v: v > 0.7, lambda v: v < -0.7)
+    return corr, direction, {"correlation": corr, "period": period}
+
+
+def _cyc_r_squared(df):
+    period = 14
+    if len(df) < period:
+        return _insufficient()
+    window = df["close"].tail(period).reset_index(drop=True)
+    n = len(window)
+    xs = pd.Series(range(n), dtype="float64")
+    x_mean = xs.mean()
+    y_mean = window.mean()
+    denom_x = ((xs - x_mean) ** 2).sum()
+    if denom_x == 0:
+        return _insufficient()
+    slope = ((xs - x_mean) * (window - y_mean)).sum() / denom_x
+    intercept = y_mean - slope * x_mean
+    predicted = intercept + slope * xs
+    ss_res = ((window - predicted) ** 2).sum()
+    ss_tot = ((window - y_mean) ** 2).sum()
+    if ss_tot == 0:
+        return _insufficient()
+    r2 = float(1 - ss_res / ss_tot)
+    direction = "neutral"
+    if r2 > 0.75:
+        direction = "bullish" if slope > 0 else "bearish" if slope < 0 else "neutral"
+    return r2, direction, {"r_squared": r2, "slope": float(slope), "period": period}
+
+
+def _cyc_linreg_slope(df):
+    period = 14
+    if len(df) < period:
+        return _insufficient()
+    slope = _last(_linreg_slope(df["close"], period))
+    return slope, _direction(slope, lambda v: v > 0, lambda v: v < 0), {"slope": slope, "period": period}
+
+
+def _cyc_kaufman_er(df):
+    period = 10
+    if len(df) < period + 1:
+        return _insufficient()
+    change = (df["close"] - df["close"].shift(period)).abs()
+    volatility = df["close"].diff().abs().rolling(period, min_periods=period).sum()
+    er_series = change / volatility.replace(0, math.nan)
+    value = _last(er_series)
+    if value is None:
+        return _insufficient()
+    direction = "neutral"
+    if value > 0.6:
+        direction = _price_swing_direction(df)
+    return value, direction, {"er": value, "period": period}
+
+
+def _cyc_price_relative(df):
+    period = 50
+    if len(df) < period:
+        return _insufficient()
+    sma = _sma(df["close"], period)
+    sma_last = _last(sma)
+    close = _last(df["close"])
+    if sma_last is None or close is None or sma_last == 0:
+        return _insufficient()
+    rs = close / sma_last
+    direction = _direction(rs, lambda v: v > 1, lambda v: v < 1)
+    return rs, direction, {"rs": rs, "close": close, "sma": sma_last, "period": period}
+
+
+def _cyc_rmo(df):
+    if len(df) < 10:
+        return _insufficient()
+    raw = 2 * df["close"] - df["high"] - df["low"]
+    swing1 = _sma(raw, 2) * 0.2
+    swing2 = _sma(swing1, 3) * 0.2
+    rmo = _ema(swing2, 81) if len(df) >= 81 else _ema(swing2, max(2, len(df) // 2))
+    value = _last(rmo)
+    return value, _direction(value, lambda v: v > 0, lambda v: v < 0), {"rmo": value}
+
+
+def _cyc_vidya(df):
+    period = 14
+    if len(df) < period * 2:
+        return _insufficient()
+    delta = df["close"].diff()
+    up = delta.clip(lower=0).rolling(period, min_periods=period).sum()
+    down = (-delta.clip(upper=0)).rolling(period, min_periods=period).sum()
+    cmo = ((up - down) / (up + down).replace(0, math.nan)).abs().fillna(0)
+    alpha = 2 / (period + 1)
+    values = [float(df["close"].iloc[0])]
+    for i in range(1, len(df)):
+        prev = values[-1]
+        k = float(cmo.iloc[i]) if pd.notna(cmo.iloc[i]) else 0.0
+        a = alpha * k
+        values.append(a * float(df["close"].iloc[i]) + (1 - a) * prev)
+    vidya = pd.Series(values, index=df.index)
+    value = _last(vidya)
+    close = _last(df["close"])
+    return value, _above_below(close, value), {"vidya": value, "close": close}
+
+
+def _cyc_ravi(df):
+    fast, slow = 7, 65
+    if len(df) < slow:
+        return _insufficient()
+    sma_fast = _sma(df["close"], fast)
+    sma_slow = _sma(df["close"], slow)
+    fast_l, slow_l = _last(sma_fast), _last(sma_slow)
+    close = _last(df["close"])
+    if fast_l is None or slow_l is None or slow_l == 0 or close is None:
+        return _insufficient()
+    ravi = abs(fast_l - slow_l) / slow_l * 100
+    direction = "neutral"
+    if ravi > 3:
+        direction = _above_below(close, slow_l)
+    return ravi, direction, {"ravi": ravi, "sma_fast": fast_l, "sma_slow": slow_l, "close": close}
+
+
+def _cyc_dpo_cycle(df):
+    length = 20
+    shift = length // 2 + 1
+    if len(df) < length + shift:
+        return _insufficient()
+    dpo = df["close"] - _sma(df["close"], length).shift(shift)
+    value = _last(dpo)
+    direction = "neutral"
+    if _crossed_above(dpo, 0):
+        direction = "bullish"
+    elif _crossed_below(dpo, 0):
+        direction = "bearish"
+    return value, direction, {"dpo": value, "length": length}
+
+
+def _cyc_kurtosis(df):
+    period = 20
+    if len(df) < period + 1:
+        return _insufficient()
+    returns = df["close"].pct_change().tail(period).dropna()
+    if len(returns) < period:
+        return _insufficient()
+    mean = returns.mean()
+    std = returns.std(ddof=0)
+    if std == 0:
+        return _insufficient()
+    kurt = float(((returns - mean) ** 4).mean() / (std ** 4) - 3)
+    direction = _price_swing_direction(df) if kurt > 3 else "neutral"
+    return kurt, direction, {"kurtosis": kurt, "fat_tail": bool(kurt > 3), "period": period}
+
+
+def _cyc_hv_percentile(df):
+    """Percentile rank of current annualized HV within the available history (target window 252)."""
+    short_window = 20
+    if len(df) < short_window + 2:
+        return _insufficient()
+    log_returns = (df["close"] / df["close"].shift(1)).apply(lambda v: math.log(v) if pd.notna(v) and v > 0 else math.nan)
+    hv = log_returns.rolling(short_window, min_periods=short_window).std() * math.sqrt(252)
+    rank_window = min(252, len(hv.dropna()))
+    if rank_window < 2:
+        return _insufficient()
+    series = hv.dropna().tail(rank_window)
+    current = float(series.iloc[-1])
+    pct = float((series <= current).sum()) / len(series) * 100
+    direction = _price_swing_direction(df) if pct < 25 else "neutral"
+    return pct, direction, {"hv": current, "window": rank_window}
+
+
+def _cyc_zscore(df):
+    period = 20
+    if len(df) < period:
+        return _insufficient()
+    sma = _sma(df["close"], period)
+    std = df["close"].rolling(period, min_periods=period).std(ddof=0)
+    sma_l, std_l, close = _last(sma), _last(std), _last(df["close"])
+    if sma_l is None or std_l is None or close is None or std_l == 0:
+        return _insufficient()
+    z = (close - sma_l) / std_l
+    direction = _direction(z, lambda v: v < -2, lambda v: v > 2)
+    return z, direction, {"zscore": z, "mean": sma_l, "std": std_l}
+
+
+def _cyc_hurst(df):
+    """Hurst exponent via simplified R/S analysis over a single window (pragmatic, not multi-scale)."""
+    period = 100
+    if len(df) < period:
+        return _insufficient()
+    series = df["close"].tail(period).reset_index(drop=True)
+    log_returns = (series / series.shift(1)).apply(lambda v: math.log(v) if pd.notna(v) and v > 0 else math.nan).dropna()
+    n = len(log_returns)
+    if n < 20:
+        return _insufficient()
+    mean = log_returns.mean()
+    deviations = log_returns - mean
+    cumulative = deviations.cumsum()
+    r = float(cumulative.max() - cumulative.min())
+    s = float(log_returns.std(ddof=0))
+    if s == 0 or r == 0:
+        return _insufficient()
+    h = math.log(r / s) / math.log(n)
+    direction = "neutral"
+    if h > 0.6:
+        direction = _price_swing_direction(df)
+    return h, direction, {"hurst": h, "n": n}
+
+
+CYCLE_SPECS = {
+    "correlation": IndicatorSpec("correlation", "cycle", _cyc_correlation),
+    "r_squared": IndicatorSpec("r_squared", "cycle", _cyc_r_squared),
+    "linreg_slope": IndicatorSpec("linreg_slope", "cycle", _cyc_linreg_slope),
+    "kaufman_er": IndicatorSpec("kaufman_er", "cycle", _cyc_kaufman_er),
+    "price_relative": IndicatorSpec("price_relative", "cycle", _cyc_price_relative),
+    "rmo": IndicatorSpec("rmo", "cycle", _cyc_rmo),
+    "vidya": IndicatorSpec("vidya", "cycle", _cyc_vidya),
+    "ravi": IndicatorSpec("ravi", "cycle", _cyc_ravi),
+    "dpo_cycle": IndicatorSpec("dpo_cycle", "cycle", _cyc_dpo_cycle),
+    "kurtosis": IndicatorSpec("kurtosis", "cycle", _cyc_kurtosis),
+    "hv_percentile": IndicatorSpec("hv_percentile", "cycle", _cyc_hv_percentile),
+    "zscore": IndicatorSpec("zscore", "cycle", _cyc_zscore),
+    "hurst": IndicatorSpec("hurst", "cycle", _cyc_hurst),
+}
