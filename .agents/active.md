@@ -1,9 +1,9 @@
 # Active Agent State
 
-Updated: 2026-05-23
+Updated: 2026-05-25
 Current owner: codex
 Branch: codex/indicator-engine-infrastructure
-Last task commit: 4d47ca9 feat: add indicator engine infrastructure
+Last task commit: 49b1cee fix: align indicator engine with entry-time signals
 
 ## Current Goal
 
@@ -11,7 +11,7 @@ Indicator Engine Infrastructure.
 
 ## Status
 
-Done — implementation verified locally and in Docker; PR opened for Claude review.
+Done — PR patch verified locally; PR opened for Claude review.
 
 ## Next Step
 
