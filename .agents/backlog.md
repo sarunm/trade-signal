@@ -62,7 +62,7 @@ assumptions: <ถ้ามี หรือ none>
 | 4 | Add missing MCP endpoints (account-snapshots, price-bars) | codex | 🔵 low | pending |
 | 5 | Indicator Engine Infrastructure | codex | 🟢 normal | done |
 | 6–7 | Indicator tasks: Trend (29) + Momentum (39) | codex | 🟢 normal | done |
-| 8–12 | Indicator tasks: Volume/Volatility/S&R/Pattern/Cycle (74) | codex | 🔵 low | in_progress |
+| 8–12 | Indicator tasks: Volume✅/Volatility✅/S&R/Pattern/Cycle (40 left) | codex/claude | 🔵 low | in_progress |
 | BUG-1 | [BUG] Trade direction always wrong — EA sends ENTRY_OUT deal type | claude | 🔴 high | done |
 | 13 | Pattern Discovery Engine (Phase 3) | codex | 🟢 normal | pending |
 | 14 | Auto Paper Trader (Phase 4) | codex | 🟢 normal | pending |

@@ -1156,3 +1156,255 @@ VOLUME_SPECS = {
     "smi_vol": IndicatorSpec("smi_vol", "volume", _vol_smi_vol),
     "volume_raw": IndicatorSpec("volume_raw", "volume", _vol_volume_raw),
 }
+
+
+def _bbands_components(close: pd.Series, length: int = 20, std: float = 2.0):
+    mid = _sma(close, length)
+    sd = close.rolling(length, min_periods=length).std(ddof=0)
+    upper = mid + std * sd
+    lower = mid - std * sd
+    return lower, mid, upper
+
+
+def _vlt_bbands(df):
+    lower, mid, upper = _bbands_components(df["close"])
+    close = _last(df["close"])
+    upper_l, mid_l, lower_l = _last(upper), _last(mid), _last(lower)
+    direction = "neutral"
+    if None not in (close, upper_l, lower_l):
+        if close < lower_l:
+            direction = "bullish"
+        elif close > upper_l:
+            direction = "bearish"
+    return mid_l, direction, {"upper": upper_l, "lower": lower_l, "close": close}
+
+
+def _vlt_bbw(df):
+    lower, mid, upper = _bbands_components(df["close"])
+    bbw = (upper - lower) / mid.replace(0, math.nan) * 100
+    value = _last(bbw)
+    valid = bbw.dropna().tail(252)
+    threshold = float(valid.quantile(0.10)) if len(valid) >= 20 else None
+    squeeze = value is not None and threshold is not None and value < threshold
+    direction = _price_swing_direction(df) if squeeze else "neutral"
+    return value, direction, {"squeeze": bool(squeeze), "p10": threshold}
+
+
+def _vlt_atr(df):
+    atr = _atr(df, 14)
+    avg = _sma(atr, 20)
+    value = _last(atr)
+    avg_l = _last(avg)
+    expanding = value is not None and avg_l is not None and value > avg_l
+    direction = _price_swing_direction(df) if expanding else "neutral"
+    return value, direction, {"atr_avg20": avg_l, "expanding": bool(expanding)}
+
+
+def _vlt_kc(df):
+    mid = _ema(df["close"], 20)
+    atr = _atr(df, 10)
+    upper = mid + 2 * atr
+    lower = mid - 2 * atr
+    close = _last(df["close"])
+    upper_l, lower_l, mid_l = _last(upper), _last(lower), _last(mid)
+    direction = "neutral"
+    if None not in (close, upper_l, lower_l):
+        if close < lower_l:
+            direction = "bullish"
+        elif close > upper_l:
+            direction = "bearish"
+    return mid_l, direction, {"upper": upper_l, "lower": lower_l, "close": close}
+
+
+def _vlt_donchian(df):
+    upper = df["high"].rolling(20, min_periods=20).max()
+    lower = df["low"].rolling(20, min_periods=20).min()
+    close = _last(df["close"])
+    prev_upper = _prev(upper)
+    prev_lower = _prev(lower)
+    upper_l, lower_l = _last(upper), _last(lower)
+    direction = "neutral"
+    if close is not None and prev_upper is not None and close > prev_upper:
+        direction = "bullish"
+    elif close is not None and prev_lower is not None and close < prev_lower:
+        direction = "bearish"
+    mid = (upper_l + lower_l) / 2 if upper_l is not None and lower_l is not None else None
+    return mid, direction, {"upper": upper_l, "lower": lower_l, "close": close}
+
+
+def _vlt_stdev(df):
+    sd = df["close"].rolling(20, min_periods=20).std(ddof=0)
+    avg = _sma(sd, 20)
+    value = _last(sd)
+    avg_l = _last(avg)
+    expanding = value is not None and avg_l is not None and value > avg_l
+    direction = _price_swing_direction(df) if expanding else "neutral"
+    return value, direction, {"stdev_avg20": avg_l, "expanding": bool(expanding)}
+
+
+def _vlt_chaikin_vol(df):
+    hl = df["high"] - df["low"]
+    ema_hl = _ema(hl, 10)
+    cv = _roc(ema_hl, 10)
+    value = _last(cv)
+    expanding = value is not None and value > 0
+    direction = _price_swing_direction(df) if expanding else "neutral"
+    return value, direction, {"expanding": bool(expanding)}
+
+
+def _vlt_starc(df):
+    mid = _sma(df["close"], 5)
+    atr = _atr(df, 15)
+    upper = mid + atr * 1.33
+    lower = mid - atr * 1.33
+    close = _last(df["close"])
+    upper_l, lower_l, mid_l = _last(upper), _last(lower), _last(mid)
+    direction = "neutral"
+    if None not in (close, upper_l, lower_l):
+        if close <= lower_l:
+            direction = "bullish"
+        elif close >= upper_l:
+            direction = "bearish"
+    return mid_l, direction, {"upper": upper_l, "lower": lower_l, "close": close}
+
+
+def _vlt_adr(df):
+    daily_range = df["high"] - df["low"]
+    adr = _sma(daily_range, 14)
+    value = _last(adr)
+    move = None
+    if value is not None and value > 0:
+        close = _last(df["close"])
+        open_ = _last(df["open"])
+        if close is not None and open_ is not None:
+            move = (close - open_) / value
+    expanding = move is not None and abs(move) > 0.5
+    direction = "neutral"
+    if expanding:
+        direction = "bullish" if move > 0 else "bearish"
+    return value, direction, {"move_ratio": move, "expanding": bool(expanding)}
+
+
+def _vlt_hv(df):
+    log_returns = (df["close"] / df["close"].shift(1)).apply(
+        lambda v: math.log(v) if pd.notna(v) and v > 0 else math.nan
+    )
+    sd = log_returns.rolling(20, min_periods=20).std(ddof=0)
+    hv = sd * math.sqrt(252) * 100
+    value = _last(hv)
+    valid = hv.dropna().tail(252)
+    threshold = float(valid.quantile(0.25)) if len(valid) >= 20 else None
+    low_vol = value is not None and threshold is not None and value < threshold
+    direction = _price_swing_direction(df) if low_vol else "neutral"
+    return value, direction, {"low_vol": bool(low_vol), "p25": threshold}
+
+
+def _vlt_ulcer(df):
+    length = 14
+    rolling_max = df["close"].rolling(length, min_periods=length).max()
+    drawdown = (df["close"] - rolling_max) / rolling_max.replace(0, math.nan) * 100
+    sq = drawdown.pow(2)
+    ui = sq.rolling(length, min_periods=length).mean().pow(0.5)
+    value = _last(ui)
+    prev = _prev(ui)
+    direction = "neutral"
+    if value is not None and prev is not None and value < prev:
+        direction = "bullish"
+    return value, direction, {"previous": prev}
+
+
+def _vlt_ttm_squeeze(df):
+    lower_bb, _, upper_bb = _bbands_components(df["close"], 20, 2.0)
+    mid_kc = _ema(df["close"], 20)
+    atr_kc = _atr(df, 20)
+    upper_kc = mid_kc + 1.5 * atr_kc
+    lower_kc = mid_kc - 1.5 * atr_kc
+    sqz_on_series = (lower_bb >= lower_kc) & (upper_bb <= upper_kc)
+    sqz_on = bool(sqz_on_series.iloc[-1]) if len(sqz_on_series.dropna()) else False
+    sqz_on_prev = bool(sqz_on_series.iloc[-2]) if len(sqz_on_series.dropna()) >= 2 else False
+    sqz_off = sqz_on_prev and not sqz_on
+    midpoint = ((df["high"].rolling(20).max() + df["low"].rolling(20).min()) / 2 + _sma(df["close"], 20)) / 2
+    momentum = _linreg_slope(df["close"] - midpoint, 20)
+    mom_value = _last(momentum)
+    direction = "neutral"
+    if sqz_off and mom_value is not None:
+        if mom_value > 0:
+            direction = "bullish"
+        elif mom_value < 0:
+            direction = "bearish"
+    return mom_value, direction, {"squeeze_on": sqz_on, "squeeze_released": bool(sqz_off)}
+
+
+def _vlt_pctb(df):
+    lower, _, upper = _bbands_components(df["close"])
+    band_width = (upper - lower).replace(0, math.nan)
+    pctb = (df["close"] - lower) / band_width
+    value = _last(pctb)
+    direction = "neutral"
+    if value is not None:
+        if value < 0:
+            direction = "bullish"
+        elif value > 1:
+            direction = "bearish"
+    return value, direction, {"upper": _last(upper), "lower": _last(lower)}
+
+
+def _vlt_adr_pct(df):
+    daily_range = df["high"] - df["low"]
+    adr = _sma(daily_range, 14)
+    close = _last(df["close"])
+    adr_l = _last(adr)
+    value = (adr_l / close * 100) if close and adr_l is not None else None
+    direction = "neutral"
+    if value is not None and adr_l is not None:
+        move = _last(df["close"]) - _last(df["open"]) if _last(df["open"]) is not None else None
+        if move is not None and abs(move) < adr_l:
+            direction = "bullish" if move > 0 else "bearish" if move < 0 else "neutral"
+    return value, direction, {"adr": adr_l, "close": close}
+
+
+def _vlt_linreg_channel(df):
+    length = 20
+    series = df["close"].tail(length).reset_index(drop=True)
+    if len(series) < length:
+        return None, "neutral", {"reason": "insufficient_bars"}
+    xs = pd.Series(range(length), dtype="float64")
+    x_mean = xs.mean()
+    y_mean = series.mean()
+    denom = ((xs - x_mean) ** 2).sum()
+    if denom == 0:
+        return None, "neutral", {"reason": "zero_variance"}
+    slope = ((xs - x_mean) * (series - y_mean)).sum() / denom
+    intercept = y_mean - slope * x_mean
+    fitted = intercept + slope * xs
+    residuals = series - fitted
+    stderr = float((residuals ** 2).sum() / (length - 2)) ** 0.5 if length > 2 else 0.0
+    upper = float(fitted.iloc[-1]) + 2 * stderr
+    lower = float(fitted.iloc[-1]) - 2 * stderr
+    close = _last(df["close"])
+    direction = "neutral"
+    if close is not None:
+        if close <= lower:
+            direction = "bullish"
+        elif close >= upper:
+            direction = "bearish"
+    return float(fitted.iloc[-1]), direction, {"upper": upper, "lower": lower, "slope": float(slope)}
+
+
+VOLATILITY_SPECS = {
+    "bbands": IndicatorSpec("bbands", "volatility", _vlt_bbands),
+    "bbw": IndicatorSpec("bbw", "volatility", _vlt_bbw),
+    "atr": IndicatorSpec("atr", "volatility", _vlt_atr),
+    "kc": IndicatorSpec("kc", "volatility", _vlt_kc),
+    "donchian": IndicatorSpec("donchian", "volatility", _vlt_donchian),
+    "stdev": IndicatorSpec("stdev", "volatility", _vlt_stdev),
+    "chaikin_vol": IndicatorSpec("chaikin_vol", "volatility", _vlt_chaikin_vol),
+    "starc": IndicatorSpec("starc", "volatility", _vlt_starc),
+    "adr": IndicatorSpec("adr", "volatility", _vlt_adr),
+    "hv": IndicatorSpec("hv", "volatility", _vlt_hv),
+    "ulcer": IndicatorSpec("ulcer", "volatility", _vlt_ulcer),
+    "ttm_squeeze": IndicatorSpec("ttm_squeeze", "volatility", _vlt_ttm_squeeze),
+    "pctb": IndicatorSpec("pctb", "volatility", _vlt_pctb),
+    "adr_pct": IndicatorSpec("adr_pct", "volatility", _vlt_adr_pct),
+    "linreg_channel": IndicatorSpec("linreg_channel", "volatility", _vlt_linreg_channel),
+}

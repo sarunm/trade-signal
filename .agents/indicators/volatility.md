@@ -1,6 +1,6 @@
 # Volatility Indicators — 15 Tasks
 
-**assignee:** (ว่าง — ใครหยิบได้) | **priority:** low | **group:** volatility
+**assignee:** claude | **status:** done | **priority:** low | **group:** volatility
 
 ทุก task block กับ **Indicator Engine Infrastructure**
 
