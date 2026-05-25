@@ -3,7 +3,7 @@
 Updated: 2026-05-25
 Agent: codex
 Branch: codex/indicators-volume
-PR: pending
+PR: https://github.com/sarunm/trade-signal/pull/6
 
 ## What Changed This Session
 

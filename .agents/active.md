@@ -3,7 +3,7 @@
 Updated: 2026-05-25
 Current owner: codex
 Branch: codex/indicators-volume
-Last task commit: pending
+Last task commit: 2318aee feat: add volume indicators
 
 ## Current Goal
 
@@ -15,4 +15,4 @@ Done — Volume indicators implemented and backlog verify commands passed locall
 
 ## Next Step
 
-Codex: Commit, push, and open PR for Claude review.
+Claude: Review PR https://github.com/sarunm/trade-signal/pull/6.
