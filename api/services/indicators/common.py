@@ -1408,3 +1408,302 @@ VOLATILITY_SPECS = {
     "adr_pct": IndicatorSpec("adr_pct", "volatility", _vlt_adr_pct),
     "linreg_channel": IndicatorSpec("linreg_channel", "volatility", _vlt_linreg_channel),
 }
+
+
+def _pat_fractals(df):
+    if len(df) < 5:
+        return None, "neutral", {"reason": "insufficient_bars"}
+    window = df.tail(5).reset_index(drop=True)
+    middle_low = float(window["low"].iloc[2])
+    middle_high = float(window["high"].iloc[2])
+    others_low = [float(window["low"].iloc[i]) for i in (0, 1, 3, 4)]
+    others_high = [float(window["high"].iloc[i]) for i in (0, 1, 3, 4)]
+    bullish = all(middle_low < value for value in others_low)
+    bearish = all(middle_high > value for value in others_high)
+    direction = "bullish" if bullish else "bearish" if bearish else "neutral"
+    value = middle_low if bullish else middle_high if bearish else float(window["close"].iloc[-1])
+    return value, direction, {"middle_low": middle_low, "middle_high": middle_high, "bullish_fractal": bullish, "bearish_fractal": bearish}
+
+
+def _heikin_ashi(df: pd.DataFrame):
+    ha_close = (df["open"] + df["high"] + df["low"] + df["close"]) / 4
+    ha_open_values = [float((df["open"].iloc[0] + df["close"].iloc[0]) / 2)]
+    for i in range(1, len(df)):
+        ha_open_values.append((ha_open_values[-1] + float(ha_close.iloc[i - 1])) / 2)
+    ha_open = pd.Series(ha_open_values, index=df.index)
+    ha_high = pd.concat([df["high"], ha_open, ha_close], axis=1).max(axis=1)
+    ha_low = pd.concat([df["low"], ha_open, ha_close], axis=1).min(axis=1)
+    return ha_open, ha_high, ha_low, ha_close
+
+
+def _pat_heikinashi(df):
+    if len(df) < 2:
+        return None, "neutral", {"reason": "insufficient_bars"}
+    ha_open, ha_high, ha_low, ha_close = _heikin_ashi(df)
+    o = float(ha_open.iloc[-1])
+    h = float(ha_high.iloc[-1])
+    l = float(ha_low.iloc[-1])
+    c = float(ha_close.iloc[-1])
+    tol = max(abs(h - l) * 1e-6, 1e-9)
+    bullish_body = c > o
+    bearish_body = c < o
+    no_lower_shadow = abs(l - min(o, c)) <= tol
+    no_upper_shadow = abs(h - max(o, c)) <= tol
+    direction = "neutral"
+    if bullish_body and no_lower_shadow:
+        direction = "bullish"
+    elif bearish_body and no_upper_shadow:
+        direction = "bearish"
+    return c, direction, {"ha_open": o, "ha_high": h, "ha_low": l, "ha_close": c}
+
+
+def _pat_candle_pattern(df):
+    if len(df) < 2:
+        return None, "neutral", {"reason": "insufficient_bars"}
+    last = df.iloc[-1]
+    prev = df.iloc[-2]
+    o, h, l, c = float(last["open"]), float(last["high"]), float(last["low"]), float(last["close"])
+    po, pc = float(prev["open"]), float(prev["close"])
+    body = abs(c - o)
+    range_ = max(h - l, 1e-9)
+    upper_shadow = h - max(o, c)
+    lower_shadow = min(o, c) - l
+
+    detected = []
+    direction = "neutral"
+
+    if body / range_ <= 0.1:
+        detected.append("doji")
+    if c > o and lower_shadow >= 2 * body and upper_shadow <= body:
+        detected.append("hammer")
+        direction = "bullish"
+    if c < o and upper_shadow >= 2 * body and lower_shadow <= body:
+        detected.append("shooting_star")
+        direction = "bearish"
+    if c > o and pc < po and c >= po and o <= pc:
+        detected.append("bullish_engulfing")
+        direction = "bullish"
+    if c < o and pc > po and c <= po and o >= pc:
+        detected.append("bearish_engulfing")
+        direction = "bearish"
+    if c < o and pc > po and c < po and c > (po + pc) / 2 and o < pc:
+        detected.append("dark_cloud_cover")
+        direction = "bearish"
+    if c > o and pc < po and c > po and c < (po + pc) / 2 and o > pc:
+        detected.append("piercing_line")
+        direction = "bullish"
+
+    return body, direction, {"patterns": detected, "body": body, "range": range_}
+
+
+def _pat_bw_mfi(df):
+    if len(df) < 2:
+        return None, "neutral", {"reason": "insufficient_bars"}
+    spread = (df["high"] - df["low"]).replace(0, math.nan)
+    mfi_series = spread / df["volume"].replace(0, math.nan)
+    mfi = float(mfi_series.iloc[-1]) if pd.notna(mfi_series.iloc[-1]) else None
+    prev_mfi = float(mfi_series.iloc[-2]) if pd.notna(mfi_series.iloc[-2]) else None
+    volume = float(df["volume"].iloc[-1])
+    prev_volume = float(df["volume"].iloc[-2])
+    if mfi is None or prev_mfi is None:
+        return None, "neutral", {"reason": "insufficient_bars"}
+    mfi_up = mfi > prev_mfi
+    vol_up = volume > prev_volume
+    if mfi_up and vol_up:
+        color = "green"
+    elif not mfi_up and not vol_up:
+        color = "fade"
+    elif mfi_up and not vol_up:
+        color = "fake"
+    else:
+        color = "squat"
+    close = float(df["close"].iloc[-1])
+    open_ = float(df["open"].iloc[-1])
+    direction = "neutral"
+    if color == "green":
+        direction = "bullish" if close >= open_ else "bearish"
+    return mfi, direction, {"color": color, "mfi": mfi, "previous_mfi": prev_mfi, "volume": volume}
+
+
+def _pat_renko(df):
+    if len(df) < 15:
+        return None, "neutral", {"reason": "insufficient_bars"}
+    atr = _last(_atr(df, 14))
+    if atr is None or atr <= 0:
+        return None, "neutral", {"reason": "no_brick_size"}
+    brick_size = float(atr)
+    closes = df["close"].astype(float).tolist()
+    last_brick_close = closes[0]
+    last_direction = 0
+    bricks = 0
+    for price in closes[1:]:
+        diff = price - last_brick_close
+        if last_direction >= 0 and diff >= brick_size:
+            count = int(diff // brick_size)
+            last_brick_close += count * brick_size
+            last_direction = 1
+            bricks += count
+        elif last_direction <= 0 and -diff >= brick_size:
+            count = int((-diff) // brick_size)
+            last_brick_close -= count * brick_size
+            last_direction = -1
+            bricks += count
+        elif last_direction == 1 and -diff >= 2 * brick_size:
+            count = int((-diff) // brick_size)
+            last_brick_close -= count * brick_size
+            last_direction = -1
+            bricks += count
+        elif last_direction == -1 and diff >= 2 * brick_size:
+            count = int(diff // brick_size)
+            last_brick_close += count * brick_size
+            last_direction = 1
+            bricks += count
+    direction = "bullish" if last_direction > 0 else "bearish" if last_direction < 0 else "neutral"
+    return last_brick_close, direction, {"brick_size": brick_size, "bricks": bricks, "brick_direction": last_direction}
+
+
+def _pat_pnf(df):
+    if len(df) < 15:
+        return None, "neutral", {"reason": "insufficient_bars"}
+    atr = _last(_atr(df, 14))
+    if atr is None or atr <= 0:
+        return None, "neutral", {"reason": "no_box_size"}
+    box_size = float(atr)
+    reversal = 3
+    closes = df["close"].astype(float).tolist()
+    column = 0  # 1 = X, -1 = O
+    extreme = closes[0]
+    for price in closes[1:]:
+        if column == 0:
+            if price - extreme >= box_size:
+                column = 1
+                extreme = price
+            elif extreme - price >= box_size:
+                column = -1
+                extreme = price
+        elif column == 1:
+            if price > extreme:
+                extreme = price
+            elif extreme - price >= reversal * box_size:
+                column = -1
+                extreme = price
+        elif column == -1:
+            if price < extreme:
+                extreme = price
+            elif price - extreme >= reversal * box_size:
+                column = 1
+                extreme = price
+    direction = "bullish" if column == 1 else "bearish" if column == -1 else "neutral"
+    return extreme, direction, {"column": "X" if column == 1 else "O" if column == -1 else None, "box_size": box_size, "reversal": reversal}
+
+
+def _pat_kagi(df, reversal: float = 0.01):
+    if len(df) < 5:
+        return None, "neutral", {"reason": "insufficient_bars"}
+    closes = df["close"].astype(float).tolist()
+    direction = 0  # 1 = Yang, -1 = Yin
+    extreme = closes[0]
+    for price in closes[1:]:
+        if direction == 0:
+            if price >= extreme * (1 + reversal):
+                direction = 1
+                extreme = price
+            elif price <= extreme * (1 - reversal):
+                direction = -1
+                extreme = price
+        elif direction == 1:
+            if price > extreme:
+                extreme = price
+            elif price <= extreme * (1 - reversal):
+                direction = -1
+                extreme = price
+        elif direction == -1:
+            if price < extreme:
+                extreme = price
+            elif price >= extreme * (1 + reversal):
+                direction = 1
+                extreme = price
+    line_type = "yang" if direction == 1 else "yin" if direction == -1 else None
+    out_direction = "bullish" if direction == 1 else "bearish" if direction == -1 else "neutral"
+    return extreme, out_direction, {"line": line_type, "reversal": reversal}
+
+
+def _pat_tlb(df):
+    if len(df) < 4:
+        return None, "neutral", {"reason": "insufficient_bars"}
+    closes = df["close"].astype(float).tolist()
+    lines = [closes[0]]
+    direction = 0
+    for price in closes[1:]:
+        if len(lines) < 3:
+            if price > lines[-1]:
+                lines.append(price)
+                direction = 1
+            elif price < lines[-1]:
+                lines.append(price)
+                direction = -1
+            continue
+        recent = lines[-3:]
+        recent_high = max(recent)
+        recent_low = min(recent)
+        if direction >= 0 and price > recent_high:
+            lines.append(price)
+            direction = 1
+        elif direction <= 0 and price < recent_low:
+            lines.append(price)
+            direction = -1
+        elif direction == 1 and price < recent_low:
+            lines.append(price)
+            direction = -1
+        elif direction == -1 and price > recent_high:
+            lines.append(price)
+            direction = 1
+    out_direction = "bullish" if direction == 1 else "bearish" if direction == -1 else "neutral"
+    return lines[-1], out_direction, {"line_count": len(lines), "line_direction": direction}
+
+
+def _rei_series(df: pd.DataFrame, length: int = 8) -> pd.Series:
+    high = df["high"].astype(float)
+    low = df["low"].astype(float)
+    close = df["close"].astype(float)
+    n1 = high - high.shift(2)
+    n2 = low - low.shift(2)
+    cond_high = ((high.shift(2) > close.shift(7)) | (high.shift(2) > close.shift(8))) & (
+        (high > low.shift(5)) | (high > low.shift(6))
+    )
+    cond_low = ((low.shift(2) < close.shift(7)) | (low.shift(2) < close.shift(8))) & (
+        (low < high.shift(5)) | (low < high.shift(6))
+    )
+    s = pd.Series(0.0, index=df.index)
+    s = s.where(~(cond_high | cond_low), n1 + n2)
+    numerator = s.rolling(length, min_periods=length).sum()
+    denominator = (n1.abs() + n2.abs()).rolling(length, min_periods=length).sum()
+    return numerator / denominator.replace(0, math.nan) * 100
+
+
+def _pat_rei_pattern(df):
+    if len(df) < 20:
+        return None, "neutral", {"reason": "insufficient_bars"}
+    rei = _rei_series(df, 8)
+    value = _last(rei)
+    prev = _prev(rei)
+    direction = "neutral"
+    if value is not None and prev is not None:
+        if prev <= -60 and value > -60:
+            direction = "bullish"
+        elif prev >= 60 and value < 60:
+            direction = "bearish"
+    return value, direction, {"rei": value, "previous": prev}
+
+
+PATTERN_SPECS = {
+    "fractals": IndicatorSpec("fractals", "pattern", _pat_fractals),
+    "heikinashi": IndicatorSpec("heikinashi", "pattern", _pat_heikinashi),
+    "candle_pattern": IndicatorSpec("candle_pattern", "pattern", _pat_candle_pattern),
+    "bw_mfi": IndicatorSpec("bw_mfi", "pattern", _pat_bw_mfi),
+    "renko": IndicatorSpec("renko", "pattern", _pat_renko),
+    "pnf": IndicatorSpec("pnf", "pattern", _pat_pnf),
+    "kagi": IndicatorSpec("kagi", "pattern", _pat_kagi),
+    "tlb": IndicatorSpec("tlb", "pattern", _pat_tlb),
+    "rei_pattern": IndicatorSpec("rei_pattern", "pattern", _pat_rei_pattern),
+}
