@@ -1,0 +1,375 @@
+import logging
+import os
+import uuid
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from decimal import Decimal, ROUND_HALF_UP
+from typing import Optional
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from models.pattern import PaperTraderRule, Pattern
+from models.price_bar import PriceBar, Timeframe
+from models.trade import Direction, OrderState, OrderType, PaperMode, Trade
+from schemas.market_tick import MarketTickSchema
+from services.indicators.common import (
+    CYCLE_SPECS,
+    MOMENTUM_SPECS,
+    PATTERN_SPECS,
+    SR_SPECS,
+    TREND_SPECS,
+    VOLATILITY_SPECS,
+    VOLUME_SPECS,
+    IndicatorSpec,
+    _atr,
+    _to_frame,
+)
+
+logger = logging.getLogger(__name__)
+
+PAPER_TRADER_ENABLED = os.getenv("PAPER_TRADER_ENABLED", "1") == "1"
+CACHE_TTL_SECONDS = int(os.getenv("PAPER_TRADER_CACHE_TTL", 3600))
+DEFAULT_TIMEFRAME = "H1"
+BAR_LOOKBACK_LIMIT = 300
+DEFAULT_VOLUME = Decimal("0.10")
+XAUUSD_CONTRACT_SIZE = Decimal("100")
+SL_ATR_MULTIPLIER = Decimal("1.5")
+ATR_LENGTH = 14
+
+ALL_SPECS: dict[str, IndicatorSpec] = {
+    **TREND_SPECS,
+    **MOMENTUM_SPECS,
+    **VOLUME_SPECS,
+    **VOLATILITY_SPECS,
+    **SR_SPECS,
+    **PATTERN_SPECS,
+    **CYCLE_SPECS,
+}
+
+
+@dataclass
+class _RuleSnapshot:
+    rule_id: uuid.UUID
+    pattern_id: uuid.UUID
+    indicator_slugs: list[str]
+    timeframe: str
+
+
+_rule_cache: list[_RuleSnapshot] = []
+_cache_refreshed_at: Optional[datetime] = None
+
+
+def reset_cache() -> None:
+    global _rule_cache, _cache_refreshed_at
+    _rule_cache = []
+    _cache_refreshed_at = None
+
+
+def _cache_valid(now: datetime) -> bool:
+    if _cache_refreshed_at is None:
+        return False
+    return (now - _cache_refreshed_at).total_seconds() < CACHE_TTL_SECONDS
+
+
+async def load_active_rules(
+    session: AsyncSession, now: Optional[datetime] = None
+) -> list[_RuleSnapshot]:
+    global _rule_cache, _cache_refreshed_at
+    now = now or datetime.now(timezone.utc)
+    if _cache_valid(now):
+        return _rule_cache
+
+    result = await session.execute(
+        select(PaperTraderRule, Pattern)
+        .join(Pattern, PaperTraderRule.pattern_id == Pattern.id)
+        .where(PaperTraderRule.status == "active")
+    )
+    snapshots: list[_RuleSnapshot] = []
+    for rule, pattern in result.all():
+        snapshots.append(
+            _RuleSnapshot(
+                rule_id=rule.id,
+                pattern_id=pattern.id,
+                indicator_slugs=list(pattern.indicator_slugs),
+                timeframe=pattern.timeframe or DEFAULT_TIMEFRAME,
+            )
+        )
+    _rule_cache = snapshots
+    _cache_refreshed_at = now
+    return _rule_cache
+
+
+async def _fetch_bars(
+    session: AsyncSession, symbol: str, timeframe: str, until: datetime
+) -> list[PriceBar]:
+    tf = Timeframe(timeframe)
+    result = await session.execute(
+        select(PriceBar)
+        .where(
+            PriceBar.symbol == symbol,
+            PriceBar.timeframe == tf,
+            PriceBar.time <= until,
+        )
+        .order_by(PriceBar.time.desc())
+        .limit(BAR_LOOKBACK_LIMIT)
+    )
+    return list(reversed(result.scalars().all()))
+
+
+def _compute(slug: str, bars: list[PriceBar]) -> tuple[Optional[float], str, dict]:
+    spec = ALL_SPECS.get(slug)
+    if spec is None or not bars:
+        return None, "neutral", {"reason": "missing_spec_or_bars"}
+    return spec.compute(_to_frame(bars))
+
+
+def _consensus_direction(directions: list[str]) -> Optional[Direction]:
+    if not directions or any(d == "neutral" for d in directions):
+        return None
+    if all(d == "bullish" for d in directions):
+        return Direction.buy
+    if all(d == "bearish" for d in directions):
+        return Direction.sell
+    return None
+
+
+def _compute_tp(
+    direction: Direction, entry: Decimal, bars: list[PriceBar], atr: Optional[Decimal]
+) -> Optional[Decimal]:
+    spec = SR_SPECS.get("pivot_std")
+    if spec is None or not bars:
+        return None
+    _, _, metadata = spec.compute(_to_frame(bars))
+    levels = {k: Decimal(str(v)) for k, v in metadata.items() if k in ("r1", "r2", "s1", "s2")}
+    if direction == Direction.buy:
+        candidates = [v for k, v in levels.items() if k.startswith("r") and v > entry]
+        if candidates:
+            return min(candidates)
+    else:
+        candidates = [v for k, v in levels.items() if k.startswith("s") and v < entry]
+        if candidates:
+            return max(candidates)
+    if atr is None:
+        return None
+    return entry + atr * 2 if direction == Direction.buy else entry - atr * 2
+
+
+def _compute_atr(bars: list[PriceBar]) -> Optional[Decimal]:
+    if len(bars) < ATR_LENGTH + 1:
+        return None
+    df = _to_frame(bars)
+    series = _atr(df, ATR_LENGTH).dropna()
+    if series.empty:
+        return None
+    return Decimal(str(float(series.iloc[-1])))
+
+
+def _compute_sl(direction: Direction, entry: Decimal, atr: Decimal) -> Decimal:
+    offset = atr * SL_ATR_MULTIPLIER
+    return entry - offset if direction == Direction.buy else entry + offset
+
+
+def _quantize(value: Decimal) -> Decimal:
+    return value.quantize(Decimal("0.00001"), rounding=ROUND_HALF_UP)
+
+
+def _first_momentum_slug(slugs: list[str]) -> Optional[str]:
+    for slug in slugs:
+        spec = ALL_SPECS.get(slug)
+        if spec is not None and spec.group == "momentum":
+            return slug
+    return None
+
+
+async def _has_open_paper_for_rule(
+    session: AsyncSession, rule_id: uuid.UUID
+) -> bool:
+    result = await session.execute(
+        select(Trade.id).where(
+            Trade.is_paper.is_(True),
+            Trade.paper_mode == PaperMode.independent,
+            Trade.close_time.is_(None),
+            Trade.recovery_plan["paper_trader_rule_id"].as_string() == str(rule_id),
+        )
+    )
+    return result.first() is not None
+
+
+async def _open_papers_for_rules(
+    session: AsyncSession, rule_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, Trade]:
+    if not rule_ids:
+        return {}
+    result = await session.execute(
+        select(Trade).where(
+            Trade.is_paper.is_(True),
+            Trade.paper_mode == PaperMode.independent,
+            Trade.close_time.is_(None),
+        )
+    )
+    trades = result.scalars().all()
+    by_rule: dict[uuid.UUID, Trade] = {}
+    rule_id_strs = {str(rid) for rid in rule_ids}
+    for t in trades:
+        plan = t.recovery_plan or {}
+        rid_str = plan.get("paper_trader_rule_id")
+        if rid_str in rule_id_strs:
+            by_rule[uuid.UUID(rid_str)] = t
+    return by_rule
+
+
+def _paper_profit(
+    trade: Trade, exit_price: Decimal
+) -> Optional[Decimal]:
+    if trade.open_price is None or trade.volume is None or trade.direction is None:
+        return None
+    if trade.direction == Direction.buy:
+        raw = (exit_price - trade.open_price) * trade.volume * XAUUSD_CONTRACT_SIZE
+    else:
+        raw = (trade.open_price - exit_price) * trade.volume * XAUUSD_CONTRACT_SIZE
+    return raw.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+async def _check_entries(
+    session: AsyncSession,
+    tick: MarketTickSchema,
+    rules: list[_RuleSnapshot],
+    bars_by_tf: dict[str, list[PriceBar]],
+    open_by_rule: dict[uuid.UUID, Trade],
+) -> list[Trade]:
+    opened: list[Trade] = []
+    rules_by_id = {r.pattern_id: r for r in rules}
+    for rule in rules:
+        if rule.rule_id in open_by_rule:
+            continue
+        bars = bars_by_tf.get(rule.timeframe) or bars_by_tf.get(DEFAULT_TIMEFRAME)
+        if not bars:
+            continue
+        directions: list[str] = []
+        for slug in rule.indicator_slugs:
+            _, direction, _ = _compute(slug, bars)
+            directions.append(direction)
+        direction = _consensus_direction(directions)
+        if direction is None:
+            continue
+        entry = (tick.ask if direction == Direction.buy else tick.bid)
+        atr = _compute_atr(bars)
+        if atr is None:
+            continue
+        sl = _quantize(_compute_sl(direction, entry, atr))
+        tp_raw = _compute_tp(direction, entry, bars, atr)
+        if tp_raw is None:
+            continue
+        tp = _quantize(tp_raw)
+        trade = Trade(
+            ticket=int(tick.timestamp.timestamp() * 1000) % 1_000_000_000_000
+            + abs(hash(rule.rule_id)) % 1000,
+            symbol=tick.symbol,
+            direction=direction,
+            order_type=OrderType.market,
+            order_state=OrderState.filled,
+            open_time=tick.timestamp,
+            fill_time=tick.timestamp,
+            open_price=entry,
+            volume=DEFAULT_VOLUME,
+            tp=tp,
+            sl=sl,
+            is_paper=True,
+            paper_mode=PaperMode.independent,
+            recovery_plan={"paper_trader_rule_id": str(rule.rule_id)},
+            account_id=tick.account_id,
+        )
+        session.add(trade)
+        await session.flush()
+        rule_row = await session.get(PaperTraderRule, rule.rule_id)
+        if rule_row is not None:
+            rule_row.total_trades += 1
+        opened.append(trade)
+        open_by_rule[rule.rule_id] = trade
+    _ = rules_by_id
+    return opened
+
+
+async def _check_exits(
+    session: AsyncSession,
+    tick: MarketTickSchema,
+    rules: list[_RuleSnapshot],
+    bars_by_tf: dict[str, list[PriceBar]],
+    open_by_rule: dict[uuid.UUID, Trade],
+) -> list[Trade]:
+    rules_by_id = {r.rule_id: r for r in rules}
+    closed: list[Trade] = []
+
+    for rule_id, trade in list(open_by_rule.items()):
+        rule = rules_by_id.get(rule_id)
+        if rule is None or trade.direction is None:
+            continue
+
+        exit_price: Optional[Decimal] = None
+        reason: Optional[str] = None
+        is_win = False
+
+        if trade.direction == Direction.buy:
+            if trade.tp is not None and tick.bid >= trade.tp:
+                exit_price, reason, is_win = trade.tp, "tp", True
+            elif trade.sl is not None and tick.bid <= trade.sl:
+                exit_price, reason = trade.sl, "sl"
+        else:
+            if trade.tp is not None and tick.ask <= trade.tp:
+                exit_price, reason, is_win = trade.tp, "tp", True
+            elif trade.sl is not None and tick.ask >= trade.sl:
+                exit_price, reason = trade.sl, "sl"
+
+        if exit_price is None:
+            momentum_slug = _first_momentum_slug(rule.indicator_slugs)
+            if momentum_slug is not None:
+                bars = bars_by_tf.get(rule.timeframe) or bars_by_tf.get(DEFAULT_TIMEFRAME)
+                if bars:
+                    _, mdir, _ = _compute(momentum_slug, bars)
+                    if (trade.direction == Direction.buy and mdir == "bearish") or (
+                        trade.direction == Direction.sell and mdir == "bullish"
+                    ):
+                        exit_price = tick.bid if trade.direction == Direction.buy else tick.ask
+                        reason = "momentum_flip"
+                        is_win = _paper_profit(trade, exit_price) and _paper_profit(trade, exit_price) > 0
+
+        if exit_price is None:
+            continue
+
+        trade.close_price = exit_price
+        trade.close_time = tick.timestamp
+        trade.profit = _paper_profit(trade, exit_price)
+        trade.paper_exit_reason = reason
+        rule_row = await session.get(PaperTraderRule, rule_id)
+        if rule_row is not None and is_win:
+            rule_row.win_count += 1
+        closed.append(trade)
+        del open_by_rule[rule_id]
+
+    return closed
+
+
+async def run_paper_trader(
+    session: AsyncSession, tick: MarketTickSchema
+) -> dict:
+    if not PAPER_TRADER_ENABLED:
+        return {"opened": 0, "closed": 0, "skipped": "disabled"}
+
+    rules = await load_active_rules(session, tick.timestamp)
+    if not rules:
+        return {"opened": 0, "closed": 0}
+
+    timeframes = {rule.timeframe for rule in rules}
+    bars_by_tf: dict[str, list[PriceBar]] = {}
+    for tf in timeframes:
+        bars_by_tf[tf] = await _fetch_bars(session, tick.symbol, tf, tick.timestamp)
+
+    open_by_rule = await _open_papers_for_rules(session, [r.rule_id for r in rules])
+    closed = await _check_exits(session, tick, rules, bars_by_tf, open_by_rule)
+    opened = await _check_entries(session, tick, rules, bars_by_tf, open_by_rule)
+
+    if opened or closed:
+        await session.commit()
+
+    return {"opened": len(opened), "closed": len(closed)}

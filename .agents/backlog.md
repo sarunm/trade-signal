@@ -65,7 +65,7 @@ assumptions: <ถ้ามี หรือ none>
 | 8–12 | Indicator tasks: Volume✅/Volatility✅/S&R✅/Pattern✅/Cycle✅ (142/142) | codex/claude | 🔵 low | done |
 | BUG-1 | [BUG] Trade direction always wrong — EA sends ENTRY_OUT deal type | claude | 🔴 high | done |
 | 13 | Pattern Discovery Engine (Phase 3) | claude | 🟢 normal | done |
-| 14 | Auto Paper Trader (Phase 4) | codex | 🟢 normal | pending |
+| 14 | Auto Paper Trader (Phase 4) | claude | 🟢 normal | done |
 
 **Indicator tasks:** ดู [`.agents/indicators/`](.agents/indicators/README.md) — 1 indicator 1 task
 
