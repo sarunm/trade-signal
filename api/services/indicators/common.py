@@ -66,6 +66,7 @@ def _to_frame(bars: Sequence[PriceBar]) -> pd.DataFrame:
             "low": [float(bar.low) for bar in bars],
             "close": [float(bar.close) for bar in bars],
             "volume": [float(bar.volume or 0) for bar in bars],
+            "time": [bar.time for bar in bars],
         }
     )
 
@@ -926,4 +927,232 @@ MOMENTUM_SPECS = {
     "cdmi": IndicatorSpec("cdmi", "momentum", _mom_cdmi),
     "rainbow": IndicatorSpec("rainbow", "momentum", _mom_rainbow),
     "gann_swing": IndicatorSpec("gann_swing", "momentum", _mom_gann_swing),
+}
+
+
+def _volume_price_direction(df):
+    close = _last(df["close"])
+    prev_close = _prev(df["close"])
+    open_ = _last(df["open"])
+    reference = prev_close if prev_close is not None else open_
+    return _above_below(close, reference)
+
+
+def _money_flow_volume(df):
+    spread = (df["high"] - df["low"]).replace(0, math.nan)
+    multiplier = ((df["close"] - df["low"]) - (df["high"] - df["close"])) / spread
+    return multiplier.fillna(0) * df["volume"]
+
+
+def _vol_obv(df):
+    signs = df["close"].diff().apply(lambda value: 1 if value > 0 else -1 if value < 0 else 0)
+    obv = (signs * df["volume"]).cumsum()
+    signal = _ema(obv, 20)
+    value = _last(obv)
+    return value, _above_below(value, _last(signal)), {"ema": _last(signal)}
+
+
+def _vol_vwap(df):
+    typical = (df["high"] + df["low"] + df["close"]) / 3
+    if "time" in df:
+        session = pd.to_datetime(df["time"]).dt.date
+        cumulative_value = (typical * df["volume"]).groupby(session).cumsum()
+        cumulative_volume = df["volume"].groupby(session).cumsum()
+    else:
+        cumulative_value = (typical * df["volume"]).cumsum()
+        cumulative_volume = df["volume"].cumsum()
+    vwap = cumulative_value / cumulative_volume.replace(0, math.nan)
+    value = _last(vwap)
+    return value, _above_below(_last(df["close"]), value), {"close": _last(df["close"])}
+
+
+def _vol_avwap(df):
+    typical = (df["high"] + df["low"] + df["close"]) / 3
+    window = min(len(df), 100)
+    anchored_tp = typical.tail(window)
+    anchored_vol = df["volume"].tail(window)
+    value = float((anchored_tp * anchored_vol).sum() / anchored_vol.sum()) if anchored_vol.sum() else None
+    return value, _above_below(_last(df["close"]), value), {"anchor_bars": window, "close": _last(df["close"])}
+
+
+def _vol_ad(df):
+    ad = _money_flow_volume(df).cumsum()
+    value = _last(ad)
+    prev = _prev(ad)
+    return value, _above_below(value, prev), {"previous": prev}
+
+
+def _vol_cmf(df):
+    mfv = _money_flow_volume(df)
+    cmf = mfv.rolling(20, min_periods=20).sum() / df["volume"].rolling(20, min_periods=20).sum().replace(0, math.nan)
+    value = _last(cmf)
+    return value, _direction(value, lambda v: v > 0, lambda v: v < 0), {"cmf": value}
+
+
+def _vol_chaikin_osc(df):
+    ad = _money_flow_volume(df).cumsum()
+    osc = _ema(ad, 3) - _ema(ad, 10)
+    value = _last(osc)
+    return value, _direction(value, lambda v: v > 0, lambda v: v < 0), {"oscillator": value}
+
+
+def _vol_mfi(df):
+    typical = (df["high"] + df["low"] + df["close"]) / 3
+    raw_flow = typical * df["volume"]
+    positive = raw_flow.where(typical.diff() > 0, 0)
+    negative = raw_flow.where(typical.diff() < 0, 0)
+    ratio = positive.rolling(14, min_periods=14).sum() / negative.rolling(14, min_periods=14).sum().replace(0, math.nan)
+    mfi = 100 - (100 / (1 + ratio))
+    value = _last(mfi.fillna(100).where(negative.rolling(14, min_periods=14).sum() != 0, 100))
+    return value, _direction(value, lambda v: v < 20, lambda v: v > 80), {"mfi": value}
+
+
+def _vol_vpt(df):
+    pct = df["close"].pct_change().fillna(0)
+    vpt = (df["volume"] * pct).cumsum()
+    signal = _ema(vpt, 20)
+    value = _last(vpt)
+    return value, _above_below(value, _last(signal)), {"ema": _last(signal)}
+
+
+def _vol_kvo(df):
+    typical = df["high"] + df["low"] + df["close"]
+    trend = typical.diff().apply(lambda value: 1 if value > 0 else -1 if value < 0 else 0)
+    volume_force = df["volume"] * trend
+    kvo = _ema(volume_force, 34) - _ema(volume_force, 55)
+    signal = _ema(kvo, 13)
+    value = _last(kvo)
+    return value, _above_below(value, _last(signal)), {"signal": _last(signal)}
+
+
+def _vol_eom(df):
+    midpoint_move = ((df["high"] + df["low"]) / 2).diff()
+    box_ratio = df["volume"] / (df["high"] - df["low"]).replace(0, math.nan)
+    eom = _sma(midpoint_move / box_ratio.replace(0, math.nan), 14)
+    value = _last(eom)
+    return value, _direction(value, lambda v: v > 0, lambda v: v < 0), {"eom": value}
+
+
+def _volume_index(df, use_positive_volume):
+    values = [1000.0]
+    for i in range(1, len(df)):
+        volume_condition = df["volume"].iloc[i] > df["volume"].iloc[i - 1]
+        if volume_condition == use_positive_volume:
+            change = (df["close"].iloc[i] - df["close"].iloc[i - 1]) / df["close"].iloc[i - 1]
+            values.append(values[-1] + change * values[-1])
+        else:
+            values.append(values[-1])
+    return pd.Series(values, index=df.index)
+
+
+def _vol_pvi(df):
+    pvi = _volume_index(df, True)
+    signal = _ema(pvi, 255)
+    value = _last(pvi)
+    return value, _above_below(value, _last(signal)), {"signal": _last(signal)}
+
+
+def _vol_nvi(df):
+    nvi = _volume_index(df, False)
+    signal = _ema(nvi, 255)
+    value = _last(nvi)
+    return value, _above_below(value, _last(signal)), {"signal": _last(signal)}
+
+
+def _vol_vrsi(df):
+    value = _last(_rsi(df["volume"], 14))
+    price_direction = _volume_price_direction(df)
+    direction = price_direction if value is not None and value > 50 else "neutral"
+    return value, direction, {"price_direction": price_direction}
+
+
+def _vol_rvol(df):
+    avg_volume = _sma(df["volume"], 20)
+    value = _last(df["volume"] / avg_volume.replace(0, math.nan))
+    price_direction = _volume_price_direction(df)
+    direction = price_direction if value is not None and value > 1.5 else "neutral"
+    return value, direction, {"average_volume": _last(avg_volume)}
+
+
+def _vol_pvo(df):
+    slow = _ema(df["volume"], 26)
+    pvo = (_ema(df["volume"], 12) - slow) / slow.replace(0, math.nan) * 100
+    signal = _ema(pvo, 9)
+    value = _last(pvo)
+    price_direction = _volume_price_direction(df)
+    direction = price_direction if value is not None and value > 0 else "neutral"
+    return value, direction, {"signal": _last(signal), "histogram": value - (_last(signal) or 0) if value is not None else None}
+
+
+def _vol_tvi(df):
+    typical = (df["high"] + df["low"] + df["close"]) / 3
+    signs = typical.diff().apply(lambda value: 1 if value > 0 else -1 if value < 0 else 0)
+    tvi = (signs * df["volume"]).cumsum()
+    value = _last(tvi)
+    prev = _prev(tvi)
+    return value, _above_below(value, prev), {"previous": prev}
+
+
+def _vol_vol_profile(df):
+    prices = df["close"]
+    bins = min(20, max(4, len(df) // 10))
+    bucket = pd.cut(prices, bins=bins, duplicates="drop")
+    volume_by_bucket = df.groupby(bucket, observed=False)["volume"].sum()
+    if volume_by_bucket.empty:
+        return None, "neutral", {"reason": "no_profile"}
+    poc_interval = volume_by_bucket.idxmax()
+    poc = float((poc_interval.left + poc_interval.right) / 2)
+    ordered = volume_by_bucket.sort_index()
+    cumulative = ordered.cumsum() / ordered.sum()
+    val_interval = cumulative[cumulative >= 0.15].index[0]
+    vah_interval = cumulative[cumulative >= 0.85].index[0]
+    val = float((val_interval.left + val_interval.right) / 2)
+    vah = float((vah_interval.left + vah_interval.right) / 2)
+    close = _last(df["close"])
+    direction = "neutral"
+    if close is not None:
+        if close <= val:
+            direction = "bullish"
+        elif close >= vah:
+            direction = "bearish"
+    return poc, direction, {"poc": poc, "vah": vah, "val": val, "close": close}
+
+
+def _vol_smi_vol(df):
+    session_move = df["close"] - df["open"]
+    smi = session_move.rolling(5, min_periods=5).sum()
+    value = _last(smi)
+    prev = _prev(smi)
+    return value, _above_below(value, prev), {"previous": prev}
+
+
+def _vol_volume_raw(df):
+    avg_volume = _sma(df["volume"], 20)
+    value = _last(df["volume"])
+    spike = value is not None and _last(avg_volume) is not None and value > _last(avg_volume) * 2
+    candle_direction = _above_below(_last(df["close"]), _last(df["open"]))
+    direction = candle_direction if spike else "neutral"
+    return value, direction, {"average_volume": _last(avg_volume), "spike": spike}
+
+
+VOLUME_SPECS = {
+    "obv": IndicatorSpec("obv", "volume", _vol_obv),
+    "vwap": IndicatorSpec("vwap", "volume", _vol_vwap),
+    "avwap": IndicatorSpec("avwap", "volume", _vol_avwap),
+    "ad": IndicatorSpec("ad", "volume", _vol_ad),
+    "cmf": IndicatorSpec("cmf", "volume", _vol_cmf),
+    "chaikin_osc": IndicatorSpec("chaikin_osc", "volume", _vol_chaikin_osc),
+    "mfi": IndicatorSpec("mfi", "volume", _vol_mfi),
+    "vpt": IndicatorSpec("vpt", "volume", _vol_vpt),
+    "kvo": IndicatorSpec("kvo", "volume", _vol_kvo),
+    "eom": IndicatorSpec("eom", "volume", _vol_eom),
+    "pvi": IndicatorSpec("pvi", "volume", _vol_pvi),
+    "nvi": IndicatorSpec("nvi", "volume", _vol_nvi),
+    "vrsi": IndicatorSpec("vrsi", "volume", _vol_vrsi),
+    "rvol": IndicatorSpec("rvol", "volume", _vol_rvol),
+    "pvo": IndicatorSpec("pvo", "volume", _vol_pvo),
+    "tvi": IndicatorSpec("tvi", "volume", _vol_tvi),
+    "vol_profile": IndicatorSpec("vol_profile", "volume", _vol_vol_profile),
+    "smi_vol": IndicatorSpec("smi_vol", "volume", _vol_smi_vol),
+    "volume_raw": IndicatorSpec("volume_raw", "volume", _vol_volume_raw),
 }
