@@ -18,7 +18,7 @@ async def close_paper_trades_on_tick(
         select(Trade).where(
             Trade.symbol == tick.symbol,
             Trade.is_paper == True,
-            Trade.paper_mode == PaperMode.mirror,
+            Trade.paper_mode == PaperMode.independent,
             Trade.order_state == OrderState.filled,
             Trade.close_time.is_(None),
             Trade.close_price.is_(None),

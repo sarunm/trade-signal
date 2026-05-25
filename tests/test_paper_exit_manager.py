@@ -30,7 +30,7 @@ def _paper_trade(
         sl=Decimal(sl) if sl else None,
         open_time=datetime(2026, 5, 18, 10, 0, tzinfo=timezone.utc),
         is_paper=True,
-        paper_mode=PaperMode.mirror,
+        paper_mode=PaperMode.independent,
     )
 
 

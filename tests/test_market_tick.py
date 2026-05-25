@@ -31,7 +31,7 @@ async def test_market_tick_closes_matching_paper_trade_without_storing_tick(clie
         sl=Decimal("1945.00"),
         open_time=datetime(2026, 5, 18, 10, 0, tzinfo=timezone.utc),
         is_paper=True,
-        paper_mode=PaperMode.mirror,
+        paper_mode=PaperMode.independent,
     )
     db_session.add(paper)
     await db_session.commit()
