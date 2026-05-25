@@ -10,7 +10,7 @@ from sqlalchemy import select
 from database import get_session
 from models.account_snapshot import AccountSnapshot
 from models.trade import OrderState, Trade
-from schemas.account import AccountResponse, DailyPLResponse
+from schemas.account import AccountResponse, AccountSnapshotResponse, DailyPLResponse
 
 router = APIRouter(prefix="/api", tags=["account"])
 _ICT = timezone(timedelta(hours=7))
@@ -41,6 +41,26 @@ def _as_utc(dt: datetime) -> datetime:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)
+
+
+@router.get("/account-snapshots", response_model=List[AccountSnapshotResponse])
+async def get_account_snapshots(
+    days: int = Query(7, ge=1, le=90),
+    session: AsyncSession = Depends(get_session),
+):
+    account_id = await _current_account_id(session)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+
+    stmt = (
+        select(AccountSnapshot)
+        .where(AccountSnapshot.timestamp >= cutoff)
+        .order_by(AccountSnapshot.timestamp.desc())
+    )
+    if account_id is not None:
+        stmt = stmt.where(AccountSnapshot.account_id == account_id)
+
+    result = await session.execute(stmt)
+    return result.scalars().all()
 
 
 @router.get("/daily-pl", response_model=List[DailyPLResponse])

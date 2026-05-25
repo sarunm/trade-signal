@@ -59,7 +59,7 @@ assumptions: <ถ้ามี หรือ none>
 | 1 | Trader Profile MCP — Phase 1 | codex | 🟢 normal | done |
 | 2 | Trade Advisor — entry scoring + recovery map + live zone alerts | agy | 🟢 normal | done |
 | 3 | Migrate agent task system to file-per-task | claude | 🔵 low | pending |
-| 4 | Add missing MCP endpoints (account-snapshots, price-bars) | codex | 🔵 low | pending |
+| 4 | Add missing MCP endpoints (account-snapshots, price-bars) | claude | 🔵 low | done |
 | 5 | Indicator Engine Infrastructure | codex | 🟢 normal | done |
 | 6–7 | Indicator tasks: Trend (29) + Momentum (39) | codex | 🟢 normal | done |
 | 8–12 | Indicator tasks: Volume✅/Volatility✅/S&R✅/Pattern✅/Cycle✅ (142/142) | codex/claude | 🔵 low | done |

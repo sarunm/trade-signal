@@ -17,6 +17,18 @@ class AccountResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class AccountSnapshotResponse(BaseModel):
+    timestamp: datetime
+    equity: Decimal
+    balance: Decimal
+    margin: Decimal
+    free_margin: Decimal
+    floating_pl: Decimal
+    account_id: Optional[int] = None
+
+    model_config = {"from_attributes": True}
+
+
 class DailyPLResponse(BaseModel):
     date: date
     profit: Decimal

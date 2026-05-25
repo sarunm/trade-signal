@@ -42,4 +42,4 @@ The approved plan asks for 7 MCP tools. Two of those tools call `/api/account-sn
 **Suggestion (ถ้ามี):**
 Create follow-up tasks for query endpoints if Claude wants all 7 MCP tools to return useful data immediately.
 
-**Status:** open
+**Status:** resolved — Task #4 "Add missing MCP endpoints (account-snapshots, price-bars)" added to backlog, assignee: codex, priority: low
