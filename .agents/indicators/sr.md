@@ -1,6 +1,6 @@
 # Support / Resistance & Price Level Indicators — 18 Tasks
 
-**assignee:** (ว่าง — ใครหยิบได้) | **priority:** low | **group:** sr
+**assignee:** claude | **status:** done | **priority:** low | **group:** sr
 
 ทุก task block กับ **Indicator Engine Infrastructure**
 
