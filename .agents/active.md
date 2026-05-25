@@ -3,7 +3,7 @@
 Updated: 2026-05-25
 Current owner: codex
 Branch: codex/indicator-engine-infrastructure
-Last task commit: 49b1cee fix: align indicator engine with entry-time signals
+Last task commit: ae1c843 fix: align indicator engine with entry-time signals
 
 ## Current Goal
 
