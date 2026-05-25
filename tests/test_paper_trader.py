@@ -424,3 +424,65 @@ async def test_entry_uses_score_based_lot(session):
     if trades:
         # ought to be one of the tier values
         assert trades[0].volume in {Decimal("0.01"), Decimal("0.03"), Decimal("0.05"), Decimal("0.10")}
+
+
+@pytest.mark.asyncio
+async def test_basket_recovery_opens_second_trade(db_session, fake_specs):
+    fake_specs.setup(["rsi", "ema"])
+    fake_specs.state["slug_directions"] = {"rsi": "bullish", "ema": "bullish"}
+
+    await _seed_bars(db_session)
+    pattern = Pattern(
+        indicator_slugs=["rsi", "ema"],
+        timeframe="H1",
+        win_rate=0.7,
+        sample_count=100,
+        status="active",
+    )
+    db_session.add(pattern)
+    await db_session.flush()
+    rule = PaperTraderRule(
+        pattern_id=pattern.id,
+        mode="basket_5k",
+        status="active",
+        virtual_balance_start=Decimal("5000"),
+        virtual_balance_current=Decimal("5000"),
+        total_trades=10, win_count=7,
+    )
+    db_session.add(rule)
+    await db_session.commit()
+
+    open_time = datetime(2026, 5, 25, 11, 0, tzinfo=timezone.utc)  # 1.5h ago
+    existing = Trade(
+        ticket=999, symbol="XAUUSD",
+        direction=Direction.buy,
+        order_type=OrderType.market, order_state=OrderState.filled,
+        open_time=open_time, open_price=Decimal("1950.0"),
+        volume=Decimal("0.10"),
+        is_paper=True, paper_mode=PaperMode.independent,
+        recovery_plan={"paper_trader_rule_id": str(rule.id)},
+        paper_trader_rule_id=rule.id,
+        account_id=1,
+    )
+    db_session.add(existing)
+    await db_session.commit()
+
+    tick = MarketTickSchema(
+        symbol="XAUUSD",
+        bid=Decimal("1750.0"),  # huge loss
+        ask=Decimal("1750.30"),
+        timestamp=datetime(2026, 5, 25, 12, 30, tzinfo=timezone.utc),
+        account_id=1,
+    )
+    await run_paper_trader(db_session, tick)
+
+    paper_trades = (
+        await db_session.execute(
+            select(Trade).where(
+                Trade.is_paper.is_(True),
+                Trade.paper_trader_rule_id == rule.id,
+            )
+        )
+    ).scalars().all()
+    # Should now have at least 2 paper trades for this rule (original + recovery)
+    assert len(paper_trades) >= 2

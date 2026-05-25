@@ -272,7 +272,7 @@ async def _has_open_paper_for_rule(
 
 async def _open_papers_for_rules(
     session: AsyncSession, rule_ids: list[uuid.UUID]
-) -> dict[uuid.UUID, Trade]:
+) -> dict[uuid.UUID, list[Trade]]:
     if not rule_ids:
         return {}
     result = await session.execute(
@@ -283,13 +283,13 @@ async def _open_papers_for_rules(
         )
     )
     trades = result.scalars().all()
-    by_rule: dict[uuid.UUID, Trade] = {}
+    by_rule: dict[uuid.UUID, list[Trade]] = {}
     rule_id_strs = {str(rid) for rid in rule_ids}
     for t in trades:
         plan = t.recovery_plan or {}
         rid_str = plan.get("paper_trader_rule_id")
         if rid_str in rule_id_strs:
-            by_rule[uuid.UUID(rid_str)] = t
+            by_rule.setdefault(uuid.UUID(rid_str), []).append(t)
     return by_rule
 
 
@@ -310,13 +310,29 @@ async def _check_entries(
     tick: MarketTickSchema,
     rules: list[_RuleSnapshot],
     bars_by_tf: dict[str, list[PriceBar]],
-    open_by_rule: dict[uuid.UUID, Trade],
+    open_by_rule: dict[uuid.UUID, list[Trade]],
     cache: dict[tuple[str, str], tuple[Optional[float], str, dict]],
 ) -> list[Trade]:
     opened: list[Trade] = []
     for rule in rules:
-        if rule.rule_id in open_by_rule:
-            continue
+        existings = open_by_rule.get(rule.rule_id, [])
+        latest = existings[-1] if existings else None
+        if latest is not None:
+            from services.basket_recovery import should_open_recovery
+            rule_row = await session.get(PaperTraderRule, rule.rule_id)
+            balance = (
+                rule_row.virtual_balance_start if rule_row else Decimal("5000")
+            )
+            if not should_open_recovery(
+                existing=latest,
+                current_bid=tick.bid,
+                current_ask=tick.ask,
+                virtual_balance=balance,
+                now=tick.timestamp,
+                mode=rule.mode,
+            ):
+                continue
+            # else: fall through and open a recovery trade alongside `latest`
         bars = bars_by_tf.get(rule.timeframe) or bars_by_tf.get(DEFAULT_TIMEFRAME)
         if not bars:
             continue
@@ -369,7 +385,7 @@ async def _check_entries(
         if rule_row is not None:
             rule_row.total_trades += 1
         opened.append(trade)
-        open_by_rule[rule.rule_id] = trade
+        open_by_rule.setdefault(rule.rule_id, []).append(trade)
     return opened
 
 
@@ -417,66 +433,71 @@ async def _check_exits(
     tick: MarketTickSchema,
     rules: list[_RuleSnapshot],
     bars_by_tf: dict[str, list[PriceBar]],
-    open_by_rule: dict[uuid.UUID, Trade],
+    open_by_rule: dict[uuid.UUID, list[Trade]],
     cache: dict[tuple[str, str], tuple[Optional[float], str, dict]],
 ) -> list[Trade]:
     rules_by_id = {r.rule_id: r for r in rules}
     closed: list[Trade] = []
 
-    for rule_id, trade in list(open_by_rule.items()):
+    for rule_id, trades in list(open_by_rule.items()):
         rule = rules_by_id.get(rule_id)
-        if rule is None or trade.direction is None:
+        if rule is None:
             continue
+        for trade in list(trades):
+            if trade.direction is None:
+                continue
 
-        exit_price: Optional[Decimal] = None
-        reason: Optional[str] = None
-        is_win = False
+            exit_price: Optional[Decimal] = None
+            reason: Optional[str] = None
+            is_win = False
 
-        # SL/TP for strict only — basket modes have no SL
-        if rule.mode == "strict":
-            if trade.direction == Direction.buy:
-                if trade.tp is not None and tick.bid >= trade.tp:
-                    exit_price, reason, is_win = trade.tp, "tp", True
-                elif trade.sl is not None and tick.bid <= trade.sl:
-                    exit_price, reason = trade.sl, "sl"
+            # SL/TP for strict only — basket modes have no SL
+            if rule.mode == "strict":
+                if trade.direction == Direction.buy:
+                    if trade.tp is not None and tick.bid >= trade.tp:
+                        exit_price, reason, is_win = trade.tp, "tp", True
+                    elif trade.sl is not None and tick.bid <= trade.sl:
+                        exit_price, reason = trade.sl, "sl"
+                else:
+                    if trade.tp is not None and tick.ask <= trade.tp:
+                        exit_price, reason, is_win = trade.tp, "tp", True
+                    elif trade.sl is not None and tick.ask >= trade.sl:
+                        exit_price, reason = trade.sl, "sl"
             else:
-                if trade.tp is not None and tick.ask <= trade.tp:
+                # basket modes: TP only on touch, no SL
+                if trade.tp is not None and trade.direction == Direction.buy and tick.bid >= trade.tp:
                     exit_price, reason, is_win = trade.tp, "tp", True
-                elif trade.sl is not None and tick.ask >= trade.sl:
-                    exit_price, reason = trade.sl, "sl"
-        else:
-            # basket modes: TP only on touch, no SL
-            if trade.tp is not None and trade.direction == Direction.buy and tick.bid >= trade.tp:
-                exit_price, reason, is_win = trade.tp, "tp", True
-            elif trade.tp is not None and trade.direction == Direction.sell and tick.ask <= trade.tp:
-                exit_price, reason, is_win = trade.tp, "tp", True
+                elif trade.tp is not None and trade.direction == Direction.sell and tick.ask <= trade.tp:
+                    exit_price, reason, is_win = trade.tp, "tp", True
 
-        if exit_price is None:
-            momentum_slug = _first_momentum_slug(rule.indicator_slugs)
-            if momentum_slug is not None:
-                mdir = _cached_direction(cache, momentum_slug, rule.timeframe)
-                flipped = (
-                    (trade.direction == Direction.buy and mdir == "bearish")
-                    or (trade.direction == Direction.sell and mdir == "bullish")
-                )
-                if flipped:
-                    exit_price = tick.bid if trade.direction == Direction.buy else tick.ask
-                    reason = "momentum_flip"
-                    profit = _paper_profit(trade, exit_price)
-                    is_win = bool(profit and profit > 0)
+            if exit_price is None:
+                momentum_slug = _first_momentum_slug(rule.indicator_slugs)
+                if momentum_slug is not None:
+                    mdir = _cached_direction(cache, momentum_slug, rule.timeframe)
+                    flipped = (
+                        (trade.direction == Direction.buy and mdir == "bearish")
+                        or (trade.direction == Direction.sell and mdir == "bullish")
+                    )
+                    if flipped:
+                        exit_price = tick.bid if trade.direction == Direction.buy else tick.ask
+                        reason = "momentum_flip"
+                        profit = _paper_profit(trade, exit_price)
+                        is_win = bool(profit and profit > 0)
 
-        if exit_price is None:
-            continue
+            if exit_price is None:
+                continue
 
-        trade.close_price = exit_price
-        trade.close_time = tick.timestamp
-        trade.profit = _paper_profit(trade, exit_price)
-        trade.paper_exit_reason = reason
-        rule_row = await session.get(PaperTraderRule, rule_id)
-        if rule_row is not None and is_win:
-            rule_row.win_count += 1
-        closed.append(trade)
-        del open_by_rule[rule_id]
+            trade.close_price = exit_price
+            trade.close_time = tick.timestamp
+            trade.profit = _paper_profit(trade, exit_price)
+            trade.paper_exit_reason = reason
+            rule_row = await session.get(PaperTraderRule, rule_id)
+            if rule_row is not None and is_win:
+                rule_row.win_count += 1
+            closed.append(trade)
+            trades.remove(trade)
+        if not trades:
+            del open_by_rule[rule_id]
 
     return closed
 
