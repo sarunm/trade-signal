@@ -39,7 +39,7 @@ export default function FibPanel({ data, error, accountData }) {
     return (
       <div className="bg-gray-900 rounded-lg p-4 min-h-72">
         <div className="flex items-center gap-2 mb-3">
-          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Fibonacci (Weekly PP)</h2>
+          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Fibonacci (Daily PP)</h2>
           {error && <span className="text-xs text-red-400 ml-auto">Stale</span>}
         </div>
         <p className="text-sm text-gray-600">Waiting for EA data</p>
@@ -57,9 +57,9 @@ export default function FibPanel({ data, error, accountData }) {
   return (
     <div className="bg-gray-900 rounded-lg p-4 min-h-72">
       <div className="flex items-center gap-2 mb-3">
-        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Fibonacci (Weekly PP)</h2>
+        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Fibonacci (Daily PP)</h2>
         <span className="text-xs px-1.5 py-0.5 rounded font-mono bg-indigo-900 text-indigo-300">
-          Weekly
+          Daily
         </span>
         {error && <span className="text-xs text-red-400 ml-auto">Stale</span>}
       </div>
@@ -68,7 +68,7 @@ export default function FibPanel({ data, error, accountData }) {
         <span className="text-gray-500">PP <span className="text-gray-300 font-mono">{fmt(pp)}</span></span>
         <span className="text-gray-500">Range <span className="text-gray-300 font-mono">{fmt(range)} pts</span></span>
         <span className="text-gray-500">Prev Close <span className="text-gray-300 font-mono">{fmt(p_close)}</span></span>
-        <span className="text-gray-500">Week <span className="text-gray-300 font-mono">Previous</span></span>
+        <span className="text-gray-500">Day <span className="text-gray-300 font-mono">Previous</span></span>
       </div>
 
       <div className="space-y-0.5 font-mono text-xs">

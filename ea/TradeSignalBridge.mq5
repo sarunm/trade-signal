@@ -3,11 +3,11 @@
 //| Sends trade events and price bars to Trade Signal Partner API    |
 //+------------------------------------------------------------------+
 #property copyright "Trade Signal Partner"
-#property version   "1.04"
+#property version   "1.08"
 #property strict
 
 input string InpServerURL  = "http://127.0.0.1:8000";
-input string InpSymbol     = "GOLD";
+input string InpSymbol     = "GOLD#";
 input int    InpTimerSec   = 60;
 input int    InpMarketTickSec = 1;    // throttle bid/ask posts for paper exits
 input int    InpSyncDays   = 30;   // days of closed deal history to sync on startup
@@ -237,7 +237,7 @@ string F2(double v) { return DoubleToString(v, 2); }
 string BarJSON(ENUM_TIMEFRAMES tf)
 {
    MqlRates rates[];
-   if(CopyRates(InpSymbol, tf, 1, 1, rates) < 1) return "null";
+   if(CopyRates(InpSymbol, tf, 1, 1, rates) < 1) return "";
    return StringFormat(
       "{\"open\":%.5f,\"high\":%.5f,\"low\":%.5f,\"close\":%.5f,\"volume\":%.0f}",
       rates[0].open, rates[0].high, rates[0].low, rates[0].close, (double)rates[0].tick_volume
@@ -284,11 +284,12 @@ string OrderTypeStr(ENUM_ORDER_TYPE type)
    }
 }
 
-//--- ISO 8601 datetime
+//--- ISO 8601 datetime in UTC (broker time → UTC via TimeGMTOffset)
 string ISOTime(datetime t)
 {
+   datetime utc = (datetime)((long)t + TimeGMTOffset());
    MqlDateTime dt;
-   TimeToStruct(t, dt);
+   TimeToStruct(utc, dt);
    return StringFormat("%04d-%02d-%02dT%02d:%02d:%02dZ",
       dt.year, dt.mon, dt.day, dt.hour, dt.min, dt.sec);
 }
@@ -300,7 +301,7 @@ int OnInit()
 {
    // Tools → Options → Expert Advisors → Allow WebRequest for: http://127.0.0.1:8000
    EventSetTimer(InpTimerSec);
-   Print("TradeSignalBridge v1.02 started. Sending to: ", InpServerURL, " | Symbol: ", InpSymbol);
+   Print("TradeSignalBridge v1.08 started. Sending to: ", InpServerURL, " | Symbol: ", InpSymbol);
    CheckHealth();
    SyncOpenPositions();
    SyncHistoryDeals(InpSyncDays);
@@ -474,8 +475,14 @@ void SendPriceTick()
    ENUM_TIMEFRAMES tfs[] = {PERIOD_M5, PERIOD_M15, PERIOD_M30, PERIOD_H1, PERIOD_H4, PERIOD_D1, PERIOD_W1};
    string bars_json = "";
    for(int i = 0; i < ArraySize(tfs); i++) {
+      string bar = BarJSON(tfs[i]);
+      if(bar == "") continue;
       if(bars_json != "") bars_json += ",";
-      bars_json += "\"" + TFLabel(tfs[i]) + "\":" + BarJSON(tfs[i]);
+      bars_json += "\"" + TFLabel(tfs[i]) + "\":" + bar;
+   }
+   if(bars_json == "") {
+      Print("SendPriceTick: no timeframes ready, skipping");
+      return;
    }
 
    string body = StringFormat(
@@ -514,26 +521,24 @@ void OnTick()
 
 void ComputeFibLevels()
 {
+   // Use broker's PERIOD_D1 directly so values match TradingView's
+   // request.security(symbol, "D", ...) which uses the same daily candle.
+   // Display timezone (Bangkok GMT+7) only shifts the time axis, not the candle boundary.
    MqlRates rates[];
-   if(CopyRates(InpSymbol, PERIOD_W1, 1, 1, rates) < 1)
+   int copied = CopyRates(InpSymbol, PERIOD_D1, 1, 1, rates);
+   if(copied < 1)
    {
-      Print("ComputeFibLevels: W1 data not ready");
+      Print("ComputeFibLevels: D1 data not ready for ", InpSymbol);
       return;
    }
-
-   datetime current_week_time = rates[0].time;
-
-   // Skip if week time has not changed
-   if(current_week_time == g_last_sent_week_time)
-   {
-      return;
-   }
+   datetime current_period_time = rates[0].time;
+   if(current_period_time == g_last_sent_week_time) return;
 
    double prev_high  = rates[0].high;
    double prev_low   = rates[0].low;
    double prev_close = rates[0].close;
-   double pp         = (prev_high + prev_low + prev_close) / 3.0;
-   double range      = prev_high - prev_low;
+   double pp    = (prev_high + prev_low + prev_close) / 3.0;
+   double range = prev_high - prev_low;
    if(range <= 0)
    {
       Print("ComputeFibLevels: invalid range <= 0");
@@ -556,7 +561,7 @@ void ComputeFibLevels()
    }
 
    string body = StringFormat(
-      "{\"symbol\":\"%s\",\"period\":\"W\","
+      "{\"symbol\":\"%s\",\"period\":\"D\","
       "\"prev_high\":%s,\"prev_low\":%s,\"prev_close\":%s,\"pp\":%s,"
       "\"resistance\":{%s},\"support\":{%s},\"computed_at\":\"%s\"}",
       InpSymbol, F(prev_high), F(prev_low), F(prev_close), F(pp),
@@ -565,7 +570,7 @@ void ComputeFibLevels()
 
    if(PostJSON("/api/fib-levels", body))
    {
-      g_last_sent_week_time = current_week_time;
+      g_last_sent_week_time = current_period_time;
    }
    DrawFibLines(prev_high, prev_low, prev_close, pp, ratios, r_lbls, s_lbls);
 }
