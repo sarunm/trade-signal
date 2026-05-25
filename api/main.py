@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from database import Base, engine
+from database import engine
 import models  # noqa: F401 — registers all ORM models with Base.metadata
 from routers.trade_events import router as trade_events_router
 from routers.price_tick import router as price_tick_router
@@ -20,8 +20,6 @@ from routers.indicator_signals import router as indicator_signals_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
     yield
     await engine.dispose()
 

@@ -52,8 +52,21 @@ async def upsert_trade(session: AsyncSession, event: TradeEventSchema) -> Trade:
         and event.close_price is None
     )
 
-    await session.commit()
+    await session.flush()
     await session.refresh(trade)
+
     if should_compute_indicators:
-        asyncio.create_task(recompute_trade_indicators_by_id(trade.id))
+        trade_id = trade.id
+        asyncio.create_task(_safe_recompute_indicators(trade_id))
+
     return trade
+
+
+async def _safe_recompute_indicators(trade_id) -> None:
+    import logging
+
+    logger = logging.getLogger(__name__)
+    try:
+        await recompute_trade_indicators_by_id(trade_id)
+    except Exception:
+        logger.exception("indicator computation failed for trade %s", trade_id)
