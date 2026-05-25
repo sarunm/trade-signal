@@ -11,6 +11,7 @@ import ClosedTrades from './components/ClosedTrades'
 import DailyPLPanel from './components/DailyPLPanel'
 import PnlChart from './components/PnlChart'
 import TradeAdvisor from './components/TradeAdvisor'
+import EAStatusBadge from './components/EAStatusBadge'
 
 const API = 'http://localhost:8000'
 
@@ -71,7 +72,10 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 p-4 space-y-4">
-      <AccountBar data={account.data} error={account.error} lastUpdated={account.lastUpdated} />
+      <div className="flex items-start gap-3">
+        <AccountBar data={account.data} error={account.error} lastUpdated={account.lastUpdated} />
+        <EAStatusBadge accountId={account.data?.account_id} />
+      </div>
       <TraderProfile data={traderProfile.data} error={traderProfile.error} />
       <DailyPLPanel
         data={dailyPL.data}
