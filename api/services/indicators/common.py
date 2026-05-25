@@ -1944,3 +1944,498 @@ CYCLE_SPECS = {
     "zscore": IndicatorSpec("zscore", "cycle", _cyc_zscore),
     "hurst": IndicatorSpec("hurst", "cycle", _cyc_hurst),
 }
+
+
+def _prev_day_ohlc(df: pd.DataFrame) -> Optional[tuple[float, float, float, float]]:
+    """Compute previous-day OHLC from H1 bars.
+
+    Resamples the available bars to D, then returns the most recent complete daily
+    OHLC prior to today. Falls back to the last 24 H1 bars if resampling fails.
+    """
+    if "time" not in df or len(df) == 0:
+        return None
+    try:
+        ts = pd.to_datetime(df["time"])
+        frame = df.assign(_ts=ts).set_index("_ts")
+        daily = frame.resample("1D").agg(
+            {"open": "first", "high": "max", "low": "min", "close": "last"}
+        ).dropna()
+        if len(daily) >= 2:
+            row = daily.iloc[-2]
+            return float(row["open"]), float(row["high"]), float(row["low"]), float(row["close"])
+        if len(daily) == 1:
+            row = daily.iloc[-1]
+            return float(row["open"]), float(row["high"]), float(row["low"]), float(row["close"])
+    except Exception:
+        pass
+    window = df.tail(24)
+    if window.empty:
+        return None
+    return (
+        float(window["open"].iloc[0]),
+        float(window["high"].max()),
+        float(window["low"].min()),
+        float(window["close"].iloc[-1]),
+    )
+
+
+def _sr_pivot_std(df):
+    ohlc = _prev_day_ohlc(df)
+    close = _last(df["close"])
+    if ohlc is None or close is None:
+        return None, "neutral", {"reason": "insufficient_bars"}
+    o, h, l, c = ohlc
+    pp = (h + l + c) / 3
+    r1 = 2 * pp - l
+    s1 = 2 * pp - h
+    r2 = pp + (h - l)
+    s2 = pp - (h - l)
+    r3 = h + 2 * (pp - l)
+    s3 = l - 2 * (h - pp)
+    direction = "neutral"
+    if close <= s1:
+        direction = "bullish"
+    elif close >= r1:
+        direction = "bearish"
+    return pp, direction, {"pp": pp, "r1": r1, "r2": r2, "r3": r3, "s1": s1, "s2": s2, "s3": s3, "close": close}
+
+
+def _sr_pivot_woodie(df):
+    ohlc = _prev_day_ohlc(df)
+    close = _last(df["close"])
+    if ohlc is None or close is None:
+        return None, "neutral", {"reason": "insufficient_bars"}
+    _, h, l, c = ohlc
+    pp = (h + l + 2 * c) / 4
+    r1 = 2 * pp - l
+    s1 = 2 * pp - h
+    r2 = pp + (h - l)
+    s2 = pp - (h - l)
+    direction = "neutral"
+    if close <= s1:
+        direction = "bullish"
+    elif close >= r1:
+        direction = "bearish"
+    return pp, direction, {"pp": pp, "r1": r1, "r2": r2, "s1": s1, "s2": s2, "close": close}
+
+
+def _sr_pivot_camarilla(df):
+    ohlc = _prev_day_ohlc(df)
+    close = _last(df["close"])
+    if ohlc is None or close is None:
+        return None, "neutral", {"reason": "insufficient_bars"}
+    _, h, l, c = ohlc
+    rng = h - l
+    h4 = c + rng * 1.1 / 2
+    h3 = c + rng * 1.1 / 4
+    l3 = c - rng * 1.1 / 4
+    l4 = c - rng * 1.1 / 2
+    direction = "neutral"
+    if close <= l3:
+        direction = "bullish"
+    elif close >= h3:
+        direction = "bearish"
+    return c, direction, {"h4": h4, "h3": h3, "l3": l3, "l4": l4, "close": close}
+
+
+def _sr_pivot_fib(df):
+    ohlc = _prev_day_ohlc(df)
+    close = _last(df["close"])
+    if ohlc is None or close is None:
+        return None, "neutral", {"reason": "insufficient_bars"}
+    _, h, l, c = ohlc
+    pp = (h + l + c) / 3
+    rng = h - l
+    r1 = pp + 0.382 * rng
+    r2 = pp + 0.618 * rng
+    r3 = pp + rng
+    s1 = pp - 0.382 * rng
+    s2 = pp - 0.618 * rng
+    s3 = pp - rng
+    direction = "neutral"
+    if close <= s1:
+        direction = "bullish"
+    elif close >= r1:
+        direction = "bearish"
+    return pp, direction, {"pp": pp, "r1": r1, "r2": r2, "r3": r3, "s1": s1, "s2": s2, "s3": s3, "close": close}
+
+
+def _sr_pivot_demark(df):
+    ohlc = _prev_day_ohlc(df)
+    close = _last(df["close"])
+    if ohlc is None or close is None:
+        return None, "neutral", {"reason": "insufficient_bars"}
+    o, h, l, c = ohlc
+    if c < o:
+        x = h + 2 * l + c
+    elif c > o:
+        x = 2 * h + l + c
+    else:
+        x = h + l + 2 * c
+    pp = x / 4
+    r1 = x / 2 - l
+    s1 = x / 2 - h
+    direction = "neutral"
+    if close <= s1:
+        direction = "bullish"
+    elif close >= r1:
+        direction = "bearish"
+    return pp, direction, {"pp": pp, "r1": r1, "s1": s1, "close": close}
+
+
+def _sr_fib_retracement(df):
+    """Identify nearest Fib retracement level for the most recent swing."""
+    swing_n = min(50, len(df))
+    if swing_n < 5:
+        return None, "neutral", {"reason": "insufficient_bars"}
+    window = df.tail(swing_n)
+    swing_high = float(window["high"].max())
+    swing_low = float(window["low"].min())
+    rng = swing_high - swing_low
+    ratios = [0.236, 0.382, 0.5, 0.618, 0.786]
+    levels = {f"fib_{r}": swing_high - rng * r for r in ratios}
+    close = _last(df["close"])
+    atr = _last(_atr(df, 14))
+    tolerance = atr / 2 if atr is not None else rng * 0.02
+    direction = "neutral"
+    nearest = None
+    if close is not None and tolerance is not None:
+        nearest_ratio = min(ratios, key=lambda r: abs(close - (swing_high - rng * r)))
+        nearest_level = swing_high - rng * nearest_ratio
+        if abs(close - nearest_level) <= tolerance:
+            nearest = nearest_ratio
+            if nearest_ratio in (0.382, 0.5, 0.618):
+                direction = "bullish"
+            elif nearest_ratio in (0.236, 0.786):
+                direction = "bearish"
+    return close, direction, {"swing_high": swing_high, "swing_low": swing_low, "nearest_ratio": nearest, **levels}
+
+
+def _sr_fib_extension(df):
+    """Project Fib extension levels from the latest 3 swing points."""
+    swing_n = min(60, len(df))
+    if swing_n < 9:
+        return None, "neutral", {"reason": "insufficient_bars"}
+    window = df.tail(swing_n).reset_index(drop=True)
+    third = max(3, swing_n // 3)
+    a_segment = window.iloc[:third]
+    b_segment = window.iloc[third:2 * third]
+    c_segment = window.iloc[2 * third:]
+    swing_a = float(a_segment["low"].min())
+    swing_b = float(b_segment["high"].max())
+    swing_c = float(c_segment["low"].min())
+    impulse = swing_b - swing_a
+    ratios = [1.272, 1.618, 2.0, 2.618]
+    levels = {f"ext_{r}": swing_c + impulse * r for r in ratios}
+    close = _last(df["close"])
+    atr = _last(_atr(df, 14))
+    tolerance = atr if atr is not None else abs(impulse) * 0.05
+    direction = "neutral"
+    nearest = None
+    if close is not None and tolerance is not None and impulse != 0:
+        nearest_ratio = min(ratios, key=lambda r: abs(close - (swing_c + impulse * r)))
+        nearest_level = swing_c + impulse * nearest_ratio
+        if abs(close - nearest_level) <= tolerance:
+            nearest = nearest_ratio
+            direction = _price_swing_direction(df)
+    return close, direction, {"swing_a": swing_a, "swing_b": swing_b, "swing_c": swing_c, "nearest_ratio": nearest, **levels}
+
+
+def _sr_fib_fan(df):
+    """Compute Fib fan trendlines anchored at the lowest low / highest high in window."""
+    swing_n = min(60, len(df))
+    if swing_n < 5:
+        return None, "neutral", {"reason": "insufficient_bars"}
+    window = df.tail(swing_n).reset_index(drop=True)
+    low_idx = int(window["low"].idxmin())
+    high_idx = int(window["high"].idxmax())
+    if low_idx == high_idx:
+        return None, "neutral", {"reason": "no_swing"}
+    swing_low = float(window["low"].iloc[low_idx])
+    swing_high = float(window["high"].iloc[high_idx])
+    rng = swing_high - swing_low
+    last_idx = len(window) - 1
+    span = last_idx - min(low_idx, high_idx)
+    if span <= 0:
+        return None, "neutral", {"reason": "no_span"}
+    ratios = [0.382, 0.5, 0.618]
+    fan_levels = {}
+    for r in ratios:
+        if low_idx < high_idx:
+            fan_levels[f"fan_{r}"] = swing_low + rng * (1 - r) * (last_idx - low_idx) / (high_idx - low_idx)
+        else:
+            fan_levels[f"fan_{r}"] = swing_high - rng * (1 - r) * (last_idx - high_idx) / (low_idx - high_idx)
+    close = _last(df["close"])
+    direction = "neutral"
+    fan_618 = fan_levels.get("fan_0.618")
+    fan_382 = fan_levels.get("fan_0.382")
+    if close is not None and fan_618 is not None and close > fan_618:
+        direction = "bullish"
+    elif close is not None and fan_382 is not None and close < fan_382:
+        direction = "bearish"
+    return close, direction, {"swing_low": swing_low, "swing_high": swing_high, **fan_levels}
+
+
+def _sr_fib_time(df):
+    """Identify Fibonacci time zones from an anchor (most recent swing point)."""
+    if len(df) < 5:
+        return None, "neutral", {"reason": "insufficient_bars"}
+    window = df.reset_index(drop=True)
+    anchor_idx = int(window["low"].tail(min(60, len(window))).idxmin())
+    fib_seq = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89]
+    last_idx = len(window) - 1
+    bars_since_anchor = last_idx - anchor_idx
+    in_zone = any(abs(bars_since_anchor - f) <= 2 for f in fib_seq)
+    direction = _price_swing_direction(df) if in_zone else "neutral"
+    nearest_zone = min(fib_seq, key=lambda f: abs(bars_since_anchor - f))
+    return float(bars_since_anchor), direction, {"anchor_idx": anchor_idx, "in_zone": bool(in_zone), "nearest_zone": nearest_zone}
+
+
+def _sr_murrey(df):
+    """Murrey Math octave levels over the last 64 bars."""
+    period = min(64, len(df))
+    if period < 10:
+        return None, "neutral", {"reason": "insufficient_bars"}
+    window = df.tail(period)
+    high = float(window["high"].max())
+    low = float(window["low"].min())
+    rng = high - low
+    if rng <= 0:
+        return None, "neutral", {"reason": "zero_range"}
+    levels = {f"oct_{i}_8": low + rng * i / 8 for i in range(9)}
+    close = _last(df["close"])
+    direction = "neutral"
+    if close is not None:
+        oct_2 = levels["oct_2_8"]
+        oct_3 = levels["oct_3_8"]
+        oct_5 = levels["oct_5_8"]
+        oct_6 = levels["oct_6_8"]
+        tolerance = rng / 16
+        if abs(close - oct_2) <= tolerance or abs(close - oct_3) <= tolerance:
+            direction = "bullish"
+        elif abs(close - oct_5) <= tolerance or abs(close - oct_6) <= tolerance:
+            direction = "bearish"
+    return close, direction, {"high": high, "low": low, **levels}
+
+
+def _sr_gann_hilo(df):
+    """Gann HiLo Activator: SMA(High,13) and SMA(Low,21) modes."""
+    sma_high = _sma(df["high"], 13)
+    sma_low = _sma(df["low"], 21)
+    close = _last(df["close"])
+    sma_high_l = _last(sma_high)
+    sma_low_l = _last(sma_low)
+    direction = "neutral"
+    ghll = None
+    ghls = None
+    if close is not None and sma_high_l is not None and close > sma_high_l:
+        ghll = sma_low_l
+        direction = "bullish"
+    elif close is not None and sma_low_l is not None and close < sma_low_l:
+        ghls = sma_high_l
+        direction = "bearish"
+    value = ghll if direction == "bullish" else ghls if direction == "bearish" else None
+    return value, direction, {"sma_high_13": sma_high_l, "sma_low_21": sma_low_l, "ghll": ghll, "ghls": ghls, "close": close}
+
+
+def _sr_price_channel(df):
+    """Price channel breakout detection (period=20)."""
+    upper = df["high"].rolling(20, min_periods=20).max()
+    lower = df["low"].rolling(20, min_periods=20).min()
+    close = _last(df["close"])
+    prev_upper = _prev(upper)
+    prev_lower = _prev(lower)
+    upper_l, lower_l = _last(upper), _last(lower)
+    direction = "neutral"
+    if close is not None and prev_upper is not None and close > prev_upper:
+        direction = "bullish"
+    elif close is not None and prev_lower is not None and close < prev_lower:
+        direction = "bearish"
+    mid = (upper_l + lower_l) / 2 if upper_l is not None and lower_l is not None else None
+    return mid, direction, {"upper": upper_l, "lower": lower_l, "close": close}
+
+
+def _sr_zigzag(df):
+    """Naive ZigZag: detect last swing where price moves >= 5% from prior pivot."""
+    if len(df) < 5:
+        return None, "neutral", {"reason": "insufficient_bars"}
+    deviation = 0.05
+    pivots = []
+    last_pivot_price = float(df["close"].iloc[0])
+    last_pivot_kind = None
+    for i in range(len(df)):
+        price = float(df["close"].iloc[i])
+        if price >= last_pivot_price * (1 + deviation):
+            pivots.append((i, price, "high"))
+            last_pivot_price = price
+            last_pivot_kind = "high"
+        elif price <= last_pivot_price * (1 - deviation):
+            pivots.append((i, price, "low"))
+            last_pivot_price = price
+            last_pivot_kind = "low"
+    close = _last(df["close"])
+    atr = _last(_atr(df, 14))
+    tolerance = atr if atr is not None else (close or 1) * 0.005
+    direction = "neutral"
+    swing_low = swing_high = None
+    if pivots:
+        last = pivots[-1]
+        if last[2] == "low":
+            swing_low = last[1]
+            if close is not None and abs(close - last[1]) <= tolerance:
+                direction = "bullish"
+        else:
+            swing_high = last[1]
+            if close is not None and abs(close - last[1]) <= tolerance:
+                direction = "bearish"
+    return close, direction, {"pivots": len(pivots), "last_pivot_kind": last_pivot_kind, "swing_low": swing_low, "swing_high": swing_high}
+
+
+def _sr_vbp(df):
+    """Volume by Price: histogram + POC identification."""
+    bins = min(20, max(4, len(df) // 10))
+    if bins < 2:
+        return None, "neutral", {"reason": "insufficient_bars"}
+    bucket = pd.cut(df["close"], bins=bins, duplicates="drop")
+    volume_by_bucket = df.groupby(bucket, observed=False)["volume"].sum()
+    if volume_by_bucket.empty:
+        return None, "neutral", {"reason": "no_profile"}
+    poc_interval = volume_by_bucket.idxmax()
+    poc = float((poc_interval.left + poc_interval.right) / 2)
+    close = _last(df["close"])
+    direction = "neutral"
+    if close is not None:
+        if close < poc:
+            direction = "bullish"
+        elif close > poc:
+            direction = "bearish"
+    return poc, direction, {"poc": poc, "close": close, "bins": bins}
+
+
+def _sr_chandelier(df):
+    """Chandelier Exit: long_exit = max(H,22) - 3*ATR(22); short_exit = min(L,22) + 3*ATR(22)."""
+    period = 22
+    mult = 3.0
+    atr = _atr(df, period)
+    highest = df["high"].rolling(period, min_periods=period).max()
+    lowest = df["low"].rolling(period, min_periods=period).min()
+    long_exit = highest - mult * atr
+    short_exit = lowest + mult * atr
+    close = _last(df["close"])
+    long_l, short_l = _last(long_exit), _last(short_exit)
+    direction = "neutral"
+    if close is not None and long_l is not None and close > long_l:
+        direction = "bullish"
+    elif close is not None and short_l is not None and close < short_l:
+        direction = "bearish"
+    return long_l, direction, {"long_exit": long_l, "short_exit": short_l, "close": close}
+
+
+def _sr_rei(df):
+    """DeMark Range Expansion Index."""
+    length = 8
+    if len(df) < length + 6:
+        return None, "neutral", {"reason": "insufficient_bars"}
+    high = df["high"]
+    low = df["low"]
+    close = df["close"]
+    high_2 = high.shift(2)
+    low_2 = low.shift(2)
+    high_5 = high.shift(5)
+    low_5 = low.shift(5)
+    high_6 = high.shift(6)
+    low_6 = low.shift(6)
+    close_7 = close.shift(7)
+    close_8 = close.shift(8)
+    n1 = high - high_2
+    n2 = low - low_2
+    cond_a = (high_2 >= close_7) | (high_2 >= close_8)
+    cond_b = (low_2 <= close_7) | (low_2 <= close_8)
+    cond_c = (high >= low_5) | (high >= low_6)
+    cond_d = (low <= high_5) | (low <= high_6)
+    contraction = ~(cond_a & cond_b) | ~(cond_c & cond_d)
+    numerator = (n1 + n2).where(~contraction, 0)
+    denominator = (n1.abs() + n2.abs())
+    rei = (numerator.rolling(length, min_periods=length).sum() /
+           denominator.rolling(length, min_periods=length).sum().replace(0, math.nan)) * 100
+    value = _last(rei)
+    direction = _direction(value, lambda v: v < -60, lambda v: v > 60)
+    return value, direction, {"rei": value}
+
+
+def _sr_se_bands(df):
+    """Standard Error Bands: linreg ± 2 * stderr."""
+    length = 21
+    if len(df) < length:
+        return None, "neutral", {"reason": "insufficient_bars"}
+    series = df["close"].tail(length).reset_index(drop=True)
+    xs = pd.Series(range(length), dtype="float64")
+    x_mean = xs.mean()
+    y_mean = series.mean()
+    denom = ((xs - x_mean) ** 2).sum()
+    if denom == 0:
+        return None, "neutral", {"reason": "zero_variance"}
+    slope = ((xs - x_mean) * (series - y_mean)).sum() / denom
+    intercept = y_mean - slope * x_mean
+    fitted = intercept + slope * xs
+    residuals = series - fitted
+    stderr = float(((residuals ** 2).sum() / max(length - 2, 1)) ** 0.5)
+    mid = float(fitted.iloc[-1])
+    upper = mid + 2 * stderr
+    lower = mid - 2 * stderr
+    close = _last(df["close"])
+    direction = "neutral"
+    if close is not None:
+        if close <= lower:
+            direction = "bullish"
+        elif close >= upper:
+            direction = "bearish"
+    return mid, direction, {"upper": upper, "lower": lower, "stderr": stderr, "close": close}
+
+
+def _sr_demark_proj(df):
+    """DeMark Projected Range using previous-day OHLC."""
+    ohlc = _prev_day_ohlc(df)
+    close = _last(df["close"])
+    if ohlc is None or close is None:
+        return None, "neutral", {"reason": "insufficient_bars"}
+    o, h, l, c = ohlc
+    if c > o:
+        proj_h = (2 * c + h - l) / 2
+        proj_l = (2 * l + h - c) / 2
+    elif c < o:
+        proj_h = (2 * h + c - l) / 2
+        proj_l = (2 * c + l - h) / 2
+    else:
+        proj_h = (h + c - l) / 2
+        proj_l = (l + c - h) / 2
+    rng = abs(proj_h - proj_l)
+    tolerance = rng * 0.1 if rng > 0 else 1.0
+    direction = "neutral"
+    if abs(close - proj_l) <= tolerance:
+        direction = "bullish"
+    elif abs(close - proj_h) <= tolerance:
+        direction = "bearish"
+    return (proj_h + proj_l) / 2, direction, {"proj_high": proj_h, "proj_low": proj_l, "close": close}
+
+
+SR_SPECS = {
+    "pivot_std": IndicatorSpec("pivot_std", "sr", _sr_pivot_std),
+    "pivot_woodie": IndicatorSpec("pivot_woodie", "sr", _sr_pivot_woodie),
+    "pivot_camarilla": IndicatorSpec("pivot_camarilla", "sr", _sr_pivot_camarilla),
+    "pivot_fib": IndicatorSpec("pivot_fib", "sr", _sr_pivot_fib),
+    "pivot_demark": IndicatorSpec("pivot_demark", "sr", _sr_pivot_demark),
+    "fib_retracement": IndicatorSpec("fib_retracement", "sr", _sr_fib_retracement),
+    "fib_extension": IndicatorSpec("fib_extension", "sr", _sr_fib_extension),
+    "fib_fan": IndicatorSpec("fib_fan", "sr", _sr_fib_fan),
+    "fib_time": IndicatorSpec("fib_time", "sr", _sr_fib_time),
+    "murrey": IndicatorSpec("murrey", "sr", _sr_murrey),
+    "gann_hilo": IndicatorSpec("gann_hilo", "sr", _sr_gann_hilo),
+    "price_channel": IndicatorSpec("price_channel", "sr", _sr_price_channel),
+    "zigzag": IndicatorSpec("zigzag", "sr", _sr_zigzag),
+    "vbp": IndicatorSpec("vbp", "sr", _sr_vbp),
+    "chandelier": IndicatorSpec("chandelier", "sr", _sr_chandelier),
+    "rei": IndicatorSpec("rei", "sr", _sr_rei),
+    "se_bands": IndicatorSpec("se_bands", "sr", _sr_se_bands),
+    "demark_proj": IndicatorSpec("demark_proj", "sr", _sr_demark_proj),
+}
