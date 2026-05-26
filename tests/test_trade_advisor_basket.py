@@ -145,8 +145,8 @@ async def test_basket_ruin_danger_tier_when_buffer_low(client, db_session, monke
     ))
     db_session.add(AccountSnapshot(
         timestamp=datetime.now(timezone.utc),
-        equity=Decimal("3500"), balance=Decimal("3500"),
-        margin=Decimal("3000"), free_margin=Decimal("500"),
+        equity=Decimal("1700"), balance=Decimal("1700"),
+        margin=Decimal("3000"), free_margin=Decimal("-1300"),
         floating_pl=Decimal("0"),
     ))
     await db_session.commit()

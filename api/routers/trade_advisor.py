@@ -128,9 +128,9 @@ def _compute_ruin(
         Decimal("0.1")
     ) if snapshot.equity != 0 else Decimal("0")
 
-    if pct_buffer >= Decimal("90"):
+    if pct_buffer >= Decimal("50"):
         tier = "safe"
-    elif pct_buffer >= Decimal("66"):
+    elif pct_buffer >= Decimal("20"):
         tier = "warning"
     else:
         tier = "danger"
