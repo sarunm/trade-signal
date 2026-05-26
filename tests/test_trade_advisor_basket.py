@@ -169,3 +169,43 @@ async def test_basket_ruin_null_when_no_snapshot(client, db_session):
 
     res = await client.get("/api/trade-advisor")
     assert res.json()["basket"]["ruin"] is None
+
+
+@pytest.mark.asyncio
+async def test_basket_tp_targets_and_zones_use_deepest_trade(client, db_session):
+    plan = {
+        "entry_price": 1955.0,
+        "tp": [
+            {"label": "BE", "price": 1956.85, "pts": 18.5},
+            {"label": "R1", "price": 1965.10, "pts": 101.0},
+            {"label": "R2", "price": 1972.50, "pts": 175.0},
+        ],
+        "add": [
+            {"label": "S1", "price": 1948.30, "pts": -67.0},
+            {"label": "S2", "price": 1940.10, "pts": -149.0},
+        ],
+        "cut": {"label": "S3", "price": 1928.50, "pts": -265.0},
+    }
+    deepest = _t(9401, Direction.buy, "0.10", "1955.00")
+    deepest.recovery_plan = plan
+    db_session.add(deepest)
+    db_session.add(_t(9402, Direction.buy, "0.10", "1958.00"))
+    db_session.add(PriceBar(
+        time=datetime.now(timezone.utc), symbol="XAUUSD", timeframe="M5",
+        open=Decimal("1959"), high=Decimal("1959"),
+        low=Decimal("1959"), close=Decimal("1959.00"),
+        volume=Decimal("100"),
+    ))
+    db_session.add(AccountSnapshot(
+        timestamp=datetime.now(timezone.utc),
+        equity=Decimal("100000"), balance=Decimal("100000"),
+        margin=Decimal("3000"), free_margin=Decimal("97000"),
+        floating_pl=Decimal("0"),
+    ))
+    await db_session.commit()
+
+    b = (await client.get("/api/trade-advisor")).json()["basket"]
+    labels = [tp["label"] for tp in b["tp_targets"]]
+    assert labels == ["R2", "R1", "BE"]
+    assert [z["label"] for z in b["add_zones"]] == ["S1", "S2"]
+    assert b["cut"]["label"] == "S3"

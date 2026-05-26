@@ -85,6 +85,8 @@ def _aggregate_basket(
     if current is not None and basket_be is not None:
         net_float = ((current - basket_be) * sign * abs(net) * CONTRACT_SIZE_XAUUSD).quantize(Decimal("0.01"))
 
+    tp_targets, add_zones, cut = _select_basket_zones(open_trades, direction, abs(net))
+
     return {
         "direction": direction,
         "lot_total": float(abs(net)),
@@ -95,11 +97,37 @@ def _aggregate_basket(
         "net_float": float(net_float) if net_float is not None else None,
         "ruin": _compute_ruin(direction, abs(net), basket_be, current, snapshot)
                  if snapshot and basket_be and current else None,
-        "tp_targets": [],
-        "add_zones": [],
-        "cut": None,
+        "tp_targets": tp_targets,
+        "add_zones": add_zones,
+        "cut": cut,
         "pnl_summary": None,
     }
+
+
+def _select_basket_zones(open_trades: list[Trade], direction: str, abs_lot: Decimal) -> tuple[list, list, Optional[dict]]:
+    candidates = [t for t in open_trades if t.recovery_plan and t.direction]
+    if not candidates:
+        return [], [], None
+    if direction == "buy":
+        deepest = min(candidates, key=lambda t: t.open_price)
+    else:
+        deepest = max(candidates, key=lambda t: t.open_price)
+    plan = deepest.recovery_plan or {}
+    contract = CONTRACT_SIZE_XAUUSD
+    entry = Decimal(str(plan.get("entry_price") or deepest.open_price))
+    sign = Decimal("1") if direction == "buy" else Decimal("-1")
+
+    def _baht(price):
+        return float(((Decimal(str(price)) - entry) * sign * abs_lot * contract).quantize(Decimal("0.01")))
+
+    tp_raw = list(plan.get("tp") or [])
+    tp_targets = [{"label": z["label"], "price": z["price"], "baht": _baht(z["price"])}
+                  for z in reversed(tp_raw)]
+    add_zones = [{"label": z["label"], "price": z["price"], "baht": _baht(z["price"])}
+                 for z in (plan.get("add") or [])]
+    cut_raw = plan.get("cut")
+    cut = {"label": cut_raw["label"], "price": cut_raw["price"], "baht": _baht(cut_raw["price"])} if cut_raw else None
+    return tp_targets, add_zones, cut
 
 
 def _compute_ruin(
