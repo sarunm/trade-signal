@@ -5,6 +5,7 @@ from uuid import uuid4
 import pytest
 
 from models.account_snapshot import AccountSnapshot
+from models.price_bar import PriceBar
 from models.trade import Direction, OrderState, Trade
 
 _BKK = timezone(timedelta(hours=7))
@@ -76,3 +77,31 @@ async def test_basket_mixed_direction_nets_by_lot(client, db_session):
     assert b["direction"] == "buy"
     assert Decimal(str(b["lot_total"])) == Decimal("0.15")
     assert b["order_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_basket_uses_latest_m5_close_for_current_and_net_float(client, db_session):
+    db_session.add_all([
+        _t(9001, Direction.buy, "0.10", "1955.00"),
+        _t(9002, Direction.buy, "0.10", "1957.00"),
+    ])
+    db_session.add(PriceBar(
+        time=datetime.now(timezone.utc),
+        symbol="XAUUSD", timeframe="M5",
+        open=Decimal("1959"), high=Decimal("1960"),
+        low=Decimal("1958"), close=Decimal("1960.00"),
+        volume=Decimal("100"),
+    ))
+    db_session.add(AccountSnapshot(
+        timestamp=datetime.now(timezone.utc),
+        equity=Decimal("100000"), balance=Decimal("100000"),
+        margin=Decimal("3000"), free_margin=Decimal("97000"),
+        floating_pl=Decimal("0"),
+    ))
+    await db_session.commit()
+
+    res = await client.get("/api/trade-advisor")
+    b = res.json()["basket"]
+    assert Decimal(str(b["current"])) == Decimal("1960.00")
+    assert Decimal(str(b["basket_be"])) == Decimal("1956.00")
+    assert Decimal(str(b["net_float"])) > 0

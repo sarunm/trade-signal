@@ -7,9 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_session
 from models.account_snapshot import AccountSnapshot
+from models.price_bar import PriceBar
 from models.trade import Direction, OrderState, Trade
 
 router = APIRouter(prefix="/api", tags=["trade-advisor"])
+
+CONTRACT_SIZE_XAUUSD = Decimal("100")  # 1 lot = 100 oz
 
 
 @router.get("/trade-advisor")
@@ -40,11 +43,22 @@ async def get_trade_advisor(session: AsyncSession = Depends(get_session)):
         }
         for t in trades
     ]
-    basket = _aggregate_basket(trades, snapshot)
+    price_result = await session.execute(
+        select(PriceBar.close)
+        .where(PriceBar.symbol == "XAUUSD", PriceBar.timeframe == "M5")
+        .order_by(PriceBar.time.desc())
+        .limit(1)
+    )
+    latest_close = price_result.scalar_one_or_none()
+    basket = _aggregate_basket(trades, snapshot, latest_close)
     return {"per_trade": per_trade, "basket": basket}
 
 
-def _aggregate_basket(trades: list[Trade], snapshot: Optional[AccountSnapshot]) -> dict[str, Any]:
+def _aggregate_basket(
+    trades: list[Trade],
+    snapshot: Optional[AccountSnapshot],
+    latest_close: Optional[Decimal],
+) -> dict[str, Any]:
     open_trades = [t for t in trades if t.volume and t.open_price and t.direction]
     if not open_trades:
         return _flat_basket()
@@ -57,27 +71,32 @@ def _aggregate_basket(trades: list[Trade], snapshot: Optional[AccountSnapshot]) 
     direction = "buy" if net > 0 else "sell"
     sign = Decimal("1") if direction == "buy" else Decimal("-1")
 
-    notional = Decimal("0")
     weight = Decimal("0")
+    notional = Decimal("0")
     for t in open_trades:
         s = Decimal("1") if t.direction == Direction.buy else Decimal("-1")
         notional += t.open_price * t.volume * s
         weight += t.volume * s
-    avg_entry = (notional / weight).quantize(Decimal("0.01")) if weight != 0 else None
+    basket_be = (notional / weight).quantize(Decimal("0.01")) if weight != 0 else None
+
+    current = latest_close.quantize(Decimal("0.01")) if latest_close is not None else None
+    net_float = None
+    if current is not None and basket_be is not None:
+        net_float = ((current - basket_be) * sign * abs(net) * CONTRACT_SIZE_XAUUSD).quantize(Decimal("0.01"))
 
     return {
         "direction": direction,
         "lot_total": float(abs(net)),
         "order_count": len(open_trades),
-        "avg_entry": float(avg_entry) if avg_entry is not None else None,
-        "current": None,         # Task 7
-        "basket_be": None,       # Task 7
-        "net_float": None,       # Task 7
-        "ruin": None,            # Task 8
-        "tp_targets": [],        # Task 9
-        "add_zones": [],         # Task 9
-        "cut": None,             # Task 9
-        "pnl_summary": None,     # Task 10
+        "avg_entry": float(basket_be) if basket_be is not None else None,
+        "current": float(current) if current is not None else None,
+        "basket_be": float(basket_be) if basket_be is not None else None,
+        "net_float": float(net_float) if net_float is not None else None,
+        "ruin": None,
+        "tp_targets": [],
+        "add_zones": [],
+        "cut": None,
+        "pnl_summary": None,
     }
 
 
