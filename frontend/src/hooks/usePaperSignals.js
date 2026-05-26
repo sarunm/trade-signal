@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { usePolling } from './usePolling'
 
 const API = 'http://localhost:8000'
@@ -47,4 +47,40 @@ export function usePaperSignalNotifications(rules) {
       })
     }
   }, [rules])
+}
+
+export function usePaperRuleDetail(ruleId, patternId) {
+  const [data, setData] = useState({
+    trades: null,
+    signals: null,
+    shadows: null,
+    gates: null,
+  })
+  const [error, setError] = useState(null)
+  const [loading, setLoading] = useState(false)
+
+  const refetch = useCallback(async () => {
+    if (!ruleId) return
+    setLoading(true)
+    setError(null)
+    try {
+      const [trades, signals, shadows, gates] = await Promise.all([
+        get(`/api/paper-trades?rule_id=${ruleId}`),
+        get(`/api/paper-signals?rule_id=${ruleId}&limit=20`),
+        get(`/api/paper-trader-rules/${ruleId}/shadows`),
+        patternId ? get(`/api/patterns/${patternId}/gates`) : Promise.resolve(null),
+      ])
+      setData({ trades, signals, shadows, gates })
+    } catch (e) {
+      setError(e)
+    } finally {
+      setLoading(false)
+    }
+  }, [ruleId, patternId])
+
+  useEffect(() => {
+    refetch()
+  }, [refetch])
+
+  return { data, error, loading, refetch }
 }
