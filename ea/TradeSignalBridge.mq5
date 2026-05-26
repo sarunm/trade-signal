@@ -3,7 +3,7 @@
 //| Sends trade events and price bars to Trade Signal Partner API    |
 //+------------------------------------------------------------------+
 #property copyright "Trade Signal Partner"
-#property version   "1.09"
+#property version   "1.10"
 #property strict
 
 input string InpServerURL  = "http://127.0.0.1:8000";
@@ -11,9 +11,12 @@ input string InpSymbol     = "GOLD#";
 input int    InpTimerSec   = 60;
 input int    InpMarketTickSec = 1;    // throttle bid/ask posts for paper exits
 input int    InpSyncDays   = 30;   // days of closed deal history to sync on startup
+input int    InpCatchupHours  = 12;  // periodic backfill interval (hours); 0 disables
+input int    InpCatchupWindowDays = 7;   // window size for periodic backfill
 
 datetime g_last_sent_week_time = 0;
 datetime g_last_market_tick_sent = 0;
+datetime g_last_catchup_sync = 0;
 
 //--- HTTP POST — logs status code and response body on non-200
 bool PostJSON(const string endpoint, const string body)
@@ -301,11 +304,12 @@ int OnInit()
 {
    // Tools → Options → Expert Advisors → Allow WebRequest for: http://127.0.0.1:8000
    EventSetTimer(InpTimerSec);
-   Print("TradeSignalBridge v1.09 started. Sending to: ", InpServerURL, " | Symbol: ", InpSymbol);
+   Print("TradeSignalBridge v1.10 started. Sending to: ", InpServerURL, " | Symbol: ", InpSymbol);
    CheckHealth();
    SyncOpenPositions();
    SyncHistoryDeals(InpSyncDays);
    ComputeFibLevels();
+   g_last_catchup_sync = TimeCurrent();
    return(INIT_SUCCEEDED);
 }
 
@@ -639,4 +643,13 @@ void OnTimer()
    SendPriceTick();
    ComputeFibLevels();
    SendHeartbeat();
+
+   if(InpCatchupHours > 0) {
+      datetime now = TimeCurrent();
+      if(now - g_last_catchup_sync >= InpCatchupHours * 3600) {
+         SyncOpenPositions();
+         SyncHistoryDeals(InpCatchupWindowDays);
+         g_last_catchup_sync = now;
+      }
+   }
 }
