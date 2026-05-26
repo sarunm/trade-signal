@@ -77,3 +77,4 @@ class Trade(Base):
     paper_trader_rule_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), nullable=True, index=True
     )
+    shadow_profit: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)

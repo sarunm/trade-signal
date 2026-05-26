@@ -58,3 +58,4 @@ class PaperTraderRule(Base):
     last_signal_status: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     trail_arm_pct: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 4), nullable=True)
     trail_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    trail_strategy: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
