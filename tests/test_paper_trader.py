@@ -27,15 +27,21 @@ from services.paper_trader import (
 @pytest.fixture(autouse=True)
 def reset_paper_trader_cache():
     paper_trader.reset_cache()
+    paper_trader.reset_slow_path()
     yield
     paper_trader.reset_cache()
+    paper_trader.reset_slow_path()
 
 
 @pytest.fixture
 def fake_specs(monkeypatch):
     """Return controllable indicator specs by patching ALL_SPECS."""
 
-    state = {"slug_directions": {}, "atr": 5.0}
+    state = {
+        "slug_directions": {},
+        "atr": 5.0,
+        "pivot_meta": {"r1": 1910.0, "r2": 1925.0, "s1": 1890.0, "s2": 1875.0},
+    }
 
     def fake_compute(slug):
         def _compute(df):
@@ -45,7 +51,7 @@ def fake_specs(monkeypatch):
         return _compute
 
     def fake_pivot_compute(df):
-        return 1900.0, "neutral", {"r1": 1910.0, "r2": 1925.0, "s1": 1890.0, "s2": 1875.0}
+        return 1900.0, "neutral", dict(state["pivot_meta"])
 
     def fake_atr(df, length):
         import pandas as pd
@@ -488,3 +494,106 @@ async def test_basket_recovery_opens_second_trade(db_session, fake_specs):
     ).scalars().all()
     # Should now have at least 2 paper trades for this rule (original + recovery)
     assert len(paper_trades) >= 2
+
+
+async def _arm_trail(db_session, slugs, group_overrides=None):
+    rule = await _make_rule(db_session, slugs)
+    rule_row = await db_session.get(PaperTraderRule, rule.id)
+    rule_row.trail_enabled = True
+    # Test uses lower pct (1%) so threshold matches the volume tier the
+    # scoring service produces for the fake fixture; production default
+    # is 10%, set by the promotion service.
+    rule_row.trail_arm_pct = Decimal("0.01")
+    rule_row.virtual_balance_current = Decimal("5000")
+    rule_row.win_count = 95
+    rule_row.total_trades = 100
+    await db_session.commit()
+    await _seed_bars(db_session)
+    return rule
+
+
+@pytest.mark.asyncio
+async def test_trail_arms_at_threshold_holds_while_strong(db_session, fake_specs):
+    fake_specs.setup(["rsi", "macd"])
+    fake_specs.state["slug_directions"] = {"rsi": "bullish", "macd": "bullish"}
+    fake_specs.state["pivot_meta"] = {
+        "r1": 2100.0, "r2": 2200.0, "s1": 1800.0, "s2": 1700.0,
+    }
+    rule = await _arm_trail(db_session, ["rsi", "macd"])
+
+    now = datetime(2026, 5, 25, 12, tzinfo=timezone.utc)
+    await paper_trader.run_paper_trader(db_session, _tick(now, bid=1900.0, ask=1900.5))
+    paper_trader.reset_cache()
+
+    # +50.5 USD * 0.10 lot * 100 contract = ฿505 ≥ 10% of ฿5000 = ฿500
+    await paper_trader.run_paper_trader(
+        db_session, _tick(now + timedelta(minutes=2), bid=1951.0, ask=1951.5)
+    )
+    trade = (await db_session.execute(select(Trade).where(Trade.is_paper.is_(True)))).scalar_one()
+    assert trade.close_time is None
+    assert (trade.recovery_plan or {}).get("trail_armed") is True
+
+
+@pytest.mark.asyncio
+async def test_trail_closes_when_pattern_reversal_after_arm(db_session, fake_specs):
+    fake_specs.setup(["rsi", "pin_bar"], group_overrides={"pin_bar": "pattern"})
+    fake_specs.state["slug_directions"] = {"rsi": "bullish", "pin_bar": "bullish"}
+    fake_specs.state["pivot_meta"] = {
+        "r1": 2100.0, "r2": 2200.0, "s1": 1800.0, "s2": 1700.0,
+    }
+    rule = await _arm_trail(db_session, ["rsi", "pin_bar"])
+
+    now = datetime(2026, 5, 25, 12, tzinfo=timezone.utc)
+    await paper_trader.run_paper_trader(db_session, _tick(now, bid=1900.0, ask=1900.5))
+    paper_trader.reset_cache()
+
+    # arm first
+    await paper_trader.run_paper_trader(
+        db_session, _tick(now + timedelta(minutes=2), bid=1951.0, ask=1951.5)
+    )
+    # pattern flips bearish — should close
+    fake_specs.state["slug_directions"] = {"rsi": "bullish", "pin_bar": "bearish"}
+    paper_trader.reset_cache()
+    await paper_trader.run_paper_trader(
+        db_session, _tick(now + timedelta(minutes=4), bid=1952.0, ask=1952.5)
+    )
+    trade = (await db_session.execute(select(Trade).where(Trade.is_paper.is_(True)))).scalar_one()
+    assert trade.paper_exit_reason == "trail_weaken"
+    assert trade.close_price == Decimal("1952.00000")
+
+
+@pytest.mark.asyncio
+async def test_trail_closes_when_near_pivot_after_arm(db_session, fake_specs):
+    fake_specs.setup(["rsi", "macd"])
+    fake_specs.state["slug_directions"] = {"rsi": "bullish", "macd": "bullish"}
+    fake_specs.state["pivot_meta"] = {
+        "r1": 2100.0, "r2": 2200.0, "s1": 1800.0, "s2": 1700.0,
+    }
+    rule = await _arm_trail(db_session, ["rsi", "macd"])
+
+    now = datetime(2026, 5, 25, 12, tzinfo=timezone.utc)
+    await paper_trader.run_paper_trader(db_session, _tick(now, bid=1900.0, ask=1900.5))
+    paper_trader.reset_cache()
+
+    # arm at +฿505
+    await paper_trader.run_paper_trader(
+        db_session, _tick(now + timedelta(minutes=2), bid=1951.0, ask=1951.5)
+    )
+
+    # move R1 close (within ATR=5)
+    fake_specs.state["pivot_meta"] = {
+        "r1": 1955.0, "r2": 2100.0, "s1": 1800.0, "s2": 1700.0,
+    }
+    paper_trader.reset_cache()
+    await paper_trader.run_paper_trader(
+        db_session, _tick(now + timedelta(minutes=4), bid=1952.0, ask=1952.5)
+    )
+    trades = (
+        await db_session.execute(
+            select(Trade).where(
+                Trade.is_paper.is_(True),
+                Trade.paper_exit_reason.is_not(None),
+            )
+        )
+    ).scalars().all()
+    assert any(t.paper_exit_reason == "trail_weaken" for t in trades)

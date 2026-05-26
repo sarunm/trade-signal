@@ -428,6 +428,62 @@ def _build_paper_trade(
     )
 
 
+def _trail_should_close(
+    trade: Trade,
+    rule: _RuleSnapshot,
+    cur_price: Decimal,
+    bars: list[PriceBar],
+    cache: dict[tuple[str, str], tuple[Optional[float], str, dict]],
+    atr: Decimal,
+) -> bool:
+    pivot_item = cache.get(("pivot_std", rule.timeframe)) or cache.get(
+        ("pivot_std", DEFAULT_TIMEFRAME)
+    )
+    if pivot_item is None:
+        spec = SR_SPECS.get("pivot_std")
+        if spec is not None and bars:
+            pivot_item = spec.compute(_to_frame(bars))
+    if pivot_item is not None:
+        _, _, meta = pivot_item
+        if trade.direction == Direction.buy:
+            res = [
+                Decimal(str(meta[k]))
+                for k in ("r1", "r2")
+                if k in meta and Decimal(str(meta[k])) > cur_price
+            ]
+            if res and min(r - cur_price for r in res) < atr:
+                return True
+        else:
+            sup = [
+                Decimal(str(meta[k]))
+                for k in ("s1", "s2")
+                if k in meta and Decimal(str(meta[k])) < cur_price
+            ]
+            if sup and min(cur_price - s for s in sup) < atr:
+                return True
+
+    trend_dirs = [
+        _cached_direction(cache, s, rule.timeframe)
+        for s in rule.indicator_slugs
+        if (ALL_SPECS.get(s) and ALL_SPECS[s].group == "trend")
+    ]
+    if trend_dirs:
+        target = "bullish" if trade.direction == Direction.buy else "bearish"
+        ratio = sum(1 for d in trend_dirs if d == target) / len(trend_dirs)
+        if ratio < 0.5:
+            return True
+
+    pattern_dirs = [
+        _cached_direction(cache, s, rule.timeframe)
+        for s in rule.indicator_slugs
+        if (ALL_SPECS.get(s) and ALL_SPECS[s].group == "pattern")
+    ]
+    reverse = "bearish" if trade.direction == Direction.buy else "bullish"
+    if any(d == reverse for d in pattern_dirs):
+        return True
+    return False
+
+
 async def _check_exits(
     session: AsyncSession,
     tick: MarketTickSchema,
@@ -435,14 +491,16 @@ async def _check_exits(
     bars_by_tf: dict[str, list[PriceBar]],
     open_by_rule: dict[uuid.UUID, list[Trade]],
     cache: dict[tuple[str, str], tuple[Optional[float], str, dict]],
-) -> list[Trade]:
+) -> tuple[list[Trade], int]:
     rules_by_id = {r.rule_id: r for r in rules}
     closed: list[Trade] = []
+    armed_count = 0
 
     for rule_id, trades in list(open_by_rule.items()):
         rule = rules_by_id.get(rule_id)
         if rule is None:
             continue
+        rule_row = await session.get(PaperTraderRule, rule_id)
         for trade in list(trades):
             if trade.direction is None:
                 continue
@@ -451,24 +509,52 @@ async def _check_exits(
             reason: Optional[str] = None
             is_win = False
 
+            # Trail mirror — arm at balance×pct, close on weakening signals
+            if rule_row is not None and getattr(rule_row, "trail_enabled", False):
+                plan = trade.recovery_plan or {}
+                armed = plan.get("trail_armed", False)
+                cur_price = tick.bid if trade.direction == Direction.buy else tick.ask
+
+                if not armed:
+                    pct = getattr(rule_row, "trail_arm_pct", None)
+                    balance = getattr(rule_row, "virtual_balance_current", None)
+                    if pct is not None and balance is not None:
+                        threshold = Decimal(balance) * Decimal(pct)
+                        unreal = _paper_profit(trade, cur_price)
+                        if unreal is not None and unreal >= threshold:
+                            new_plan = dict(plan)
+                            new_plan["trail_armed"] = True
+                            trade.recovery_plan = new_plan
+                            armed = True
+                            armed_count += 1
+
+                if armed:
+                    bars = bars_by_tf.get(rule.timeframe) or bars_by_tf.get(DEFAULT_TIMEFRAME)
+                    atr = _compute_atr(bars) if bars else None
+                    if atr and _trail_should_close(trade, rule, cur_price, bars, cache, atr):
+                        exit_price = cur_price
+                        reason = "trail_weaken"
+                        profit = _paper_profit(trade, exit_price)
+                        is_win = bool(profit and profit > 0)
+
             # SL/TP for strict only — basket modes have no SL
-            if rule.mode == "strict":
-                if trade.direction == Direction.buy:
-                    if trade.tp is not None and tick.bid >= trade.tp:
-                        exit_price, reason, is_win = trade.tp, "tp", True
-                    elif trade.sl is not None and tick.bid <= trade.sl:
-                        exit_price, reason = trade.sl, "sl"
+            if exit_price is None:
+                if rule.mode == "strict":
+                    if trade.direction == Direction.buy:
+                        if trade.tp is not None and tick.bid >= trade.tp:
+                            exit_price, reason, is_win = trade.tp, "tp", True
+                        elif trade.sl is not None and tick.bid <= trade.sl:
+                            exit_price, reason = trade.sl, "sl"
+                    else:
+                        if trade.tp is not None and tick.ask <= trade.tp:
+                            exit_price, reason, is_win = trade.tp, "tp", True
+                        elif trade.sl is not None and tick.ask >= trade.sl:
+                            exit_price, reason = trade.sl, "sl"
                 else:
-                    if trade.tp is not None and tick.ask <= trade.tp:
+                    if trade.tp is not None and trade.direction == Direction.buy and tick.bid >= trade.tp:
                         exit_price, reason, is_win = trade.tp, "tp", True
-                    elif trade.sl is not None and tick.ask >= trade.sl:
-                        exit_price, reason = trade.sl, "sl"
-            else:
-                # basket modes: TP only on touch, no SL
-                if trade.tp is not None and trade.direction == Direction.buy and tick.bid >= trade.tp:
-                    exit_price, reason, is_win = trade.tp, "tp", True
-                elif trade.tp is not None and trade.direction == Direction.sell and tick.ask <= trade.tp:
-                    exit_price, reason, is_win = trade.tp, "tp", True
+                    elif trade.tp is not None and trade.direction == Direction.sell and tick.ask <= trade.tp:
+                        exit_price, reason, is_win = trade.tp, "tp", True
 
             if exit_price is None:
                 momentum_slug = _first_momentum_slug(rule.indicator_slugs)
@@ -491,7 +577,6 @@ async def _check_exits(
             trade.close_time = tick.timestamp
             trade.profit = _paper_profit(trade, exit_price)
             trade.paper_exit_reason = reason
-            rule_row = await session.get(PaperTraderRule, rule_id)
             if rule_row is not None and is_win:
                 rule_row.win_count += 1
             closed.append(trade)
@@ -499,7 +584,7 @@ async def _check_exits(
         if not trades:
             del open_by_rule[rule_id]
 
-    return closed
+    return closed, armed_count
 
 
 def evals_for_broadcaster(
@@ -552,10 +637,10 @@ async def run_paper_trader(
 
     cache = _build_indicator_cache(rules, bars_by_tf, now=tick.timestamp)
     open_by_rule = await _open_papers_for_rules(session, [r.rule_id for r in rules])
-    closed = await _check_exits(session, tick, rules, bars_by_tf, open_by_rule, cache)
+    closed, armed_count = await _check_exits(session, tick, rules, bars_by_tf, open_by_rule, cache)
     opened = await _check_entries(session, tick, rules, bars_by_tf, open_by_rule, cache)
 
-    if opened or closed:
+    if opened or closed or armed_count:
         await session.commit()
 
     return {
