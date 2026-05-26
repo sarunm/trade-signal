@@ -254,3 +254,34 @@ curl "http://localhost:8000/api/paper-trades"
 # ส่ง mock tick แล้วเช็คว่า background task รัน:
 curl -X POST http://localhost:8000/api/market-tick -H "Content-Type: application/json" -d '{...}'
 ```
+
+---
+
+### TASK: Paper Trade Console — show richer per-rule context (Paper Rule Drawer)
+
+**assignee:** claude
+**status:** done
+**priority:** normal
+**remark:** shipped 2026-05-26 as Paper Rule Drawer — spec `docs/superpowers/specs/2026-05-26-paper-rule-drawer-design.md`, plan `docs/superpowers/plans/2026-05-26-paper-rule-drawer.md`. 12 commits e28b307..9b4b264 on feat/paper-trade-v2. 337/337 tests, clean build.
+
+**Why:** PaperRuleCard อ่านยาก ดูแล้วบอกไม่ได้ว่ารูล alive/stuck/failing — เพิ่ม collapsed summary (alive dot + balance + cum PnL + open count) + click-to-expand drawer ที่รวบ 6 sections (signal trail, active orders, recent history, pattern conditions, promotion gates, shadows) ใน UI เดียว
+**Files touched:**
+- `api/schemas/pattern.py` — added 4 fields to `PaperTraderRuleResponse`
+- `api/routers/patterns.py` — batched `_open_trades_count_by_rule` + `_last_activity_by_rule`
+- `frontend/src/components/PaperRuleCard.jsx` — collapsed redesign + caret
+- `frontend/src/components/PaperRuleDrawer.jsx` — 6-section drawer shell
+- `frontend/src/components/drawer/{SignalTrail,OrdersTable,PatternConditions,PromotionGates,ShadowsList}.jsx` — sections
+- `frontend/src/hooks/usePaperSignals.js` — `usePaperRuleDetail` hook with cancellation token
+- `tests/test_paper_trader_rules_extended.py` — 3 tests covering new fields
+**Acceptance criteria:**
+- [x] Card collapsed shows balance + cum PnL + open count + alive dot
+- [x] Caret expands drawer with 6 sections (skip empty sections gracefully)
+- [x] Manual refresh refetches all 4 drawer endpoints
+- [x] Shadow rules surfaced inside parent drawer (not as standalone cards)
+- [x] Backend pytest passes including regression
+- [x] Drawer queries fire only when expanded (no auto-poll)
+**Verify:**
+```bash
+cd api && pytest ../tests/test_paper_trader_rules_extended.py -v
+cd frontend && npm run build
+```

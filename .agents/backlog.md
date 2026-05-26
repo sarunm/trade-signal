@@ -198,35 +198,4 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api sh -
 ```
 
 
-### TASK: Paper Trade Console — show richer per-rule context (hard to read right now)
-
-**assignee:** claude
-**priority:** normal
-**status:** needs-design
-**remark:** ผู้ใช้ feedback ว่า PaperRuleCard ใน Paper Trade Console ตอนนี้อ่านยาก ดูแล้วไม่แน่ใจว่ารูล "ผิดปกติ" หรือ "ทำงานถูกต้องอยู่" — เคยคุยกันก่อนหน้าว่าจะแสดงข้อมูลเยอะกว่านี้ แต่ยังไม่ได้ลงมือทำ
-
-**Why:** rule card ปัจจุบันโชว์แค่ mode / tier / Net EV / Wilson / vs Baseline / trades / wins + filters chip — ไม่มี signal trail, ไม่มี last-trade outcome, ไม่มี link ไปดู trades ของรูล, ไม่มี shadow comparison ตัวเลข ทำให้ดูแล้วไม่รู้ว่ารูลกำลัง "alive" หรือ "stuck" อยู่
-
-**Context (ไฟล์ที่เกี่ยวข้อง):**
-- `frontend/src/components/PaperRuleCard.jsx` — UI card ปัจจุบัน
-- `frontend/src/components/PaperTradeConsole.jsx` — list + tier filter
-- `api/routers/patterns.py` — `/api/paper-trader-rules`, `/api/paper-trader-rules/{id}/shadows`, `/api/paper-trades`
-- `api/schemas/pattern.py` — `PaperTraderRuleResponse`, `PaperTradeResponse`
-
-**Open questions ต้อง brainstorm ก่อนลงมือ:**
-1. อะไรคือ "อ่านยาก" จริง ๆ — field ที่อยากเห็นเพิ่ม คือ?
-   - last 5 signal results (mini sparkline / dot trail)?
-   - last trade time + last trade outcome (W/L + ฿)?
-   - lifetime PnL ฿ (ไม่ใช่แค่ EV/trade)?
-   - shadow vs parent winrate delta แบบ inline?
-   - reason last signal เป็น `near` / `far` (gate fail reason)?
-   - link / drawer ที่ขยายดู trades + recent ticks ของรูลนั้น?
-2. card-level vs drawer-level — ขยาย card ให้ใหญ่ขึ้น หรือทำเป็น expandable drawer?
-3. shadow rules ตอนนี้ถูก filter ออกจาก list (`status !== 'shadow'`) — อยากเห็น shadow nested ใต้ parent ไหม?
-
-**Next step:** invoke `superpowers:brainstorming` ตอบคำถามทีละข้อ → spec → plan → execute (TDD per task)
-
-**Acceptance criteria (จะ refine ตอน brainstorm):**
-- [ ] ดู rule card แล้วบอกได้ใน 5 วิ ว่ารูล healthy / stuck / failing
-- [ ] เห็น last activity (ไม่ต้อง refresh ก็รู้ว่ารูลยังเดินอยู่)
-- [ ] เห็น shadow comparison ในที่เดียว ไม่ต้องเปิด tab ใหม่
+<!-- Paper Trade Console — show richer per-rule context: shipped 2026-05-26 as Paper Rule Drawer (12 commits e28b307..9b4b264, 337/337 tests). Archived to task-done.md. -->
