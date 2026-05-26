@@ -6,7 +6,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from database import engine
+from database import SessionLocal, engine
 import models  # noqa: F401 — registers all ORM models with Base.metadata
 from routers.trade_events import router as trade_events_router
 from routers.price_tick import router as price_tick_router
@@ -23,6 +23,7 @@ from routers.patterns import router as patterns_router
 from routers.price_bars import router as price_bars_router
 from routers.ea_status import router as ea_status_router
 from routers.paper_signals import router as paper_signals_router
+from services.baseline_runner import BASELINE_ENABLED, open_baseline_trade
 from services.cost_model import refresh_cost_cache
 from services.pattern_discovery import run_pattern_discovery
 
@@ -31,6 +32,7 @@ logger = logging.getLogger(__name__)
 PATTERN_DISCOVERY_ENABLED = os.getenv("PATTERN_DISCOVERY_ENABLED", "1") == "1"
 COST_REFRESH_ENABLED = os.getenv("COST_REFRESH_ENABLED", "1") == "1"
 COST_REFRESH_INTERVAL_MIN = int(os.getenv("COST_REFRESH_INTERVAL_MIN", 60))
+BASELINE_ACCOUNT_ID = int(os.getenv("BASELINE_ACCOUNT_ID", "0"))
 
 
 @asynccontextmanager
@@ -58,6 +60,19 @@ async def lifespan(app: FastAPI):
             id="cost_refresh_hourly",
             replace_existing=True,
         )
+    if BASELINE_ENABLED:
+        if scheduler is None:
+            scheduler = AsyncIOScheduler(timezone="UTC")
+            scheduler.start()
+        for jid, hour in (("baseline_london", 7), ("baseline_ny", 13), ("baseline_asia", 22)):
+            scheduler.add_job(
+                _safe_open_baseline,
+                "cron",
+                hour=hour,
+                minute=0,
+                id=jid,
+                replace_existing=True,
+            )
     yield
     if scheduler is not None:
         scheduler.shutdown(wait=False)
@@ -76,6 +91,14 @@ async def _safe_refresh_cost() -> None:
         await refresh_cost_cache()
     except Exception:
         logger.exception("cost refresh cron failed")
+
+
+async def _safe_open_baseline() -> None:
+    try:
+        async with SessionLocal() as session:
+            await open_baseline_trade(session, account_id=BASELINE_ACCOUNT_ID or None)
+    except Exception:
+        logger.exception("baseline runner cron failed")
 
 
 app = FastAPI(title="Trade Signal Partner", lifespan=lifespan)
