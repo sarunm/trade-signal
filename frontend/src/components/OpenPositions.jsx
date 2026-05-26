@@ -1,8 +1,23 @@
+import React from 'react'
 import SetupTag from './SetupTag'
 
 function fmt(v, d = 5) {
   if (v == null) return '—'
   return Number(v).toFixed(d)
+}
+
+function chipForScore(score, verdict) {
+  if (score == null) return null
+  const s = Number(score)
+  let cls = 'border-loss/30 text-loss bg-loss/10'
+  if (s >= 7) cls = 'border-profit/30 text-profit bg-profit/10'
+  else if (s >= 4) cls = 'border-warning/30 text-warning bg-warning/10'
+  const label = verdict === 'good' ? 'Good entry' : verdict === 'caution' ? 'Caution' : verdict === 'high_risk' ? 'High risk' : ''
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs ${cls}`}>
+      ● {s.toFixed(1)} {label}
+    </span>
+  )
 }
 
 function fmtStrategy(v) {
@@ -49,27 +64,36 @@ export default function OpenPositions({ data, error, onTradeTagged }) {
             {real.map(t => {
               const paper = trades.find(p => p.is_paper && p.ticket === t.ticket)
               return (
-                <tr key={t.ticket} className="border-b border-gray-800 last:border-0">
-                  <td className="py-2 pr-4 font-mono text-gray-300">{t.ticket}</td>
-                  <td className={`py-2 pr-4 font-semibold ${t.direction === 'buy' ? 'text-green-400' : 'text-red-400'}`}>
-                    {t.direction?.toUpperCase() ?? '—'}
-                  </td>
-                  <td className="py-2 pr-4 font-mono">{fmt(t.open_price)}</td>
-                  <td className="py-2 pr-4 font-mono">{fmt(paper?.open_price)}</td>
-                  <td className="py-2 pr-4 font-mono text-red-400">{fmt(paper?.sl)}</td>
-                  <td className="py-2 pr-4 font-mono text-green-400">{fmt(paper?.tp)}</td>
-                  <td className="py-2 text-xs text-gray-400">{fmtStrategy(paper?.paper_exit_strategy)}</td>
-                  <td className="py-2 pl-2">
-                    <SetupTag
-                      ticket={t.ticket}
-                      currentPattern={t.setup_pattern}
-                      currentBias={t.trade_bias}
-                      nearFibLevel={t.near_fib_level}
-                      entryCandle={t.entry_candle}
-                      onUpdated={onTradeTagged}
-                    />
-                  </td>
-                </tr>
+                <React.Fragment key={t.ticket}>
+                  <tr className="border-b border-gray-800 last:border-0">
+                    <td className="py-2 pr-4 font-mono text-gray-300">{t.ticket}</td>
+                    <td className={`py-2 pr-4 font-semibold ${t.direction === 'buy' ? 'text-green-400' : 'text-red-400'}`}>
+                      {t.direction?.toUpperCase() ?? '—'}
+                    </td>
+                    <td className="py-2 pr-4 font-mono">{fmt(t.open_price)}</td>
+                    <td className="py-2 pr-4 font-mono">{fmt(paper?.open_price)}</td>
+                    <td className="py-2 pr-4 font-mono text-red-400">{fmt(paper?.sl)}</td>
+                    <td className="py-2 pr-4 font-mono text-green-400">{fmt(paper?.tp)}</td>
+                    <td className="py-2 text-xs text-gray-400">{fmtStrategy(paper?.paper_exit_strategy)}</td>
+                    <td className="py-2 pl-2">
+                      <SetupTag
+                        ticket={t.ticket}
+                        currentPattern={t.setup_pattern}
+                        currentBias={t.trade_bias}
+                        nearFibLevel={t.near_fib_level}
+                        entryCandle={t.entry_candle}
+                        onUpdated={onTradeTagged}
+                      />
+                    </td>
+                  </tr>
+                  {t.entry_score != null && (
+                    <tr className="border-b border-gray-800 last:border-0">
+                      <td colSpan={8} className="py-1 pl-1">
+                        {chipForScore(t.entry_score, t.entry_verdict)}
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
               )
             })}
           </tbody>
