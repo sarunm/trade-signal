@@ -36,6 +36,10 @@ class PaperTraderRuleResponse(BaseModel):
     last_signal_status: Optional[str] = None
     filters: list[dict] = []
     shadow_of_rule_id: Optional[UUID] = None
+    virtual_balance_start: Optional[Decimal] = None
+    virtual_balance_current: Optional[Decimal] = None
+    open_trades_count: int = 0
+    last_activity_at: Optional[datetime] = None
 
     @computed_field
     @property
