@@ -18,6 +18,23 @@ from services.promotion_gate import evaluate_rule
 router = APIRouter(prefix="/api", tags=["patterns"])
 
 
+async def _open_trades_count_by_rule(session: AsyncSession) -> dict[str, int]:
+    """Return {rule_id_str: open_count} for all paper trades currently open."""
+    stmt = select(Trade).where(
+        Trade.is_paper.is_(True),
+        Trade.close_time.is_(None),
+    )
+    result = await session.execute(stmt)
+    counts: dict[str, int] = {}
+    for trade in result.scalars().all():
+        plan = trade.recovery_plan or {}
+        rid = plan.get("paper_trader_rule_id") if isinstance(plan, dict) else None
+        if not rid:
+            continue
+        counts[rid] = counts.get(rid, 0) + 1
+    return counts
+
+
 @router.get("/patterns", response_model=List[PatternResponse])
 async def list_patterns(
     status: Optional[str] = Query(None),
@@ -43,6 +60,7 @@ async def list_paper_trader_rules(
     result = await session.execute(stmt)
     rules = result.scalars().all()
     now = datetime.now(timezone.utc)
+    open_counts = await _open_trades_count_by_rule(session)
     out: list[PaperTraderRuleResponse] = []
     for r in rules:
         spawned = r.spawned_at
@@ -68,7 +86,7 @@ async def list_paper_trader_rules(
                 shadow_of_rule_id=getattr(r, "shadow_of_rule_id", None),
                 virtual_balance_start=getattr(r, "virtual_balance_start", None),
                 virtual_balance_current=getattr(r, "virtual_balance_current", None),
-                open_trades_count=0,
+                open_trades_count=open_counts.get(str(r.id), 0),
                 last_activity_at=None,
             )
         )
