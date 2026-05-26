@@ -242,3 +242,82 @@ async def test_does_not_close_when_retrace_under_threshold(db_session):
     assert closed == 0
     await db_session.refresh(trade)
     assert trade.close_time is None
+
+
+@pytest.mark.asyncio
+async def test_no_trail_when_strategy_null(db_session):
+    rule = _trail_rule()
+    rule.trail_strategy = None
+    db_session.add(rule)
+    trade = _trail_paper_trade(Direction.buy, "1950.00", rule.id, ticket=7140)
+    db_session.add(trade)
+    await db_session.commit()
+
+    with patch(
+        "services.paper_exit_manager.compute_user_avg_profit",
+        new=AsyncMock(return_value=Decimal("500.00")),
+    ):
+        closed = await close_paper_trades_on_tick(db_session, _tick("2000.00", "2000.10"))
+
+    assert closed == 0
+    await db_session.refresh(trade)
+    assert trade.recovery_plan is None or "trail" not in (trade.recovery_plan or {})
+
+
+@pytest.mark.asyncio
+async def test_no_trail_when_user_avg_unavailable(db_session):
+    rule = _trail_rule()
+    db_session.add(rule)
+    trade = _trail_paper_trade(Direction.buy, "1950.00", rule.id, ticket=7150)
+    db_session.add(trade)
+    await db_session.commit()
+
+    with patch(
+        "services.paper_exit_manager.compute_user_avg_profit",
+        new=AsyncMock(return_value=None),
+    ):
+        closed = await close_paper_trades_on_tick(db_session, _tick("2000.00", "2000.10"))
+
+    assert closed == 0
+    await db_session.refresh(trade)
+    assert trade.recovery_plan is None or "trail" not in (trade.recovery_plan or {})
+
+
+@pytest.mark.asyncio
+async def test_tp_wins_over_trail_on_same_tick(db_session):
+    rule = _trail_rule()
+    db_session.add(rule)
+    trade = _trail_paper_trade(Direction.buy, "1950.00", rule.id, ticket=7160)
+    trade.tp = Decimal("1955.00")
+    trade.recovery_plan = {"trail": {"peak_profit": "100.00", "peak_price": "1960.00"}}
+    db_session.add(trade)
+    await db_session.commit()
+
+    with patch(
+        "services.paper_exit_manager.compute_user_avg_profit",
+        new=AsyncMock(return_value=Decimal("500.00")),
+    ):
+        closed = await close_paper_trades_on_tick(db_session, _tick("1955.00", "1955.10"))
+
+    assert closed == 1
+    await db_session.refresh(trade)
+    assert trade.paper_exit_reason == "tp"
+    assert trade.close_price == Decimal("1955.00")
+    assert trade.shadow_profit is None
+
+
+@pytest.mark.asyncio
+async def test_no_rule_link_skips_trail(db_session):
+    trade = _paper_trade(Direction.buy, "1950.00", "9999.00", "0.01", ticket=7170)
+    db_session.add(trade)
+    await db_session.commit()
+
+    with patch(
+        "services.paper_exit_manager.compute_user_avg_profit",
+        new=AsyncMock(return_value=Decimal("500.00")),
+    ):
+        closed = await close_paper_trades_on_tick(db_session, _tick("2000.00", "2000.10"))
+
+    assert closed == 0
+    await db_session.refresh(trade)
+    assert trade.recovery_plan is None or "trail" not in (trade.recovery_plan or {})
