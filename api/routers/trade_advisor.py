@@ -1,4 +1,5 @@
 import os
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Optional
 
@@ -14,6 +15,61 @@ from models.trade import Direction, OrderState, Trade
 router = APIRouter(prefix="/api", tags=["trade-advisor"])
 
 CONTRACT_SIZE_XAUUSD = Decimal("100")  # 1 lot = 100 oz
+
+_BKK = timezone(timedelta(hours=7))
+
+
+def _today_in_bkk() -> date:
+    return datetime.now(_BKK).date()
+
+
+def _as_utc(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+async def _compute_pnl_summary(
+    session: AsyncSession,
+    snapshot: Optional[AccountSnapshot],
+) -> Optional[dict]:
+    today = _today_in_bkk()
+    week_start = today - timedelta(days=6)
+    month_start = today.replace(day=1)
+
+    stmt = select(Trade).where(
+        Trade.is_paper == False,
+        Trade.order_state == OrderState.filled,
+        Trade.close_time.isnot(None),
+        Trade.profit.isnot(None),
+    )
+    if snapshot and snapshot.account_id is not None:
+        stmt = stmt.where(Trade.account_id == snapshot.account_id)
+    res = await session.execute(stmt)
+    trades = res.scalars().all()
+
+    today_b = Decimal("0.00")
+    week_b = Decimal("0.00")
+    month_b = Decimal("0.00")
+    for t in trades:
+        d = _as_utc(t.close_time).astimezone(_BKK).date()
+        if d == today:
+            today_b += t.profit
+        if d >= week_start:
+            week_b += t.profit
+        if d >= month_start:
+            month_b += t.profit
+
+    base = snapshot.balance if snapshot else None
+
+    def _row(b):
+        return {
+            "baht": float(b.quantize(Decimal("0.01"))),
+            "pct": (float(((b / base) * Decimal("100")).quantize(Decimal("0.01")))
+                    if base and base != 0 else None),
+        }
+
+    return {"today": _row(today_b), "week": _row(week_b), "month": _row(month_b)}
 
 
 @router.get("/trade-advisor")
@@ -52,6 +108,7 @@ async def get_trade_advisor(session: AsyncSession = Depends(get_session)):
     )
     latest_close = price_result.scalar_one_or_none()
     basket = _aggregate_basket(trades, snapshot, latest_close)
+    basket["pnl_summary"] = await _compute_pnl_summary(session, snapshot)
     return {"per_trade": per_trade, "basket": basket}
 
 

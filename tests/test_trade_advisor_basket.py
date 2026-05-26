@@ -209,3 +209,52 @@ async def test_basket_tp_targets_and_zones_use_deepest_trade(client, db_session)
     assert labels == ["R2", "R1", "BE"]
     assert [z["label"] for z in b["add_zones"]] == ["S1", "S2"]
     assert b["cut"]["label"] == "S3"
+
+
+@pytest.mark.asyncio
+async def test_basket_pnl_summary_buckets_today_week_month(client, db_session, monkeypatch):
+    today_close = datetime(2026, 5, 26, 12, tzinfo=_BKK).astimezone(timezone.utc)
+    week_close = datetime(2026, 5, 22, 12, tzinfo=_BKK).astimezone(timezone.utc)
+    month_close = datetime(2026, 5, 5, 12, tzinfo=_BKK).astimezone(timezone.utc)
+    older = datetime(2026, 4, 5, 12, tzinfo=_BKK).astimezone(timezone.utc)
+
+    db_session.add_all([
+        Trade(id=uuid4(), ticket=10001, symbol="XAUUSD", direction=Direction.buy,
+              order_state=OrderState.filled, is_paper=False,
+              open_time=today_close, close_time=today_close,
+              open_price=Decimal("1955"), close_price=Decimal("1960"),
+              volume=Decimal("0.10"), profit=Decimal("420.00")),
+        Trade(id=uuid4(), ticket=10002, symbol="XAUUSD", direction=Direction.buy,
+              order_state=OrderState.filled, is_paper=False,
+              open_time=week_close, close_time=week_close,
+              open_price=Decimal("1955"), close_price=Decimal("1960"),
+              volume=Decimal("0.10"), profit=Decimal("1430.00")),
+        Trade(id=uuid4(), ticket=10003, symbol="XAUUSD", direction=Direction.buy,
+              order_state=OrderState.filled, is_paper=False,
+              open_time=month_close, close_time=month_close,
+              open_price=Decimal("1955"), close_price=Decimal("1960"),
+              volume=Decimal("0.10"), profit=Decimal("2380.00")),
+        Trade(id=uuid4(), ticket=10004, symbol="XAUUSD", direction=Direction.buy,
+              order_state=OrderState.filled, is_paper=False,
+              open_time=older, close_time=older,
+              open_price=Decimal("1955"), close_price=Decimal("1960"),
+              volume=Decimal("0.10"), profit=Decimal("999.00")),
+    ])
+    db_session.add(AccountSnapshot(
+        timestamp=today_close,
+        equity=Decimal("100000"), balance=Decimal("100000"),
+        margin=Decimal("0"), free_margin=Decimal("100000"),
+        floating_pl=Decimal("0"),
+    ))
+    await db_session.commit()
+
+    monkeypatch.setattr(
+        "routers.trade_advisor._today_in_bkk",
+        lambda: datetime(2026, 5, 26, tzinfo=_BKK).date(),
+    )
+
+    b = (await client.get("/api/trade-advisor")).json()["basket"]
+    s = b["pnl_summary"]
+    assert Decimal(str(s["today"]["baht"])) == Decimal("420.00")
+    assert Decimal(str(s["week"]["baht"])) == Decimal("1850.00")
+    assert Decimal(str(s["month"]["baht"])) == Decimal("4230.00")
