@@ -10,11 +10,13 @@ from sqlalchemy.pool import StaticPool
 from database import Base
 from models.pattern import PaperTraderRule, Pattern
 from models.trade import Direction, OrderState, OrderType, PaperMode, Trade
+from models.price_bar import PriceBar, Timeframe
 from services.baseline_runner import (
     BASELINE_PATTERN_STATUS,
     BASELINE_RULE_MODE,
     ensure_baseline_rule,
     next_direction,
+    open_baseline_trade,
 )
 
 
@@ -102,3 +104,36 @@ async def test_alternates_after_sell(session):
     await session.commit()
     direction = await next_direction(session, rule)
     assert direction == Direction.buy
+
+
+async def _seed_h1_bar(session, t: datetime, close: float = 1950.0):
+    session.add(PriceBar(
+        symbol="XAUUSD", timeframe=Timeframe.H1, time=t,
+        open=Decimal(str(close)), high=Decimal(str(close + 1)),
+        low=Decimal(str(close - 1)), close=Decimal(str(close)),
+        volume=Decimal("100"),
+    ))
+    await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_open_baseline_trade_inserts_paper(session):
+    now = datetime(2026, 5, 25, 7, 0, tzinfo=timezone.utc)
+    await _seed_h1_bar(session, now)
+    rule = await ensure_baseline_rule(session)
+    trade = await open_baseline_trade(session, account_id=1, now=now)
+    assert trade is not None
+    assert trade.is_paper is True
+    assert trade.direction == Direction.buy
+    assert trade.recovery_plan["is_baseline"] is True
+    assert trade.recovery_plan["paper_trader_rule_id"] == str(rule.id)
+
+
+@pytest.mark.asyncio
+async def test_open_baseline_skipped_if_already_open(session):
+    now = datetime(2026, 5, 25, 7, 0, tzinfo=timezone.utc)
+    await _seed_h1_bar(session, now)
+    first = await open_baseline_trade(session, account_id=1, now=now)
+    assert first is not None
+    second = await open_baseline_trade(session, account_id=1, now=now)
+    assert second is None

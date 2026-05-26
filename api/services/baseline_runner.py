@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.pattern import PaperTraderRule, Pattern
+from models.price_bar import PriceBar, Timeframe
 from models.trade import Direction, OrderState, OrderType, PaperMode, Trade
 
 logger = logging.getLogger(__name__)
@@ -112,3 +113,79 @@ async def ensure_baseline_rule(session: AsyncSession) -> PaperTraderRule:
 
     await session.commit()
     return rule
+
+
+async def _has_open_baseline(session: AsyncSession, rule: PaperTraderRule) -> bool:
+    rule_id_str = str(rule.id)
+    result = await session.execute(
+        select(Trade).where(
+            Trade.is_paper.is_(True),
+            Trade.paper_mode == PaperMode.independent,
+            Trade.close_time.is_(None),
+        )
+    )
+    for trade in result.scalars().all():
+        plan = trade.recovery_plan or {}
+        if plan.get("paper_trader_rule_id") == rule_id_str:
+            return True
+    return False
+
+
+async def _latest_h1_close(
+    session: AsyncSession, symbol: str = "XAUUSD"
+) -> Optional[Decimal]:
+    result = await session.execute(
+        select(PriceBar)
+        .where(PriceBar.symbol == symbol, PriceBar.timeframe == Timeframe.H1)
+        .order_by(PriceBar.time.desc())
+        .limit(1)
+    )
+    bar = result.scalars().first()
+    return bar.close if bar else None
+
+
+async def open_baseline_trade(
+    session: AsyncSession,
+    account_id: Optional[int],
+    now: Optional[datetime] = None,
+) -> Optional[Trade]:
+    if not BASELINE_ENABLED:
+        return None
+    now = now or datetime.now(timezone.utc)
+    rule = await ensure_baseline_rule(session)
+    if await _has_open_baseline(session, rule):
+        logger.info("baseline_runner: existing open baseline trade — skipping")
+        return None
+
+    last_close = await _latest_h1_close(session)
+    if last_close is None:
+        logger.warning("baseline_runner: no price bars; skipping")
+        return None
+
+    direction = await next_direction(session, rule)
+    trade = Trade(
+        ticket=int(now.timestamp() * 1000) % 1_000_000_000_000,
+        symbol="XAUUSD",
+        direction=direction,
+        order_type=OrderType.market,
+        order_state=OrderState.filled,
+        open_time=now,
+        fill_time=now,
+        open_price=last_close,
+        volume=BASELINE_VOLUME,
+        is_paper=True,
+        paper_mode=PaperMode.independent,
+        recovery_plan={
+            "paper_trader_rule_id": str(rule.id),
+            "is_baseline": True,
+        },
+        account_id=account_id,
+    )
+    session.add(trade)
+    rule.total_trades = (rule.total_trades or 0) + 1
+    await session.commit()
+    logger.info(
+        "baseline_runner: opened %s baseline trade #%s @ %s",
+        direction.value, trade.ticket, last_close,
+    )
+    return trade
