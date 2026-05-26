@@ -143,7 +143,8 @@ async def test_signal_monitor_opens_paper_trade_on_consensus(db_session, fake_sp
 
     now = datetime(2026, 5, 25, 12, tzinfo=timezone.utc)
     result = await paper_trader.run_paper_trader(db_session, _tick(now, bid=1900.0, ask=1900.5))
-    assert result == {"opened": 1, "closed": 0}
+    assert result["opened"] == 1
+    assert result["closed"] == 0
 
     trades = (await db_session.execute(select(Trade).where(Trade.is_paper.is_(True)))).scalars().all()
     assert len(trades) == 1
@@ -266,7 +267,8 @@ async def test_paper_trader_no_active_rules_is_noop(db_session, fake_specs):
     result = await paper_trader.run_paper_trader(
         db_session, _tick(datetime(2026, 5, 25, 12, tzinfo=timezone.utc))
     )
-    assert result == {"opened": 0, "closed": 0}
+    assert result["opened"] == 0
+    assert result["closed"] == 0
 
 
 @pytest.mark.asyncio

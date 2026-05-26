@@ -502,15 +502,48 @@ async def _check_exits(
     return closed
 
 
+def evals_for_broadcaster(
+    rules: list[_RuleSnapshot],
+    cache: dict[tuple[str, str], tuple[Optional[float], str, dict]],
+    open_by_rule: dict[uuid.UUID, list[Trade]],
+) -> list:
+    from services.signal_broadcaster import RuleEval, SignalEvalInputs
+
+    out = []
+    for rule in rules:
+        matched: list[str] = []
+        missing: list[str] = []
+        for slug in rule.indicator_slugs:
+            item = cache.get((slug, rule.timeframe)) or cache.get((slug, DEFAULT_TIMEFRAME))
+            direction = item[1] if item else "neutral"
+            if direction == "neutral":
+                missing.append(slug)
+            else:
+                matched.append(slug)
+        out.append(
+            RuleEval(
+                rule_id=rule.rule_id,
+                inputs=SignalEvalInputs(
+                    matched_count=len(matched),
+                    total_count=len(rule.indicator_slugs),
+                    has_open_paper=bool(open_by_rule.get(rule.rule_id)),
+                ),
+                matched_conditions=matched,
+                missing_conditions=missing,
+            )
+        )
+    return out
+
+
 async def run_paper_trader(
     session: AsyncSession, tick: MarketTickSchema
 ) -> dict:
     if not PAPER_TRADER_ENABLED:
-        return {"opened": 0, "closed": 0, "skipped": "disabled"}
+        return {"opened": 0, "closed": 0, "skipped": "disabled", "evals": []}
 
     rules = await load_active_rules(session, tick.timestamp)
     if not rules:
-        return {"opened": 0, "closed": 0}
+        return {"opened": 0, "closed": 0, "evals": []}
 
     timeframes = {rule.timeframe for rule in rules}
     bars_by_tf: dict[str, list[PriceBar]] = {}
@@ -525,4 +558,8 @@ async def run_paper_trader(
     if opened or closed:
         await session.commit()
 
-    return {"opened": len(opened), "closed": len(closed)}
+    return {
+        "opened": len(opened),
+        "closed": len(closed),
+        "evals": evals_for_broadcaster(rules, cache, open_by_rule),
+    }

@@ -9,6 +9,7 @@ from services.alert_manager import check_large_adverse_move
 from services.mirror_exit_manager import evaluate_mirror_exits
 from services.paper_exit_manager import close_paper_trades_on_tick
 from services.paper_trader import run_paper_trader
+from services.signal_broadcaster import broadcast_status_changes
 from services.spread_buffer import push_spread
 from services.trade_advisor import check_advisor_zones
 
@@ -27,8 +28,13 @@ async def receive_market_tick(
     await check_large_adverse_move(session, tick)
     await check_advisor_zones(session, tick)
 
+    signals_emitted = 0
     try:
-        await run_paper_trader(session, tick)
+        result = await run_paper_trader(session, tick)
+        evals = result.get("evals", [])
+        if evals:
+            written = await broadcast_status_changes(session, evals, now=tick.timestamp)
+            signals_emitted = len(written)
     except Exception:
         logger.exception("paper trader run failed for tick %s", tick.timestamp)
 
@@ -38,4 +44,5 @@ async def receive_market_tick(
         "closed_paper_trades": closed_independent + closed_mirror,
         "closed_mirror": closed_mirror,
         "closed_independent": closed_independent,
+        "signals_emitted": signals_emitted,
     }
