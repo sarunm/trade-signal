@@ -23,6 +23,7 @@ from routers.patterns import router as patterns_router
 from routers.price_bars import router as price_bars_router
 from routers.ea_status import router as ea_status_router
 from routers.paper_signals import router as paper_signals_router
+from services.adaptive_tuner import run_adaptive_tuner
 from services.baseline_runner import BASELINE_ENABLED, open_baseline_trade
 from services.cost_model import refresh_cost_cache
 from services.pattern_discovery import run_pattern_discovery
@@ -35,6 +36,7 @@ COST_REFRESH_ENABLED = os.getenv("COST_REFRESH_ENABLED", "1") == "1"
 COST_REFRESH_INTERVAL_MIN = int(os.getenv("COST_REFRESH_INTERVAL_MIN", 60))
 BASELINE_ACCOUNT_ID = int(os.getenv("BASELINE_ACCOUNT_ID", "0"))
 PROMOTION_GATE_ENABLED = os.getenv("PROMOTION_GATE_ENABLED", "1") == "1"
+ADAPTIVE_ENABLED = os.getenv("ADAPTIVE_ENABLED", "1") == "1"
 
 
 @asynccontextmanager
@@ -87,6 +89,18 @@ async def lifespan(app: FastAPI):
             id="promotion_gate_daily",
             replace_existing=True,
         )
+    if ADAPTIVE_ENABLED:
+        if scheduler is None:
+            scheduler = AsyncIOScheduler(timezone="UTC")
+            scheduler.start()
+        scheduler.add_job(
+            _safe_run_adaptive_tuner,
+            "cron",
+            hour=0,
+            minute=45,
+            id="adaptive_tuner_daily",
+            replace_existing=True,
+        )
     yield
     if scheduler is not None:
         scheduler.shutdown(wait=False)
@@ -121,6 +135,14 @@ async def _safe_run_promotion_gate() -> None:
         logger.info("promotion gate cron evaluated %d rules", len(results))
     except Exception:
         logger.exception("promotion gate cron failed")
+
+
+async def _safe_run_adaptive_tuner() -> None:
+    try:
+        async with SessionLocal() as session:
+            await run_adaptive_tuner(session)
+    except Exception:
+        logger.exception("adaptive tuner cron failed")
 
 
 app = FastAPI(title="Trade Signal Partner", lifespan=lifespan)
