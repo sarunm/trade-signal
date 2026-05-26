@@ -13,6 +13,7 @@ from schemas.pattern import (
     PaperTraderRuleResponse,
     PatternResponse,
 )
+from services.promotion_gate import evaluate_rule
 
 router = APIRouter(prefix="/api", tags=["patterns"])
 
@@ -66,6 +67,36 @@ async def list_paper_trader_rules(
             )
         )
     return out
+
+
+@router.get("/patterns/{pattern_id}/gates")
+async def pattern_gates(
+    pattern_id: UUID,
+    session: AsyncSession = Depends(get_session),
+):
+    rules = (await session.execute(
+        select(PaperTraderRule).where(PaperTraderRule.pattern_id == pattern_id)
+    )).scalars().all()
+    summaries = []
+    for rule in rules:
+        result = await evaluate_rule(session, rule)
+        summaries.append({
+            "rule_id": str(rule.id),
+            "mode": rule.mode,
+            "tier": result.tier,
+            "gates": {
+                "sample": result.gates.sample,
+                "performance": result.gates.performance,
+                "stability": result.gates.stability,
+                "walk_forward": result.gates.walk_forward,
+            },
+            "wilson_lower": result.wilson_lower,
+            "net_ev": float(result.net_ev),
+            "profit_factor": float(result.profit_factor),
+            "baseline_delta": result.baseline_delta,
+            "reason": result.reason,
+        })
+    return {"pattern_id": str(pattern_id), "rules": summaries}
 
 
 @router.get("/paper-trades", response_model=List[PaperTradeResponse])
