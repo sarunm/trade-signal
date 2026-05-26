@@ -22,11 +22,14 @@ from routers.indicator_signals import router as indicator_signals_router
 from routers.patterns import router as patterns_router
 from routers.price_bars import router as price_bars_router
 from routers.ea_status import router as ea_status_router
+from services.cost_model import refresh_cost_cache
 from services.pattern_discovery import run_pattern_discovery
 
 logger = logging.getLogger(__name__)
 
 PATTERN_DISCOVERY_ENABLED = os.getenv("PATTERN_DISCOVERY_ENABLED", "1") == "1"
+COST_REFRESH_ENABLED = os.getenv("COST_REFRESH_ENABLED", "1") == "1"
+COST_REFRESH_INTERVAL_MIN = int(os.getenv("COST_REFRESH_INTERVAL_MIN", 60))
 
 
 @asynccontextmanager
@@ -43,6 +46,17 @@ async def lifespan(app: FastAPI):
             replace_existing=True,
         )
         scheduler.start()
+    if COST_REFRESH_ENABLED:
+        if scheduler is None:
+            scheduler = AsyncIOScheduler(timezone="UTC")
+            scheduler.start()
+        scheduler.add_job(
+            _safe_refresh_cost,
+            "interval",
+            minutes=COST_REFRESH_INTERVAL_MIN,
+            id="cost_refresh_hourly",
+            replace_existing=True,
+        )
     yield
     if scheduler is not None:
         scheduler.shutdown(wait=False)
@@ -54,6 +68,13 @@ async def _safe_run_pattern_discovery() -> None:
         await run_pattern_discovery()
     except Exception:
         logger.exception("pattern discovery cron failed")
+
+
+async def _safe_refresh_cost() -> None:
+    try:
+        await refresh_cost_cache()
+    except Exception:
+        logger.exception("cost refresh cron failed")
 
 
 app = FastAPI(title="Trade Signal Partner", lifespan=lifespan)
