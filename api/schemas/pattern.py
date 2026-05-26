@@ -27,6 +27,13 @@ class PaperTraderRuleResponse(BaseModel):
     spawned_at: datetime
     total_trades: int
     win_count: int
+    mode: str = "strict"
+    trust_tier: str = "experimental"
+    age_seconds: int = 0
+    net_ev_per_trade: Optional[Decimal] = None
+    wilson_lower_95: Optional[Decimal] = None
+    baseline_delta: Optional[Decimal] = None
+    last_signal_status: Optional[str] = None
 
     @computed_field
     @property

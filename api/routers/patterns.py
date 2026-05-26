@@ -34,11 +34,38 @@ async def list_paper_trader_rules(
     status: Optional[str] = Query(None),
     session: AsyncSession = Depends(get_session),
 ):
+    from datetime import datetime, timezone
+
     stmt = select(PaperTraderRule).order_by(PaperTraderRule.spawned_at.desc())
     if status:
         stmt = stmt.where(PaperTraderRule.status == status)
     result = await session.execute(stmt)
-    return result.scalars().all()
+    rules = result.scalars().all()
+    now = datetime.now(timezone.utc)
+    out: list[PaperTraderRuleResponse] = []
+    for r in rules:
+        spawned = r.spawned_at
+        if spawned is not None and spawned.tzinfo is None:
+            spawned = spawned.replace(tzinfo=timezone.utc)
+        age = int((now - spawned).total_seconds()) if spawned else 0
+        out.append(
+            PaperTraderRuleResponse(
+                id=r.id,
+                pattern_id=r.pattern_id,
+                status=r.status,
+                spawned_at=r.spawned_at,
+                total_trades=r.total_trades,
+                win_count=r.win_count,
+                mode=getattr(r, "mode", "strict") or "strict",
+                trust_tier=getattr(r, "trust_tier", "experimental") or "experimental",
+                age_seconds=age,
+                net_ev_per_trade=getattr(r, "net_ev_per_trade", None),
+                wilson_lower_95=getattr(r, "wilson_lower_95", None),
+                baseline_delta=getattr(r, "baseline_delta", None),
+                last_signal_status=getattr(r, "last_signal_status", None),
+            )
+        )
+    return out
 
 
 @router.get("/paper-trades", response_model=List[PaperTradeResponse])

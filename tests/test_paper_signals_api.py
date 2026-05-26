@@ -67,6 +67,19 @@ async def test_list_paper_signals_for_rule(client):
 
 
 @pytest.mark.asyncio
+async def test_paper_trader_rule_response_includes_trust_tier(client):
+    c, rule_id = client
+    res = await c.get("/api/paper-trader-rules")
+    assert res.status_code == 200
+    rules = res.json()
+    assert any(r["id"] == str(rule_id) for r in rules)
+    sample = [r for r in rules if r["id"] == str(rule_id)][0]
+    for key in ("trust_tier", "age_seconds", "net_ev_per_trade",
+                "wilson_lower_95", "baseline_delta", "mode"):
+        assert key in sample
+
+
+@pytest.mark.asyncio
 async def test_list_paper_signals_since_filter(client):
     c, rule_id = client
     cutoff = datetime(2026, 5, 25, 12, 1, tzinfo=timezone.utc).isoformat()
