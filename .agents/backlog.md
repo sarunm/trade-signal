@@ -115,6 +115,32 @@ exact commands
 
 ## Queue
 
+### TASK: Explore ML to assist pattern discovery / signal scoring
+
+**assignee:** claude
+**priority:** low
+**status:** needs-design
+**remark:** idea ระหว่าง brainstorm dashboard re-design (2026-05-26) — เก็บไว้ก่อน ยังไม่ตัดสินใจ
+
+**Why:** ตอนนี้ Pattern Discovery Engine เป็น brute-force combinations + threshold (sample ≥ 10, win rate ≥ 0.60, stable ≥ 3 วัน) อยากดูว่า ML ช่วยอะไรได้บ้าง — จัด priority candidate combos / classify trade outcome / score live entries / predict ruin
+
+**Open questions (ต้อง brainstorm ก่อน scope):**
+- ใช้ ML แทนที่ pattern discovery หรือเป็น layer เสริม?
+- ใช้กับอะไร: (a) entry scoring, (b) exit timing, (c) basket size, (d) ranking pattern candidates, (e) anomaly detection (ruin warning)?
+- ต้อง training data เท่าไหร่ — trade history ตอนนี้ยังน้อย
+- Online learning vs batch retrain?
+- Model อะไร — XGBoost / LightGBM (tabular), หรือ logistic regression ก่อน
+- จะ deploy ยังไงใน Docker stack — joblib persistence? ONNX? FastAPI service แยก?
+- Explainability — pattern ปัจจุบันอ่านง่าย ("rsi+ema match → bullish") ML จะกลายเป็น black box?
+
+**Files to touch:** TBD ระหว่าง design
+
+**Acceptance criteria:** TBD ระหว่าง design
+
+**Verify:** TBD
+
+---
+
 <!-- [BUG] Cum PnL stuck at +฿0: shipped 2026-05-26 — cum_pnl_realized field derived from SUM(profit), close flow updates virtual_balance_current. Archived. -->
 
 <!-- 3 codex backlog tasks shipped 2026-05-26: migration 019 (legacy exit_strategy), test_market_tick integration test, migration 020 (NOT NULL filters/gate_status). Archived to task-done.md. -->
