@@ -50,7 +50,7 @@ async def get_account_history(days: int = 7) -> str:
 @mcp.tool()
 async def get_trade_stats() -> str:
     """Get aggregated trade statistics: win rate, average profit, daily P/L."""
-    return await _get("/api/daily-pl", {"days": 30})
+    return await _get("/api/pnl-history", {"granularity": "daily", "page_size": 30})
 
 
 @mcp.tool()

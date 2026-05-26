@@ -11,7 +11,7 @@ from sqlalchemy import select
 from database import get_session
 from models.account_snapshot import AccountSnapshot
 from models.trade import OrderState, Trade
-from schemas.account import AccountResponse, AccountSnapshotResponse, DailyPLResponse, PnlHistoryItem, PnlHistoryResponse
+from schemas.account import AccountResponse, AccountSnapshotResponse, PnlHistoryItem, PnlHistoryResponse
 
 router = APIRouter(prefix="/api", tags=["account"])
 _ICT = timezone(timedelta(hours=7))
@@ -62,86 +62,6 @@ async def get_account_snapshots(
 
     result = await session.execute(stmt)
     return result.scalars().all()
-
-
-@router.get("/daily-pl", response_model=List[DailyPLResponse])
-async def get_daily_pl(
-    days: int = Query(14, ge=1, le=90),
-    session: AsyncSession = Depends(get_session),
-):
-    account_id = await _current_account_id(session)
-
-    trade_query = select(Trade).where(
-        Trade.is_paper == False,
-        Trade.order_state == OrderState.filled,
-        Trade.close_time.isnot(None),
-        Trade.profit.isnot(None),
-    )
-    snapshot_query = select(AccountSnapshot)
-    if account_id is not None:
-        trade_query = trade_query.where(Trade.account_id == account_id)
-        snapshot_query = snapshot_query.where(AccountSnapshot.account_id == account_id)
-
-    trade_result = await session.execute(trade_query)
-    trades = trade_result.scalars().all()
-
-    snapshot_result = await session.execute(snapshot_query.order_by(AccountSnapshot.timestamp.asc()))
-    snapshots = snapshot_result.scalars().all()
-
-    data_dates = [
-        _as_utc(trade.close_time).astimezone(_ICT).date()
-        for trade in trades
-    ] + [
-        _as_utc(snapshot.timestamp).astimezone(_ICT).date()
-        for snapshot in snapshots
-    ]
-    anchor_day = max(data_dates, default=datetime.now(_ICT).date())
-    oldest = anchor_day - timedelta(days=days - 1)
-    grouped: dict = defaultdict(lambda: {"profit": Decimal("0.00"), "trade_count": 0})
-    for trade in trades:
-        close_date = _as_utc(trade.close_time).astimezone(_ICT).date()
-        if close_date < oldest or close_date > anchor_day:
-            continue
-        grouped[close_date]["profit"] += trade.profit
-        grouped[close_date]["trade_count"] += 1
-
-    first_snapshot_per_day: dict = {}
-    for snapshot in snapshots:
-        snapshot_date = _as_utc(snapshot.timestamp).astimezone(_ICT).date()
-        first_snapshot_per_day.setdefault(snapshot_date, snapshot.balance)
-
-    base_by_date: dict = {}
-    running = None
-    for d in sorted(first_snapshot_per_day):
-        if d <= oldest:
-            running = first_snapshot_per_day[d]
-    cur = oldest
-    while cur <= anchor_day:
-        if cur in first_snapshot_per_day:
-            running = first_snapshot_per_day[cur]
-        if running is not None:
-            base_by_date[cur] = running
-        cur += timedelta(days=1)
-
-    rows = []
-    cur = anchor_day
-    while cur >= oldest:
-        stats = grouped.get(cur, {"profit": Decimal("0.00"), "trade_count": 0})
-        base_balance = base_by_date.get(cur)
-        profit = stats["profit"].quantize(Decimal("0.01"))
-        profit_pct = None
-        if base_balance is not None and base_balance != 0:
-            profit_pct = ((profit / base_balance) * Decimal("100")).quantize(Decimal("0.01"))
-        rows.append(DailyPLResponse(
-            date=cur,
-            profit=profit,
-            profit_pct=profit_pct,
-            base_balance=base_balance,
-            trade_count=stats["trade_count"],
-        ))
-        cur -= timedelta(days=1)
-
-    return rows
 
 
 @router.get("/pnl-history", response_model=PnlHistoryResponse)
