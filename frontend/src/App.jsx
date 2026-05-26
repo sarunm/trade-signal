@@ -5,7 +5,6 @@ import TopBar from './components/TopBar'
 import SectionDivider from './components/SectionDivider'
 import AlertsPanel from './components/AlertsPanel'
 import InsightsPanel from './components/InsightsPanel'
-import FibPanel from './components/FibPanel'
 import TraderProfile from './components/TraderProfile'
 import OpenPositions from './components/OpenPositions'
 import ClosedTrades from './components/ClosedTrades'
@@ -34,7 +33,6 @@ export default function App() {
     [closedLimit, closedOffset]
   )
   const fetchPnl = useCallback(() => get('/api/trades/pnl-history?days=30'), [])
-  const fetchFib = useCallback(() => get('/api/fib-levels'), [])
   const fetchTraderProfile = useCallback(() => get('/api/trader-profile'), [])
   const fetchAdvisor = useCallback(() => get('/api/trade-advisor'), [])
   const fetchEa = useCallback(() => get('/api/ea-status'), [])
@@ -45,7 +43,6 @@ export default function App() {
   const openTrades = usePolling(fetchOpen)
   const closedTrades = usePolling(fetchClosed)
   const pnlHistory = usePolling(fetchPnl)
-  const fib = usePolling(fetchFib)
   const traderProfile = usePolling(fetchTraderProfile, 60000)
   const advisor = usePolling(fetchAdvisor)
   const eaStatus = usePolling(fetchEa, 5000)
@@ -107,7 +104,7 @@ export default function App() {
           </div>
         </div>
         <div id="alerts-anchor" className="grid grid-cols-1 lg:grid-cols-12 gap-4 mt-4">
-          <div className="lg:col-span-4">
+          <div className="lg:col-span-6">
             <AlertsPanel
               data={alerts.data}
               error={alerts.error}
@@ -115,11 +112,8 @@ export default function App() {
               onAcknowledgeAll={acknowledgeAll}
             />
           </div>
-          <div className="lg:col-span-4">
+          <div className="lg:col-span-6">
             <InsightsPanel data={insights.data} error={insights.error} />
-          </div>
-          <div className="lg:col-span-4">
-            <FibPanel data={fib.data?.[0]} accountData={account.data} error={fib.error} />
           </div>
         </div>
 
