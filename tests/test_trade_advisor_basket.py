@@ -105,3 +105,67 @@ async def test_basket_uses_latest_m5_close_for_current_and_net_float(client, db_
     assert Decimal(str(b["current"])) == Decimal("1960.00")
     assert Decimal(str(b["basket_be"])) == Decimal("1956.00")
     assert Decimal(str(b["net_float"])) > 0
+
+
+@pytest.mark.asyncio
+async def test_basket_ruin_safe_tier(client, db_session, monkeypatch):
+    monkeypatch.setenv("RUIN_STOP_OUT_PCT", "50")
+    db_session.add(_t(9101, Direction.buy, "0.10", "1955.00"))
+    db_session.add(PriceBar(
+        time=datetime.now(timezone.utc), symbol="XAUUSD", timeframe="M5",
+        open=Decimal("1958"), high=Decimal("1958"),
+        low=Decimal("1958"), close=Decimal("1958.00"),
+        volume=Decimal("100"),
+    ))
+    db_session.add(AccountSnapshot(
+        timestamp=datetime.now(timezone.utc),
+        equity=Decimal("100000"), balance=Decimal("100000"),
+        margin=Decimal("3000"), free_margin=Decimal("97000"),
+        floating_pl=Decimal("0"),
+    ))
+    await db_session.commit()
+
+    res = await client.get("/api/trade-advisor")
+    ruin = res.json()["basket"]["ruin"]
+    assert ruin["tier"] == "safe"
+    assert Decimal(str(ruin["pct_buffer"])) > Decimal("50")
+    assert Decimal(str(ruin["pts"])) < 0
+    assert Decimal(str(ruin["baht_buffer"])) < 0
+
+
+@pytest.mark.asyncio
+async def test_basket_ruin_danger_tier_when_buffer_low(client, db_session, monkeypatch):
+    monkeypatch.setenv("RUIN_STOP_OUT_PCT", "50")
+    db_session.add(_t(9201, Direction.buy, "1.00", "1955.00"))
+    db_session.add(PriceBar(
+        time=datetime.now(timezone.utc), symbol="XAUUSD", timeframe="M5",
+        open=Decimal("1955"), high=Decimal("1955"),
+        low=Decimal("1955"), close=Decimal("1955.00"),
+        volume=Decimal("100"),
+    ))
+    db_session.add(AccountSnapshot(
+        timestamp=datetime.now(timezone.utc),
+        equity=Decimal("3500"), balance=Decimal("3500"),
+        margin=Decimal("3000"), free_margin=Decimal("500"),
+        floating_pl=Decimal("0"),
+    ))
+    await db_session.commit()
+
+    res = await client.get("/api/trade-advisor")
+    ruin = res.json()["basket"]["ruin"]
+    assert ruin["tier"] == "danger"
+
+
+@pytest.mark.asyncio
+async def test_basket_ruin_null_when_no_snapshot(client, db_session):
+    db_session.add(_t(9301, Direction.buy, "0.10", "1955.00"))
+    db_session.add(PriceBar(
+        time=datetime.now(timezone.utc), symbol="XAUUSD", timeframe="M5",
+        open=Decimal("1958"), high=Decimal("1958"),
+        low=Decimal("1958"), close=Decimal("1958.00"),
+        volume=Decimal("100"),
+    ))
+    await db_session.commit()
+
+    res = await client.get("/api/trade-advisor")
+    assert res.json()["basket"]["ruin"] is None

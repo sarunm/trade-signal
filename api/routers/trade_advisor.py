@@ -1,3 +1,4 @@
+import os
 from decimal import Decimal
 from typing import Any, Optional
 
@@ -92,11 +93,54 @@ def _aggregate_basket(
         "current": float(current) if current is not None else None,
         "basket_be": float(basket_be) if basket_be is not None else None,
         "net_float": float(net_float) if net_float is not None else None,
-        "ruin": None,
+        "ruin": _compute_ruin(direction, abs(net), basket_be, current, snapshot)
+                 if snapshot and basket_be and current else None,
         "tp_targets": [],
         "add_zones": [],
         "cut": None,
         "pnl_summary": None,
+    }
+
+
+def _compute_ruin(
+    direction: str,
+    abs_lot: Decimal,
+    basket_be: Decimal,
+    current: Decimal,
+    snapshot: AccountSnapshot,
+) -> Optional[dict]:
+    if snapshot is None or snapshot.equity is None or snapshot.margin is None:
+        return None
+    if abs_lot == 0 or basket_be is None or current is None:
+        return None
+    stop_out_pct = Decimal(os.getenv("RUIN_STOP_OUT_PCT", "50")) / Decimal("100")
+    sign = Decimal("1") if direction == "buy" else Decimal("-1")
+
+    threshold_equity = snapshot.margin * stop_out_pct
+    delta_eq = threshold_equity - snapshot.equity
+    contract = CONTRACT_SIZE_XAUUSD
+    price_delta = delta_eq / (contract * abs_lot)
+    ruin_price = (basket_be + sign * price_delta).quantize(Decimal("0.01"))
+
+    pts = (ruin_price - current).quantize(Decimal("0.01"))
+    baht_buffer = ((ruin_price - current) * sign * abs_lot * contract).quantize(Decimal("0.01"))
+    pct_buffer = ((snapshot.equity - threshold_equity) / snapshot.equity * Decimal("100")).quantize(
+        Decimal("0.1")
+    ) if snapshot.equity != 0 else Decimal("0")
+
+    if pct_buffer >= Decimal("90"):
+        tier = "safe"
+    elif pct_buffer >= Decimal("66"):
+        tier = "warning"
+    else:
+        tier = "danger"
+
+    return {
+        "price": float(ruin_price),
+        "pts": float(pts),
+        "baht_buffer": float(baht_buffer),
+        "pct_buffer": float(pct_buffer),
+        "tier": tier,
     }
 
 
