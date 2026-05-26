@@ -1,7 +1,7 @@
 import logging
 import os
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
@@ -25,11 +25,36 @@ from services.indicators.common import (
     _atr,
     _to_frame,
 )
+from services.feature_extractor import (
+    classify_session as _classify_session,
+    day_of_week as _day_of_week,
+    hour_bucket as _hour_bucket,
+)
 from services.scoring import (
     SignalQualityInputs,
     compute_score,
     score_to_lot,
 )
+
+
+_FILTER_FEATURE_FNS = {
+    "session": lambda ctx: _classify_session(ctx["now"]),
+    "hour_bucket": lambda ctx: _hour_bucket(ctx["now"]),
+    "dow": lambda ctx: _day_of_week(ctx["now"]),
+}
+
+
+def _passes_filters(rule, ctx: dict) -> bool:
+    """Return False if any filter clause excludes the current context."""
+    for clause in (getattr(rule, "filters", None) or []):
+        feature = clause.get("feature")
+        exclude = clause.get("exclude")
+        fn = _FILTER_FEATURE_FNS.get(feature)
+        if fn is None:
+            continue
+        if fn(ctx) == exclude:
+            return False
+    return True
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +111,7 @@ class _RuleSnapshot:
     indicator_slugs: list[str]
     timeframe: str
     mode: str
+    filters: list[dict] = field(default_factory=list)
 
 
 _rule_cache: list[_RuleSnapshot] = []
@@ -126,6 +152,7 @@ async def load_active_rules(
                 indicator_slugs=list(pattern.indicator_slugs),
                 timeframe=pattern.timeframe or DEFAULT_TIMEFRAME,
                 mode=rule.mode or "strict",
+                filters=list(rule.filters or []),
             )
         )
     _rule_cache = snapshots
