@@ -171,8 +171,12 @@ async def get_pnl_history(
 
     if granularity == "daily":
         rows = _group_pnl_daily(trades, snapshots)
+    elif granularity == "weekly":
+        rows = _group_pnl_weekly(trades, snapshots)
+    elif granularity == "monthly":
+        rows = _group_pnl_monthly(trades, snapshots)
     else:
-        rows = []
+        rows = []  # all — Task 4
 
     total_count = len(rows)
     total_pages = max(1, ceil(total_count / page_size)) if total_count else 0
@@ -214,3 +218,51 @@ def _base_balance_by_date(snapshots) -> dict:
         d = _as_utc(s.timestamp).astimezone(_ICT).date()
         first_per_day.setdefault(d, s.balance)
     return first_per_day
+
+
+def _iso_week_monday(d):
+    return d - timedelta(days=d.isoweekday() - 1)
+
+
+def _group_pnl_weekly(trades, snapshots):
+    grouped: dict = defaultdict(lambda: {"profit": Decimal("0.00"), "trade_count": 0})
+    for trade in trades:
+        d = _as_utc(trade.close_time).astimezone(_ICT).date()
+        key = _iso_week_monday(d)
+        grouped[key]["profit"] += trade.profit
+        grouped[key]["trade_count"] += 1
+    base_by_date = _base_balance_by_date(snapshots)
+    rows: list[PnlHistoryItem] = []
+    for key in sorted(grouped.keys(), reverse=True):
+        profit = grouped[key]["profit"].quantize(Decimal("0.01"))
+        base = base_by_date.get(key)
+        pct = ((profit / base) * Decimal("100")).quantize(Decimal("0.01")) if base else None
+        rows.append(PnlHistoryItem(
+            period=key.isoformat(),
+            profit=profit,
+            profit_pct=pct,
+            trade_count=grouped[key]["trade_count"],
+        ))
+    return rows
+
+
+def _group_pnl_monthly(trades, snapshots):
+    grouped: dict = defaultdict(lambda: {"profit": Decimal("0.00"), "trade_count": 0})
+    for trade in trades:
+        d = _as_utc(trade.close_time).astimezone(_ICT).date()
+        key = d.replace(day=1)
+        grouped[key]["profit"] += trade.profit
+        grouped[key]["trade_count"] += 1
+    base_by_date = _base_balance_by_date(snapshots)
+    rows: list[PnlHistoryItem] = []
+    for key in sorted(grouped.keys(), reverse=True):
+        profit = grouped[key]["profit"].quantize(Decimal("0.01"))
+        base = base_by_date.get(key)
+        pct = ((profit / base) * Decimal("100")).quantize(Decimal("0.01")) if base else None
+        rows.append(PnlHistoryItem(
+            period=key.isoformat(),
+            profit=profit,
+            profit_pct=pct,
+            trade_count=grouped[key]["trade_count"],
+        ))
+    return rows
