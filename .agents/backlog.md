@@ -141,9 +141,121 @@ exact commands
 
 ---
 
+### TASK: BasketExitPlan UI/data fixes (color, label clarity, duplicate field, legacy trade purge)
+
+**assignee:** claude
+**priority:** normal
+**status:** pending
+
+**Why:** ผู้ใช้ดู Real Trading basket แล้วงง 4 จุดพร้อมกัน:
+1. `Net direction: BUY` ใส่สีขาวธรรมดา → อยากให้ BUY = เขียว, SELL = แดง
+2. `(0.81 lot, 17 orders)` ไม่ชัดว่าคืออะไร → 0.81 = net lot (|sum buy − sum sell|), 17 = order_count. ควรมี tooltip หรือ label ชัด
+3. `Avg entry` กับ `Basket BE` แสดงเลขเดียวกัน (4429.07) — bug: ตอนนี้ frontend ใช้ field `basket_be` ในทั้งสองช่อง. Avg entry ควร = mean entry (notional-weighted by abs volume), Basket BE = ราคาที่ basket float = 0 (notional-weighted by signed volume)
+4. Real basket ตอนนี้มี 2 legacy trades (#999001 BUY 0.01 @1950.50, #111001 BUY 0.05 @3280.00) ที่ดึง weighted avg ลงมาผิดปกติ ทำให้ BE = 4429 ทั้งที่ majority entry อยู่ ~4540 — ควร force-close หรือ exclude
+
+**Files to touch:**
+- `frontend/src/components/BasketExitPlan.jsx` — direction-tone (text-profit / text-loss), tooltip on `(0.81 lot, 17 orders)`
+- `api/routers/trade_advisor.py` — เพิ่ม field `mean_entry` (= Σ(price × vol) / Σ vol, ไม่ใช้ sign) แยกจาก `basket_be`
+- DB: ตัดสินใจ legacy trade #999001 + #111001 (force-close หรือ archive)
+
+**Acceptance criteria:**
+- [ ] BUY basket → "BUY" เป็น text-profit (เขียว), SELL → text-loss (แดง)
+- [ ] hover ตรง `(0.81 lot, 17 orders)` มี tooltip: "Net lot exposure (sum buy − sum sell), total open orders"
+- [ ] Avg entry กับ Basket BE แสดงเลขต่างกัน: avg_entry = volume-weighted mean (ignore direction), basket_be = signed weighted (current behavior)
+- [ ] Legacy trades 1950.50 + 3280.00 จัดการ (close หรือ tag เป็น archived)
+
+**Verify:**
+```
+docker compose run --rm -e PYTHONPATH=/app api sh -c "cd /app && pytest tests/test_trade_advisor_basket.py -v"
+cd frontend && npm run build
+```
+
+---
+
+### TASK: TopBar — fix XAUUSD price source + add Account block + 1-sec refresh
+
+**assignee:** claude
+**priority:** high
+**status:** pending
+
+**Why:** TopBar แสดง `XAUUSD 3280.90` ซึ่งเป็น stale (M5 latest 2026-05-17 frozen). Live broker price = GOLD# 4577.37 (latest 2026-05-26). symbol mismatch ระหว่าง paper trades (XAUUSD) กับ live data (GOLD#) ทำให้ basket.current ผิด. นอกจากนั้นอยากเพิ่ม Account block ใน TopBar.
+
+**Required layout (left → right):**
+```
+Account {account_number}  Balance: {balance}  Percent: {x.xx%}  Float P/L: {±฿n}  XAUUSD {price}
+```
+- `account_number` = `account.account_id`
+- `balance` = `account.balance`
+- `percent` = % change ของ equity จาก balance หรือ today profit_pct (ตัดสินใจระหว่าง impl — ดู spec ให้ชัด)
+- `float P/L` = `account.floating_pl`
+
+**XAUUSD price fix:** ตอนนี้ใช้ `advisor.data.basket.current` มาจาก `_aggregate_basket(latest_close)` ของ symbol `XAUUSD` ที่ frozen. ต้อง:
+- ตัดสินใจ: ถาม backend คืน live `GOLD#` price แยกเป็น endpoint ใหม่ (`/api/market-tick/latest`) หรือ resolve symbol mapping ที่ backend (XAUUSD ↔ GOLD#) แล้ว basket query latest จาก correct symbol
+- หรือใช้ EA tick ตรงๆ จาก market_tick handler
+
+**Refresh interval (header only):** อยากให้ refresh ทุก 1 วินาที (ตอนนี้ account=3s, ea=5s, advisor=30s).
+- Performance impact: 1 req/วิ × 3 endpoints (account, ea, advisor) = 3 req/วิ จาก browser → API → DB. ส่วนใหญ่เป็น single-row latest query ตาม index, น่าจะเบามาก (<5ms/req).
+- Risk: advisor endpoint หนักกว่า (basket aggregation + pnl_summary loop) → ถ้ายิงทุก 1 วิอาจ load DB
+- Recommend: ทำ `/api/header-snapshot` endpoint รวม (equity/balance/floating_pl/account_id/xau_price/ea_status) เป็น single query → 1 req/วิ พอ + cached
+
+**Files to touch:**
+- `frontend/src/components/TopBar.jsx` — add Account block, restructure layout
+- `frontend/src/App.jsx` — fetch interval to 1000, fix xauPrice source
+- (option) `api/routers/account.py` — add `/api/header-snapshot` lite endpoint
+- `api/services/trade_logger.py` หรือ `api/services/price_handler.py` — resolve XAUUSD↔GOLD# symbol mismatch
+
+**Open questions (ต้อง decide ก่อน impl):**
+1. Symbol mismatch: เป็น bug ที่ EA ส่ง bars เป็น `GOLD#` แต่ trades เก็บเป็น `XAUUSD`? ดู `OnTimer` ใน `ea/TradeSignalBridge.mq5`
+2. `Percent` ใน TopBar = อะไร? today PnL % / equity vs balance / drawdown from peak?
+3. ทำ header-snapshot endpoint หรือยิงหลาย endpoint แบบเดิม?
+
+**Acceptance criteria:**
+- [ ] TopBar แสดง Account / Balance / Percent / Float P/L / XAUUSD price ตาม layout ด้านบน
+- [ ] XAUUSD price = live broker price (วันนี้ 4577.x ไม่ใช่ 3280.90 frozen)
+- [ ] Refresh ทุก 1 วินาที สำหรับ data ใน header เท่านั้น
+- [ ] DevTools Network: <5 req/วิ จาก header (ไม่กระทบ section อื่น)
+- [ ] DB query <10ms p95 สำหรับ header endpoint(s)
+
+**Verify:**
+```
+cd frontend && npm run build
+# manual: open localhost:3000, ดู Network tab ใน DevTools
+docker compose logs api --tail=50 | grep "GET /api/" # check req rate
+```
+
+**Performance answer (short):** 1 req/วิ ไม่มีปัญหาถ้าเป็น single-row latest queries (account-snapshots, ea-status, market-tick latest = ~1ms/แต่ละ query). ปัญหาจะเกิดถ้ายิง `/api/trade-advisor` ทุกวิ เพราะมัน aggregate basket + pnl_summary หลาย query. **คำแนะนำ: ทำ /api/header-snapshot เฉพาะกิจ + ปล่อย advisor เป็น 30s ตามเดิม.**
+
+---
+
+### TASK: OpenPositions + BasketExitPlan cards equal height
+
+**assignee:** claude
+**priority:** normal
+**status:** pending
+
+**Why:** ใน Real Trading row (col-7 + col-5) card ซ้าย OpenPositions เตี้ยกว่า BasketExitPlan มาก (เพราะมี order เดียว) ทำให้พื้นที่ว่างเสียเปล่า อยากให้สูงเท่ากัน — ปกติ grid-cell จะ stretch อยู่แล้ว แต่ inner card ไม่ `h-full`
+
+**Files to touch:**
+- `frontend/src/components/OpenPositions.jsx` — outer `div.bg-gray-900 rounded-lg p-4` → add `h-full`
+- `frontend/src/components/BasketExitPlan.jsx` — outer flat container → add `h-full`
+- (อาจจะ) `frontend/src/App.jsx` — verify grid items stretch
+
+**Acceptance criteria:**
+- [ ] OpenPositions card สูงเท่า BasketExitPlan card ใน lg≥1024px
+- [ ] OpenPositions ที่ว่างเยอะ (1 order) ยังดูสะอาด ไม่มี orphan padding มหาศาล — table wrapper อยู่ติดบน, "No data" state ถ้ามีก็ center
+- [ ] Stack 1-col ที่ <1024px ยัง work (auto-height ตาม content)
+
+**Verify:**
+```
+cd frontend && npm run build
+# manual: open localhost:3000, real trading row should have aligned cards
+```
+
+---
+
 ### TASK: [BUG] Paper trades open without paper_trader_rule_id → orphan, exit logic skips them
 
-**assignee:** codex
+**assignee:** claude
 **priority:** high
 **status:** pending
 
