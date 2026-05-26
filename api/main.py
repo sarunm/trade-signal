@@ -22,6 +22,7 @@ from routers.indicator_signals import router as indicator_signals_router
 from routers.patterns import router as patterns_router
 from routers.price_bars import router as price_bars_router
 from routers.ea_status import router as ea_status_router
+from routers.paper_signals import router as paper_signals_router
 from services.cost_model import refresh_cost_cache
 from services.pattern_discovery import run_pattern_discovery
 
@@ -100,6 +101,7 @@ app.include_router(indicator_signals_router)
 app.include_router(patterns_router)
 app.include_router(price_bars_router)
 app.include_router(ea_status_router)
+app.include_router(paper_signals_router)
 
 
 @app.get("/health")
