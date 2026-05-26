@@ -9,6 +9,7 @@ from services.alert_manager import check_large_adverse_move
 from services.mirror_exit_manager import evaluate_mirror_exits
 from services.paper_exit_manager import close_paper_trades_on_tick
 from services.paper_trader import run_paper_trader
+from services.spread_buffer import push_spread
 from services.trade_advisor import check_advisor_zones
 
 logger = logging.getLogger(__name__)
@@ -20,6 +21,7 @@ async def receive_market_tick(
     tick: MarketTickSchema,
     session: AsyncSession = Depends(get_session),
 ):
+    push_spread(tick.ask - tick.bid)
     closed_independent = await close_paper_trades_on_tick(session, tick)
     closed_mirror = await evaluate_mirror_exits(session, tick)
     await check_large_adverse_move(session, tick)
