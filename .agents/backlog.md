@@ -430,31 +430,6 @@ docker compose exec db psql -U tradesignal -d tradesignal -c "SELECT paper_exit_
 ```
 
 
-### TASK: [BUG] Paper Trade Console — "Failed to load rules"
-
-**assignee:** codex
-**priority:** normal
-**status:** ready
-**remark:** Frontend Paper Trade Console panel โชว์ "Failed to load rules" — ต้อง investigate ว่า fetch endpoint ไหน fail (น่าจะ `/api/paper-trader-rules` หรือใกล้เคียง) → check browser network tab + API logs → fix root cause (อาจเป็น schema mismatch หลัง migration 018 เพิ่ม trust_tier/baseline_delta, หรือ endpoint error)
-
-**Why:** UI ไม่แสดง active paper trader rules ให้ user เห็น — visibility broken
-**Files to touch:**
-- `frontend/src/components/PaperTradeConsole.*` (หรือไฟล์ที่ render panel นี้)
-- `api/routers/patterns.py` (`/api/paper-trader-rules`) — verify response payload matches frontend expectation
-- `api/schemas/pattern.py` (`PaperTraderRuleResponse`)
-**Acceptance criteria:**
-- [ ] ระบุได้ว่า fetch endpoint ไหน fail + error message จริงคืออะไร
-- [ ] Console โหลด rules ได้สำเร็จ ไม่ขึ้น "Failed to load rules"
-- [ ] เพิ่ม regression test ถ้า root cause อยู่ฝั่ง backend
-**Verify:**
-```bash
-docker compose up -d
-# เปิด frontend → Paper Trade Console → ต้องเห็น rules list ไม่ขึ้น error banner
-curl http://localhost:8000/api/paper-trader-rules | jq .
-```
-
----
-
 ### TASK: Add /api/market-tick integration test for mirror exit path
 
 **assignee:** codex
