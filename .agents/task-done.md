@@ -285,3 +285,30 @@ curl -X POST http://localhost:8000/api/market-tick -H "Content-Type: application
 cd api && pytest ../tests/test_paper_trader_rules_extended.py -v
 cd frontend && npm run build
 ```
+
+---
+
+### TASK: Migrate legacy paper_exit_strategy labels to "rule_driven"
+
+**assignee:** codex (done by claude)
+**status:** done
+**priority:** low
+**remark:** shipped 2026-05-26 as migration 019 (commit 0c509c4). Normalized 58 legacy rows (`tp:*;sl:*`) → `rule_driven` in prod; idempotent re-run verified via downgrade+upgrade.
+
+---
+
+### TASK: Add /api/market-tick integration test for mirror exit path
+
+**assignee:** codex (done by claude)
+**status:** done
+**priority:** low
+**remark:** shipped 2026-05-26 (commit c50f908). New test `test_market_tick_closes_open_mirror_via_pivot_tp` seeds D/H1 bars + mirror trade, posts tick, asserts `closed_mirror == 1` and `paper_exit_reason == 'tp_pivot'`. Regression validated by temporarily disabling `evaluate_mirror_exits` (test failed as expected).
+
+---
+
+### TASK: Tighten ORM nullability for paper_trader_rules.filters and gate_status
+
+**assignee:** codex (done by claude)
+**status:** done
+**priority:** low
+**remark:** shipped 2026-05-26 as migration 020 (commit 73c6b84). NULL backfill + `ALTER COLUMN ... SET NOT NULL` on `filters` and `gate_status`; sqlite path no-op for tests. ORM `Mapped[list]` / `Mapped[dict]` declarations now match DB. 338/338 tests pass.
