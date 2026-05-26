@@ -47,6 +47,43 @@ async def _find_baseline_rule(session: AsyncSession) -> Optional[PaperTraderRule
     return result.scalars().first()
 
 
+async def _last_baseline_trade(
+    session: AsyncSession, rule: PaperTraderRule
+) -> Optional[Trade]:
+    rule_id_str = str(rule.id)
+    result = await session.execute(
+        select(Trade)
+        .where(
+            Trade.is_paper.is_(True),
+            Trade.paper_mode == PaperMode.independent,
+        )
+        .order_by(Trade.open_time.desc().nullslast())
+        .limit(50)
+    )
+    for trade in result.scalars().all():
+        plan = trade.recovery_plan or {}
+        if plan.get("paper_trader_rule_id") == rule_id_str:
+            return trade
+    return None
+
+
+async def next_direction(
+    session: AsyncSession, rule: PaperTraderRule
+) -> Direction:
+    if BASELINE_DIRECTION_STRATEGY == "longonly":
+        return Direction.buy
+    if BASELINE_DIRECTION_STRATEGY == "shortonly":
+        return Direction.sell
+    if BASELINE_DIRECTION_STRATEGY == "random":
+        import random
+
+        return random.choice([Direction.buy, Direction.sell])
+    last = await _last_baseline_trade(session, rule)
+    if last is None or last.direction == Direction.sell:
+        return Direction.buy
+    return Direction.sell
+
+
 async def ensure_baseline_rule(session: AsyncSession) -> PaperTraderRule:
     pattern = await _find_baseline_pattern(session)
     if pattern is None:
