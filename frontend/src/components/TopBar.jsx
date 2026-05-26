@@ -12,7 +12,14 @@ function fmtPct(n) {
   return `${sign}${v.toFixed(2)}%`
 }
 
+function fmtBalance(n) {
+  if (n == null) return '—'
+  return `฿${Math.round(Number(n)).toLocaleString()}`
+}
+
 export default function TopBar({
+  accountId,
+  balance,
   equity,
   todayPnlBaht,
   todayPnlPct,
@@ -24,17 +31,25 @@ export default function TopBar({
 }) {
   const todayTone = (todayPnlBaht ?? 0) >= 0 ? 'text-profit' : 'text-loss'
   const floatTone = (floatPl ?? 0) >= 0 ? 'text-profit' : 'text-loss'
+  const pctTone = (todayPnlPct ?? 0) >= 0 ? 'text-profit' : 'text-loss'
 
   return (
     <div className="sticky top-0 z-50 h-14 bg-surface border-b border-border-default flex items-center px-4 gap-6">
       <div className="flex items-center gap-4 text-sm">
-        <span className="font-mono text-text-primary">฿{Math.round(Number(equity ?? 0)).toLocaleString()}</span>
-        <span className={`font-mono ${todayTone}`}>
-          {fmtBaht(todayPnlBaht)} ({fmtPct(todayPnlPct)})
+        <span className="text-text-dim">
+          Account <span className="font-mono text-text-primary">{accountId ?? '—'}</span>
         </span>
         <span className="text-text-dim">
-          Float: <span className={`font-mono ${floatTone}`}>{fmtBaht(floatPl)}</span>
+          Balance <span className="font-mono text-text-primary">{fmtBalance(balance)}</span>
         </span>
+        <span className={`font-mono ${pctTone}`}>{fmtPct(todayPnlPct)}</span>
+        <span className="text-text-dim">
+          Float <span className={`font-mono ${floatTone}`}>{fmtBaht(floatPl)}</span>
+        </span>
+        <span className="text-text-dim">
+          Equity <span className="font-mono text-text-primary">{fmtBalance(equity)}</span>
+        </span>
+        <span className={`font-mono ${todayTone}`}>{fmtBaht(todayPnlBaht)} today</span>
       </div>
       <div className="flex-1 text-center">
         <span className="font-mono text-neutral text-base">

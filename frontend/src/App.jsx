@@ -24,6 +24,7 @@ export default function App() {
   const [closedLimit, setClosedLimit] = useState(20)
   const [closedOffset, setClosedOffset] = useState(0)
 
+  const fetchHeader = useCallback(() => get('/api/header-snapshot'), [])
   const fetchAccount = useCallback(() => get('/api/account'), [])
   const fetchAlerts = useCallback(() => get('/api/alerts'), [])
   const fetchInsights = useCallback(() => get('/api/insights'), [])
@@ -35,8 +36,8 @@ export default function App() {
   const fetchPnl = useCallback(() => get('/api/trades/pnl-history?days=30'), [])
   const fetchTraderProfile = useCallback(() => get('/api/trader-profile'), [])
   const fetchAdvisor = useCallback(() => get('/api/trade-advisor'), [])
-  const fetchEa = useCallback(() => get('/api/ea-status'), [])
 
+  const header = usePolling(fetchHeader, 1000)
   const account = usePolling(fetchAccount, 3000)
   const alerts = usePolling(fetchAlerts)
   const insights = usePolling(fetchInsights)
@@ -45,7 +46,6 @@ export default function App() {
   const pnlHistory = usePolling(fetchPnl)
   const traderProfile = usePolling(fetchTraderProfile, 60000)
   const advisor = usePolling(fetchAdvisor)
-  const eaStatus = usePolling(fetchEa, 5000)
   useTradeAlerts()
 
   const acknowledgeAlert = useCallback(async (id) => {
@@ -64,13 +64,10 @@ export default function App() {
 
   const handleTradeTagged = useCallback(() => openTrades.refetch(), [openTrades.refetch])
 
-  const todaySummary = advisor.data?.basket?.pnl_summary?.today
-  const xauPrice = advisor.data?.basket?.current
   const alertCount = useMemo(
     () => (alerts.data ?? []).filter(a => !a.acknowledged_at).length,
     [alerts.data]
   )
-  const eaOnline = (eaStatus.data?.status === 'online') || (eaStatus.data?.online === true)
 
   const scrollToAlerts = useCallback(() => {
     const el = document.getElementById('alerts-anchor')
@@ -80,13 +77,15 @@ export default function App() {
   return (
     <div className="min-h-screen bg-base text-text-primary">
       <TopBar
-        equity={account.data?.equity}
-        todayPnlBaht={todaySummary?.baht}
-        todayPnlPct={todaySummary?.pct}
-        floatPl={account.data?.floating_pl}
-        xauPrice={xauPrice}
+        accountId={header.data?.account_id ?? account.data?.account_id}
+        balance={header.data?.balance ?? account.data?.balance}
+        equity={header.data?.equity ?? account.data?.equity}
+        todayPnlBaht={header.data?.today_pnl_baht}
+        todayPnlPct={header.data?.today_pnl_pct}
+        floatPl={header.data?.floating_pl ?? account.data?.floating_pl}
+        xauPrice={header.data?.xau_price}
         alertCount={alertCount}
-        eaOnline={eaOnline}
+        eaOnline={header.data?.ea_online ?? false}
         onAlertsClick={scrollToAlerts}
       />
       <main className="px-4 pb-8">
