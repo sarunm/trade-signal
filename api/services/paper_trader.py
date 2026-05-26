@@ -342,6 +342,8 @@ async def _check_entries(
 ) -> list[Trade]:
     opened: list[Trade] = []
     for rule in rules:
+        if not _passes_filters(rule, {"now": tick.timestamp}):
+            continue
         existings = open_by_rule.get(rule.rule_id, [])
         latest = existings[-1] if existings else None
         if latest is not None:
