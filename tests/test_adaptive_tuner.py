@@ -241,3 +241,37 @@ async def test_does_not_promote_shadow_below_min_trades(session):
 
     promoted = await promote_shadow_if_outperforms(session, shadow)
     assert promoted is False
+
+
+from services.adaptive_tuner import run_adaptive_tuner
+
+
+@pytest.mark.asyncio
+async def test_run_adaptive_tuner_spawns_shadows_for_eligible_rules(session):
+    rule = await _seed_rule(session)
+    for _ in range(15):
+        session.add(_trade(rule.id, profit=-50, hour=2))
+    for _ in range(15):
+        session.add(_trade(rule.id, profit=+50, hour=10))
+    await session.commit()
+
+    summary = await run_adaptive_tuner(session)
+
+    assert summary["rules_evaluated"] >= 1
+    assert summary["shadows_spawned"] >= 1
+    shadows = (await session.execute(
+        select(PaperTraderRule).where(
+            PaperTraderRule.shadow_of_rule_id == rule.id,
+            PaperTraderRule.status == "shadow",
+        )
+    )).scalars().all()
+    assert len(shadows) >= 1
+
+
+@pytest.mark.asyncio
+async def test_run_adaptive_tuner_skips_baseline_rules(session):
+    rule = await _seed_rule(session)
+    rule.is_baseline = True
+    await session.commit()
+    summary = await run_adaptive_tuner(session)
+    assert summary["rules_evaluated"] == 0

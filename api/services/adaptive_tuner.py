@@ -249,3 +249,64 @@ async def propose_filters_for_rule(
         buckets = _bucket_trades(trades, fn)
         proposals.extend(_propose_for_feature(feature, buckets))
     return proposals
+
+
+async def _active_non_baseline_rules(session: AsyncSession) -> list[PaperTraderRule]:
+    result = await session.execute(
+        select(PaperTraderRule).where(PaperTraderRule.status == "active")
+    )
+    rules: list[PaperTraderRule] = []
+    for r in result.scalars().all():
+        if getattr(r, "is_baseline", False):
+            continue
+        rules.append(r)
+    return rules
+
+
+async def _all_shadow_rules(session: AsyncSession) -> list[PaperTraderRule]:
+    result = await session.execute(
+        select(PaperTraderRule).where(PaperTraderRule.status == "shadow")
+    )
+    return list(result.scalars().all())
+
+
+async def run_adaptive_tuner(session: AsyncSession) -> dict:
+    """Daily orchestrator: propose filters, spawn shadows, promote winners."""
+    summary = {
+        "rules_evaluated": 0,
+        "proposals_total": 0,
+        "shadows_spawned": 0,
+        "shadows_promoted": 0,
+    }
+    if not ADAPTIVE_ENABLED:
+        return summary
+
+    active_rules = await _active_non_baseline_rules(session)
+    summary["rules_evaluated"] = len(active_rules)
+
+    for rule in active_rules:
+        try:
+            proposals = await propose_filters_for_rule(session, rule)
+        except Exception:
+            logger.exception("adaptive_tuner: propose failed for rule %s", rule.id)
+            continue
+        summary["proposals_total"] += len(proposals)
+        for proposal in proposals:
+            try:
+                await spawn_shadow_rule(session, rule, proposal)
+                summary["shadows_spawned"] += 1
+            except Exception:
+                logger.exception(
+                    "adaptive_tuner: spawn failed for rule %s, proposal %s",
+                    rule.id, proposal,
+                )
+
+    for shadow in await _all_shadow_rules(session):
+        try:
+            if await promote_shadow_if_outperforms(session, shadow):
+                summary["shadows_promoted"] += 1
+        except Exception:
+            logger.exception("adaptive_tuner: promote failed for shadow %s", shadow.id)
+
+    logger.info("adaptive_tuner: %s", summary)
+    return summary
