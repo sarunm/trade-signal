@@ -35,3 +35,18 @@ class DailyPLResponse(BaseModel):
     profit_pct: Optional[Decimal] = None
     base_balance: Optional[Decimal] = None
     trade_count: int
+
+
+class PnlHistoryItem(BaseModel):
+    period: str
+    profit: Decimal
+    profit_pct: Optional[Decimal] = None
+    trade_count: int
+
+
+class PnlHistoryResponse(BaseModel):
+    items: list[PnlHistoryItem]
+    page: int
+    page_size: int
+    total_pages: int
+    total_count: int
