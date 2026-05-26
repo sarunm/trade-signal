@@ -59,3 +59,10 @@ class PaperTraderRule(Base):
     trail_arm_pct: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 4), nullable=True)
     trail_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     trail_strategy: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+
+    trust_tier: Mapped[str] = mapped_column(String(20), default="experimental", server_default="experimental")
+    is_baseline: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    spawn_strategy: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    net_ev_per_trade: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
+    wilson_lower_95: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 4), nullable=True)
+    baseline_delta: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 4), nullable=True)
