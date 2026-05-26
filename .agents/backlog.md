@@ -141,42 +141,17 @@ exact commands
 
 ---
 
-### TASK: BasketExitPlan UI/data fixes (color, label clarity, duplicate field, legacy trade purge)
+<!-- BasketExitPlan UI/data fixes: shipped 2026-05-26 — BUY/SELL color, lot tooltip, mean_entry vs basket_be split (commit on feat/paper-trade-v2). Legacy trades #999001/#111001 force-closed earlier same day. -->
 
-**assignee:** claude
-**priority:** normal
-**status:** pending
+<!-- TopBar XAUUSD + Account + 1s refresh: shipped 2026-05-26 — symbol GOLD#, /api/header-snapshot, 1s polling, layout Account/Balance/%/Float/Equity/today, 5 tests. -->
 
-**Why:** ผู้ใช้ดู Real Trading basket แล้วงง 4 จุดพร้อมกัน:
-1. `Net direction: BUY` ใส่สีขาวธรรมดา → อยากให้ BUY = เขียว, SELL = แดง
-2. `(0.81 lot, 17 orders)` ไม่ชัดว่าคืออะไร → 0.81 = net lot (|sum buy − sum sell|), 17 = order_count. ควรมี tooltip หรือ label ชัด
-3. `Avg entry` กับ `Basket BE` แสดงเลขเดียวกัน (4429.07) — bug: ตอนนี้ frontend ใช้ field `basket_be` ในทั้งสองช่อง. Avg entry ควร = mean entry (notional-weighted by abs volume), Basket BE = ราคาที่ basket float = 0 (notional-weighted by signed volume)
-4. Real basket ตอนนี้มี 2 legacy trades (#999001 BUY 0.01 @1950.50, #111001 BUY 0.05 @3280.00) ที่ดึง weighted avg ลงมาผิดปกติ ทำให้ BE = 4429 ทั้งที่ majority entry อยู่ ~4540 — ควร force-close หรือ exclude
+<!-- OpenPositions + BasketExitPlan equal card heights: shipped 2026-05-26 — h-full added on both outer containers. -->
 
-**Files to touch:**
-- `frontend/src/components/BasketExitPlan.jsx` — direction-tone (text-profit / text-loss), tooltip on `(0.81 lot, 17 orders)`
-- `api/routers/trade_advisor.py` — เพิ่ม field `mean_entry` (= Σ(price × vol) / Σ vol, ไม่ใช้ sign) แยกจาก `basket_be`
-- DB: ตัดสินใจ legacy trade #999001 + #111001 (force-close หรือ archive)
-
-**Acceptance criteria:**
-- [ ] BUY basket → "BUY" เป็น text-profit (เขียว), SELL → text-loss (แดง)
-- [ ] hover ตรง `(0.81 lot, 17 orders)` มี tooltip: "Net lot exposure (sum buy − sum sell), total open orders"
-- [ ] Avg entry กับ Basket BE แสดงเลขต่างกัน: avg_entry = volume-weighted mean (ignore direction), basket_be = signed weighted (current behavior)
-- [ ] Legacy trades 1950.50 + 3280.00 จัดการ (close หรือ tag เป็น archived)
-
-**Verify:**
-```
-docker compose run --rm -e PYTHONPATH=/app api sh -c "cd /app && pytest tests/test_trade_advisor_basket.py -v"
-cd frontend && npm run build
-```
-
----
-
-### TASK: TopBar — fix XAUUSD price source + add Account block + 1-sec refresh
+### TASK: ~~TopBar — fix XAUUSD price source + add Account block + 1-sec refresh~~ DONE
 
 **assignee:** claude
 **priority:** high
-**status:** pending
+**status:** done
 
 **Why:** TopBar แสดง `XAUUSD 3280.90` ซึ่งเป็น stale (M5 latest 2026-05-17 frozen). Live broker price = GOLD# 4577.37 (latest 2026-05-26). symbol mismatch ระหว่าง paper trades (XAUUSD) กับ live data (GOLD#) ทำให้ basket.current ผิด. นอกจากนั้นอยากเพิ่ม Account block ใน TopBar.
 
@@ -227,11 +202,11 @@ docker compose logs api --tail=50 | grep "GET /api/" # check req rate
 
 ---
 
-### TASK: OpenPositions + BasketExitPlan cards equal height
+### TASK: ~~OpenPositions + BasketExitPlan cards equal height~~ DONE
 
 **assignee:** claude
 **priority:** normal
-**status:** pending
+**status:** done
 
 **Why:** ใน Real Trading row (col-7 + col-5) card ซ้าย OpenPositions เตี้ยกว่า BasketExitPlan มาก (เพราะมี order เดียว) ทำให้พื้นที่ว่างเสียเปล่า อยากให้สูงเท่ากัน — ปกติ grid-cell จะ stretch อยู่แล้ว แต่ inner card ไม่ `h-full`
 
