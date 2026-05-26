@@ -133,3 +133,76 @@ async def test_last_activity_at_uses_latest_paper_signal(client, db_session):
     row = next(r for r in res.json() if r["id"] == str(rule.id))
     assert row["last_activity_at"] is not None
     assert row["last_activity_at"].startswith("2026-05-26T12:00")
+
+
+@pytest.mark.asyncio
+async def test_cum_pnl_realized_sums_closed_trade_profit(client, db_session):
+    """Card's Cum PnL must derive from SUM(profit) of closed paper trades
+    bound to this rule, not from virtual_balance delta (which can drift)."""
+    pattern = Pattern(
+        id=uuid4(),
+        indicator_slugs=["rsi_14"],
+        timeframe="M15",
+        win_rate=0.6,
+        sample_count=20,
+        consecutive_stable_days=3,
+        status="active",
+        discovered_at=datetime.now(timezone.utc),
+    )
+    rule = PaperTraderRule(
+        id=uuid4(), pattern_id=pattern.id, status="active",
+        spawned_at=datetime.now(timezone.utc),
+        total_trades=0, win_count=0,
+        virtual_balance_start=Decimal("5000.00"),
+        virtual_balance_current=Decimal("5000.00"),
+    )
+    win = Trade(
+        id=uuid4(), ticket=2001, symbol="XAUUSD",
+        is_paper=True, paper_mode=PaperMode.independent,
+        open_time=datetime.now(timezone.utc),
+        close_time=datetime.now(timezone.utc),
+        profit=Decimal("120.50"),
+        paper_trader_rule_id=rule.id,
+    )
+    loss = Trade(
+        id=uuid4(), ticket=2002, symbol="XAUUSD",
+        is_paper=True, paper_mode=PaperMode.independent,
+        open_time=datetime.now(timezone.utc),
+        close_time=datetime.now(timezone.utc),
+        profit=Decimal("-40.25"),
+        paper_trader_rule_id=rule.id,
+    )
+    open_trade = Trade(
+        id=uuid4(), ticket=2003, symbol="XAUUSD",
+        is_paper=True, paper_mode=PaperMode.independent,
+        open_time=datetime.now(timezone.utc),
+        paper_trader_rule_id=rule.id,
+    )
+    db_session.add_all([pattern, rule, win, loss, open_trade])
+    await db_session.commit()
+
+    res = await client.get("/api/paper-trader-rules")
+    row = next(r for r in res.json() if r["id"] == str(rule.id))
+    assert row["cum_pnl_realized"] == "80.25"
+
+
+@pytest.mark.asyncio
+async def test_cum_pnl_realized_zero_when_no_closed_trades(client, db_session):
+    pattern = Pattern(
+        id=uuid4(),
+        indicator_slugs=["rsi_14"],
+        timeframe="M15",
+        win_rate=0.6, sample_count=20, consecutive_stable_days=3,
+        status="active", discovered_at=datetime.now(timezone.utc),
+    )
+    rule = PaperTraderRule(
+        id=uuid4(), pattern_id=pattern.id, status="active",
+        spawned_at=datetime.now(timezone.utc),
+        total_trades=0, win_count=0,
+    )
+    db_session.add_all([pattern, rule])
+    await db_session.commit()
+
+    res = await client.get("/api/paper-trader-rules")
+    row = next(r for r in res.json() if r["id"] == str(rule.id))
+    assert row["cum_pnl_realized"] == "0"

@@ -478,3 +478,29 @@ async def test_shadow_falls_back_when_no_h1_bar(db_session):
     assert closed == 1
     await db_session.refresh(trade)
     assert trade.shadow_profit == Decimal("80.00")
+
+
+@pytest.mark.asyncio
+async def test_close_updates_rule_virtual_balance_current(db_session):
+    """When a paper trade bound to a rule closes, the rule's
+    virtual_balance_current must accumulate the realized profit."""
+    rule = PaperTraderRule(
+        id=uuid.uuid4(),
+        pattern_id=uuid.uuid4(),
+        status="active",
+        mode="strict",
+        virtual_balance_start=Decimal("5000"),
+        virtual_balance_current=Decimal("5000"),
+    )
+    db_session.add(rule)
+    trade = _paper_trade(Direction.buy, "1950.00", "1960.00", "1945.00", ticket=7300)
+    trade.paper_trader_rule_id = rule.id
+    db_session.add(trade)
+    await db_session.commit()
+
+    closed = await close_paper_trades_on_tick(db_session, _tick("1960.10", "1960.30"))
+
+    assert closed == 1
+    await db_session.refresh(rule)
+    # tp profit = (1960 - 1950) * 0.10 * 100 = 100
+    assert rule.virtual_balance_current == Decimal("5100.00")

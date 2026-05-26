@@ -5,6 +5,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from models.pattern import PaperTraderRule
 from models.price_bar import PriceBar, Timeframe
 from models.trade import Direction, OrderState, PaperMode, Trade
 from schemas.market_tick import MarketTickSchema
@@ -38,6 +39,16 @@ async def evaluate_mirror_exits(session: AsyncSession, tick: MarketTickSchema) -
     daily_bars = await _fetch_bars(session, tick.symbol, Timeframe.D, DAILY_LOOKBACK)
     h1_bars = await _fetch_bars(session, tick.symbol, Timeframe.H1, H1_LOOKBACK)
 
+    rule_ids = {t.paper_trader_rule_id for t in open_mirrors if t.paper_trader_rule_id}
+    rules_by_id: dict = {}
+    if rule_ids:
+        rule_rows = (
+            await session.execute(
+                select(PaperTraderRule).where(PaperTraderRule.id.in_(rule_ids))
+            )
+        ).scalars().all()
+        rules_by_id = {r.id: r for r in rule_rows}
+
     closed = 0
     for trade in open_mirrors:
         exit_price, reason = _exit_decision(trade, tick, daily_bars, h1_bars)
@@ -47,6 +58,11 @@ async def evaluate_mirror_exits(session: AsyncSession, tick: MarketTickSchema) -
         trade.close_time = tick.timestamp
         trade.profit = _floating_pnl(trade, exit_price)
         trade.paper_exit_reason = reason
+        rule = rules_by_id.get(trade.paper_trader_rule_id)
+        if rule is not None and trade.profit is not None:
+            rule.virtual_balance_current = (
+                rule.virtual_balance_current or Decimal("0")
+            ) + trade.profit
         closed += 1
 
     if closed:

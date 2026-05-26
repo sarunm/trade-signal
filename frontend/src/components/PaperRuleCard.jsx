@@ -38,8 +38,8 @@ export default function PaperRuleCard({ rule, pattern }) {
   const dot = ALIVE_DOT[tone] || ALIVE_DOT.idle
 
   const start = Number(rule.virtual_balance_start ?? 0)
-  const current = Number(rule.virtual_balance_current ?? 0)
-  const cumPnl = current - start
+  const cumPnl = Number(rule.cum_pnl_realized ?? 0)
+  const current = start + cumPnl
   const cumPct = start > 0 ? (cumPnl / start) * 100 : 0
   const balanceTone = current < start ? 'text-red-400' : 'text-gray-100'
   const pnlTone = cumPnl > 0 ? 'text-emerald-400' : cumPnl < 0 ? 'text-red-400' : 'text-gray-300'

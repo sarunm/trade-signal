@@ -40,6 +40,7 @@ class PaperTraderRuleResponse(BaseModel):
     virtual_balance_current: Optional[Decimal] = None
     open_trades_count: int = 0
     last_activity_at: Optional[datetime] = None
+    cum_pnl_realized: Decimal = Decimal("0")
 
     @computed_field
     @property

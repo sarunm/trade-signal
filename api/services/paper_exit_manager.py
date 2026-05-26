@@ -91,6 +91,11 @@ async def close_paper_trades_on_tick(
         trade.paper_exit_reason = exit_reason
         if exit_reason == "user_avg_trail":
             trade.shadow_profit = await _shadow_projection(session, trade, tick)
+        rule = rules_by_id.get(trade.paper_trader_rule_id)
+        if rule is not None and trade.profit is not None:
+            rule.virtual_balance_current = (
+                rule.virtual_balance_current or Decimal("0")
+            ) + trade.profit
         closed += 1
 
     if closed or any((t.recovery_plan or {}).get("trail") for t in open_papers):

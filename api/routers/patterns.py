@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from typing import List, Optional
 from uuid import UUID
 
@@ -35,6 +36,36 @@ async def _open_trades_count_by_rule(session: AsyncSession) -> dict[str, int]:
             continue
         counts[rid] = counts.get(rid, 0) + 1
     return counts
+
+
+async def _realized_pnl_by_rule(session: AsyncSession) -> dict[str, Decimal]:
+    """Return {rule_id_str: SUM(profit)} across all closed paper trades.
+
+    Reads rule binding from both Trade.paper_trader_rule_id (canonical) and
+    recovery_plan->>'paper_trader_rule_id' (legacy) so historical trades are
+    not lost.
+    """
+    stmt = select(Trade).where(
+        Trade.is_paper.is_(True),
+        Trade.close_time.is_not(None),
+    )
+    result = await session.execute(stmt)
+    totals: dict[str, Decimal] = {}
+    for trade in result.scalars().all():
+        if trade.profit is None:
+            continue
+        rid: Optional[str] = None
+        if trade.paper_trader_rule_id is not None:
+            rid = str(trade.paper_trader_rule_id)
+        else:
+            plan = trade.recovery_plan or {}
+            if isinstance(plan, dict):
+                raw = plan.get("paper_trader_rule_id")
+                rid = str(raw) if raw else None
+        if not rid:
+            continue
+        totals[rid] = totals.get(rid, Decimal("0")) + trade.profit
+    return totals
 
 
 async def _last_activity_by_rule(session: AsyncSession) -> dict[str, datetime]:
@@ -74,6 +105,7 @@ async def list_paper_trader_rules(
     now = datetime.now(timezone.utc)
     open_counts = await _open_trades_count_by_rule(session)
     last_activity = await _last_activity_by_rule(session)
+    realized_pnl = await _realized_pnl_by_rule(session)
     out: list[PaperTraderRuleResponse] = []
     for r in rules:
         spawned = r.spawned_at
@@ -101,6 +133,7 @@ async def list_paper_trader_rules(
                 virtual_balance_current=getattr(r, "virtual_balance_current", None),
                 open_trades_count=open_counts.get(str(r.id), 0),
                 last_activity_at=last_activity.get(str(r.id)),
+                cum_pnl_realized=realized_pnl.get(str(r.id), Decimal("0")),
             )
         )
     return out

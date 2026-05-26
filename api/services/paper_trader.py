@@ -606,8 +606,13 @@ async def _check_exits(
             trade.close_time = tick.timestamp
             trade.profit = _paper_profit(trade, exit_price)
             trade.paper_exit_reason = reason
-            if rule_row is not None and is_win:
-                rule_row.win_count += 1
+            if rule_row is not None:
+                if is_win:
+                    rule_row.win_count += 1
+                if trade.profit is not None:
+                    rule_row.virtual_balance_current = (
+                        rule_row.virtual_balance_current or Decimal("0")
+                    ) + trade.profit
             closed.append(trade)
             trades.remove(trade)
         if not trades:
