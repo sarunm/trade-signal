@@ -1,6 +1,6 @@
 # Plan 7 — Promotion Gate v2 (Wilson + EV + Baseline) Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Spec:** `docs/superpowers/specs/2026-05-25-paper-trade-system-redesign-v2.md` § "Cost-aware Promotion Gates" + § "Trust tier (4-badge UI)"
 
@@ -43,7 +43,7 @@
 - Modify: `api/models/pattern.py`
 - Test: `tests/test_migration_016.py`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```python
 # tests/test_migration_016.py
@@ -82,7 +82,7 @@ async def test_paper_trader_rules_has_v2_columns(engine):
     assert expected.issubset(cols), f"missing: {expected - cols}"
 ```
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -91,7 +91,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL — columns missing.
 
-- [ ] **Step 3: Write the migration**
+- [x] **Step 3: Write the migration**
 
 ```python
 # api/alembic/versions/016_v2_promotion_columns.py
@@ -138,7 +138,7 @@ def downgrade() -> None:
             op.drop_column("paper_trader_rules", name)
 ```
 
-- [ ] **Step 4: Mirror columns into the ORM**
+- [x] **Step 4: Mirror columns into the ORM**
 
 Update `api/models/pattern.py` `PaperTraderRule`:
 
@@ -164,7 +164,7 @@ from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, Nume
 from decimal import Decimal
 ```
 
-- [ ] **Step 5: Run to verify**
+- [x] **Step 5: Run to verify**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -173,7 +173,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/alembic/versions/016_v2_promotion_columns.py \
@@ -189,7 +189,7 @@ git commit -m "feat: migration 016 — v2 promotion gate columns"
 - Create: `api/services/statistics.py`
 - Test: `tests/test_statistics.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_statistics.py
@@ -253,7 +253,7 @@ def test_profit_factor_no_wins_returns_zero():
     assert profit_factor(profits) == Decimal("0.0000")
 ```
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -262,7 +262,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement `statistics.py`**
+- [x] **Step 3: Implement `statistics.py`**
 
 ```python
 # api/services/statistics.py
@@ -307,7 +307,7 @@ def profit_factor(profits: Sequence[Decimal]) -> Decimal:
     return (wins / abs(losses)).quantize(Decimal("0.0001"))
 ```
 
-- [ ] **Step 4: Run to verify**
+- [x] **Step 4: Run to verify**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -316,7 +316,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS (10 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/services/statistics.py tests/test_statistics.py
@@ -331,7 +331,7 @@ git commit -m "feat: Wilson lower CI + net EV + profit factor helpers"
 - Create: `api/services/trust_tier.py`
 - Test: `tests/test_trust_tier.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_trust_tier.py
@@ -375,7 +375,7 @@ def test_walk_forward_alone_does_not_promote():
     assert compute_trust_tier(g) == TIER_EXPERIMENTAL
 ```
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -384,7 +384,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement `trust_tier.py`**
+- [x] **Step 3: Implement `trust_tier.py`**
 
 ```python
 # api/services/trust_tier.py
@@ -415,7 +415,7 @@ def compute_trust_tier(outcomes: GateOutcomes) -> str:
     return TIER_EXPERIMENTAL
 ```
 
-- [ ] **Step 4: Run to verify**
+- [x] **Step 4: Run to verify**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -424,7 +424,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS (6 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/services/trust_tier.py tests/test_trust_tier.py
@@ -439,7 +439,7 @@ git commit -m "feat: trust tier mapping from gate outcomes"
 - Create: `api/services/promotion_gate.py`
 - Test: `tests/test_promotion_gate.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_promotion_gate.py
@@ -508,7 +508,7 @@ async def test_sample_gate_passes_at_threshold(session):
     assert result.gates.sample is True
 ```
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -517,7 +517,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement skeleton + Gate 1**
+- [x] **Step 3: Implement skeleton + Gate 1**
 
 ```python
 # api/services/promotion_gate.py
@@ -602,7 +602,7 @@ async def _persist(
     await session.commit()
 ```
 
-- [ ] **Step 4: Run to verify**
+- [x] **Step 4: Run to verify**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -611,7 +611,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/services/promotion_gate.py tests/test_promotion_gate.py
@@ -626,7 +626,7 @@ git commit -m "feat: promotion gate skeleton + Gate 1 (sample sufficiency)"
 - Modify: `api/services/promotion_gate.py`
 - Modify: `tests/test_promotion_gate.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Append to `tests/test_promotion_gate.py`:
 
@@ -711,7 +711,7 @@ async def test_performance_gate_fails_when_low_net_ev(session):
     assert "ev" in result.reason or "profit_factor" in result.reason
 ```
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -720,7 +720,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL — performance gate not implemented.
 
-- [ ] **Step 3: Implement Gate 2 inside `evaluate_rule()`**
+- [x] **Step 3: Implement Gate 2 inside `evaluate_rule()`**
 
 In `api/services/promotion_gate.py`:
 
@@ -845,7 +845,7 @@ async def evaluate_rule(
     return result
 ```
 
-- [ ] **Step 4: Run to verify**
+- [x] **Step 4: Run to verify**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -854,7 +854,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS for performance_gate tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/services/promotion_gate.py tests/test_promotion_gate.py
@@ -869,7 +869,7 @@ git commit -m "feat: Gate 2 — Wilson + net EV + profit factor + baseline delta
 - Modify: `api/services/promotion_gate.py`
 - Modify: `tests/test_promotion_gate.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 @pytest.mark.asyncio
@@ -910,7 +910,7 @@ async def test_walk_forward_passes_with_held_out_window(session):
     assert result.tier == "ea_candidate"
 ```
 
-- [ ] **Step 2: Implement Gate 3 + Gate 4**
+- [x] **Step 2: Implement Gate 3 + Gate 4**
 
 In `api/services/promotion_gate.py`:
 
@@ -1005,7 +1005,7 @@ async def evaluate_rule(
     return result
 ```
 
-- [ ] **Step 3: Run to verify**
+- [x] **Step 3: Run to verify**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -1014,7 +1014,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add api/services/promotion_gate.py tests/test_promotion_gate.py
@@ -1029,7 +1029,7 @@ git commit -m "feat: Gate 3 (stability) + Gate 4 (walk-forward)"
 - Modify: `api/services/promotion_gate.py`
 - Modify: `api/main.py`
 
-- [ ] **Step 1: Add `evaluate_all_active_rules()`**
+- [x] **Step 1: Add `evaluate_all_active_rules()`**
 
 ```python
 async def evaluate_all_active_rules(
@@ -1056,7 +1056,7 @@ async def _evaluate_all(session: AsyncSession) -> list[GateResult]:
     return results
 ```
 
-- [ ] **Step 2: Schedule cron in `api/main.py`**
+- [x] **Step 2: Schedule cron in `api/main.py`**
 
 ```python
 from services.promotion_gate import evaluate_all_active_rules
@@ -1090,7 +1090,7 @@ And update `needs_scheduler` to include it:
     )
 ```
 
-- [ ] **Step 3: Smoke test**
+- [x] **Step 3: Smoke test**
 
 ```
 docker compose up -d
@@ -1103,7 +1103,7 @@ Expect no scheduler exceptions.
 docker compose down
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add api/services/promotion_gate.py api/main.py
@@ -1118,7 +1118,7 @@ git commit -m "feat: daily promotion gate cron over all non-baseline rules"
 - Modify: `api/routers/patterns.py`
 - Test: `tests/test_promotion_gate_api.py`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```python
 # tests/test_promotion_gate_api.py
@@ -1188,7 +1188,7 @@ async def test_pattern_gates_endpoint_returns_breakdown(client):
     }
 ```
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -1197,7 +1197,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL with 404.
 
-- [ ] **Step 3: Add the endpoint to `api/routers/patterns.py`**
+- [x] **Step 3: Add the endpoint to `api/routers/patterns.py`**
 
 ```python
 from services.promotion_gate import evaluate_rule
@@ -1233,7 +1233,7 @@ async def pattern_gates(
     return {"pattern_id": str(pattern_id), "rules": summaries}
 ```
 
-- [ ] **Step 4: Run to verify**
+- [x] **Step 4: Run to verify**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -1242,7 +1242,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/routers/patterns.py tests/test_promotion_gate_api.py
@@ -1257,7 +1257,7 @@ git commit -m "feat: GET /api/patterns/{id}/gates breakdown"
 - Modify: `api/services/promotion_gate.py`
 - Modify: `tests/test_promotion_gate.py`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```python
 @pytest.mark.asyncio
@@ -1284,7 +1284,7 @@ async def test_stable_days_resets_when_performance_fails(session):
     assert rule.consecutive_stable_days_rule == 0
 ```
 
-- [ ] **Step 2: Add the bump logic** in `evaluate_rule()`
+- [x] **Step 2: Add the bump logic** in `evaluate_rule()`
 
 After `gates.performance` is determined:
 
@@ -1295,7 +1295,7 @@ After `gates.performance` is determined:
             rule.consecutive_stable_days_rule = 0
 ```
 
-- [ ] **Step 3: Run to verify**
+- [x] **Step 3: Run to verify**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -1304,7 +1304,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add api/services/promotion_gate.py tests/test_promotion_gate.py
@@ -1315,7 +1315,7 @@ git commit -m "feat: bump/reset consecutive_stable_days based on Gate 2"
 
 ## Task 10: Full regression
 
-- [ ] **Step 1: Run all tests**
+- [x] **Step 1: Run all tests**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -1324,7 +1324,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS — including all `test_promotion_gate*`, `test_statistics`, `test_trust_tier`, `test_migration_016`.
 
-- [ ] **Step 2: Commit any test fixups**
+- [x] **Step 2: Commit any test fixups**
 
 ```bash
 git add -A tests/
