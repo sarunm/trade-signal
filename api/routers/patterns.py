@@ -64,6 +64,8 @@ async def list_paper_trader_rules(
                 wilson_lower_95=getattr(r, "wilson_lower_95", None),
                 baseline_delta=getattr(r, "baseline_delta", None),
                 last_signal_status=getattr(r, "last_signal_status", None),
+                filters=list(getattr(r, "filters", None) or []),
+                shadow_of_rule_id=getattr(r, "shadow_of_rule_id", None),
             )
         )
     return out

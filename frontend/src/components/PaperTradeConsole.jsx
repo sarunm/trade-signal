@@ -12,7 +12,7 @@ export default function PaperTradeConsole() {
   usePaperSignalNotifications(rules.data)
 
   const sorted = useMemo(() => {
-    const list = (rules.data || []).slice()
+    const list = (rules.data || []).filter((r) => r.status !== 'shadow')
     list.sort((a, b) => {
       const ta = TIER_RANK[a.trust_tier] || 0
       const tb = TIER_RANK[b.trust_tier] || 0

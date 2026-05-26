@@ -34,6 +34,8 @@ class PaperTraderRuleResponse(BaseModel):
     wilson_lower_95: Optional[Decimal] = None
     baseline_delta: Optional[Decimal] = None
     last_signal_status: Optional[str] = None
+    filters: list[dict] = []
+    shadow_of_rule_id: Optional[UUID] = None
 
     @computed_field
     @property

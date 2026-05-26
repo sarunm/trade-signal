@@ -46,6 +46,25 @@ export default function PaperRuleCard({ rule, pattern }) {
       <div className="text-xs text-gray-500">
         Trades {rule.total_trades} · Wins {rule.win_count}
       </div>
+      {rule.shadow_of_rule_id ? (
+        <div className="text-xs text-amber-300">
+          🌗 Shadow of <code className="text-amber-200">{rule.shadow_of_rule_id.slice(0, 8)}</code> — testing:
+          {(rule.filters || []).map((f, i) => (
+            <span key={i} className="ml-1 inline-block rounded bg-amber-900/40 px-1">
+              {f.feature}≠{f.exclude}
+            </span>
+          ))}
+        </div>
+      ) : (rule.filters || []).length > 0 ? (
+        <div className="text-xs text-gray-400">
+          Filters:
+          {rule.filters.map((f, i) => (
+            <span key={i} className="ml-1 inline-block rounded bg-gray-800 px-1">
+              {f.feature}≠{f.exclude}
+            </span>
+          ))}
+        </div>
+      ) : null}
     </div>
   )
 }
