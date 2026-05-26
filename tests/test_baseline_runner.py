@@ -62,7 +62,7 @@ async def test_ensure_baseline_idempotent(session):
 def _baseline_trade(rule_id, direction: Direction, ticket: int, open_time: datetime) -> Trade:
     return Trade(
         ticket=ticket,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=direction,
         order_type=OrderType.market,
         order_state=OrderState.filled,
@@ -108,7 +108,7 @@ async def test_alternates_after_sell(session):
 
 async def _seed_h1_bar(session, t: datetime, close: float = 1950.0):
     session.add(PriceBar(
-        symbol="XAUUSD", timeframe=Timeframe.H1, time=t,
+        symbol="GOLD#", timeframe=Timeframe.H1, time=t,
         open=Decimal(str(close)), high=Decimal(str(close + 1)),
         low=Decimal(str(close - 1)), close=Decimal(str(close)),
         volume=Decimal("100"),

@@ -13,7 +13,7 @@ _BKK = timezone(timedelta(hours=7))
 
 def _t(ticket, direction, vol, entry):
     return Trade(
-        id=uuid4(), ticket=ticket, symbol="XAUUSD", direction=direction,
+        id=uuid4(), ticket=ticket, symbol="GOLD#", direction=direction,
         order_state=OrderState.filled, is_paper=False,
         open_time=datetime.now(timezone.utc),
         open_price=Decimal(str(entry)),
@@ -87,7 +87,7 @@ async def test_basket_uses_latest_m5_close_for_current_and_net_float(client, db_
     ])
     db_session.add(PriceBar(
         time=datetime.now(timezone.utc),
-        symbol="XAUUSD", timeframe="M5",
+        symbol="GOLD#", timeframe="M5",
         open=Decimal("1959"), high=Decimal("1960"),
         low=Decimal("1958"), close=Decimal("1960.00"),
         volume=Decimal("100"),
@@ -112,7 +112,7 @@ async def test_basket_ruin_safe_tier(client, db_session, monkeypatch):
     monkeypatch.setenv("RUIN_STOP_OUT_PCT", "50")
     db_session.add(_t(9101, Direction.buy, "0.10", "1955.00"))
     db_session.add(PriceBar(
-        time=datetime.now(timezone.utc), symbol="XAUUSD", timeframe="M5",
+        time=datetime.now(timezone.utc), symbol="GOLD#", timeframe="M5",
         open=Decimal("1958"), high=Decimal("1958"),
         low=Decimal("1958"), close=Decimal("1958.00"),
         volume=Decimal("100"),
@@ -138,7 +138,7 @@ async def test_basket_ruin_danger_tier_when_buffer_low(client, db_session, monke
     monkeypatch.setenv("RUIN_STOP_OUT_PCT", "50")
     db_session.add(_t(9201, Direction.buy, "1.00", "1955.00"))
     db_session.add(PriceBar(
-        time=datetime.now(timezone.utc), symbol="XAUUSD", timeframe="M5",
+        time=datetime.now(timezone.utc), symbol="GOLD#", timeframe="M5",
         open=Decimal("1955"), high=Decimal("1955"),
         low=Decimal("1955"), close=Decimal("1955.00"),
         volume=Decimal("100"),
@@ -160,7 +160,7 @@ async def test_basket_ruin_danger_tier_when_buffer_low(client, db_session, monke
 async def test_basket_ruin_null_when_no_snapshot(client, db_session):
     db_session.add(_t(9301, Direction.buy, "0.10", "1955.00"))
     db_session.add(PriceBar(
-        time=datetime.now(timezone.utc), symbol="XAUUSD", timeframe="M5",
+        time=datetime.now(timezone.utc), symbol="GOLD#", timeframe="M5",
         open=Decimal("1958"), high=Decimal("1958"),
         low=Decimal("1958"), close=Decimal("1958.00"),
         volume=Decimal("100"),
@@ -191,7 +191,7 @@ async def test_basket_tp_targets_and_zones_use_deepest_trade(client, db_session)
     db_session.add(deepest)
     db_session.add(_t(9402, Direction.buy, "0.10", "1958.00"))
     db_session.add(PriceBar(
-        time=datetime.now(timezone.utc), symbol="XAUUSD", timeframe="M5",
+        time=datetime.now(timezone.utc), symbol="GOLD#", timeframe="M5",
         open=Decimal("1959"), high=Decimal("1959"),
         low=Decimal("1959"), close=Decimal("1959.00"),
         volume=Decimal("100"),
@@ -219,22 +219,22 @@ async def test_basket_pnl_summary_buckets_today_week_month(client, db_session, m
     older = datetime(2026, 4, 5, 12, tzinfo=_BKK).astimezone(timezone.utc)
 
     db_session.add_all([
-        Trade(id=uuid4(), ticket=10001, symbol="XAUUSD", direction=Direction.buy,
+        Trade(id=uuid4(), ticket=10001, symbol="GOLD#", direction=Direction.buy,
               order_state=OrderState.filled, is_paper=False,
               open_time=today_close, close_time=today_close,
               open_price=Decimal("1955"), close_price=Decimal("1960"),
               volume=Decimal("0.10"), profit=Decimal("420.00")),
-        Trade(id=uuid4(), ticket=10002, symbol="XAUUSD", direction=Direction.buy,
+        Trade(id=uuid4(), ticket=10002, symbol="GOLD#", direction=Direction.buy,
               order_state=OrderState.filled, is_paper=False,
               open_time=week_close, close_time=week_close,
               open_price=Decimal("1955"), close_price=Decimal("1960"),
               volume=Decimal("0.10"), profit=Decimal("1430.00")),
-        Trade(id=uuid4(), ticket=10003, symbol="XAUUSD", direction=Direction.buy,
+        Trade(id=uuid4(), ticket=10003, symbol="GOLD#", direction=Direction.buy,
               order_state=OrderState.filled, is_paper=False,
               open_time=month_close, close_time=month_close,
               open_price=Decimal("1955"), close_price=Decimal("1960"),
               volume=Decimal("0.10"), profit=Decimal("2380.00")),
-        Trade(id=uuid4(), ticket=10004, symbol="XAUUSD", direction=Direction.buy,
+        Trade(id=uuid4(), ticket=10004, symbol="GOLD#", direction=Direction.buy,
               order_state=OrderState.filled, is_paper=False,
               open_time=older, close_time=older,
               open_price=Decimal("1955"), close_price=Decimal("1960"),

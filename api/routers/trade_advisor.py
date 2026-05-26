@@ -102,7 +102,7 @@ async def get_trade_advisor(session: AsyncSession = Depends(get_session)):
     ]
     price_result = await session.execute(
         select(PriceBar.close)
-        .where(PriceBar.symbol == "XAUUSD", PriceBar.timeframe == "M5")
+        .where(PriceBar.symbol == "GOLD#", PriceBar.timeframe == "M5")
         .order_by(PriceBar.time.desc())
         .limit(1)
     )

@@ -132,7 +132,7 @@ async def _has_open_baseline(session: AsyncSession, rule: PaperTraderRule) -> bo
 
 
 async def _latest_h1_close(
-    session: AsyncSession, symbol: str = "XAUUSD"
+    session: AsyncSession, symbol: str = "GOLD#"
 ) -> Optional[Decimal]:
     result = await session.execute(
         select(PriceBar)
@@ -165,7 +165,7 @@ async def open_baseline_trade(
     direction = await next_direction(session, rule)
     trade = Trade(
         ticket=int(now.timestamp() * 1000) % 1_000_000_000_000,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=direction,
         order_type=OrderType.market,
         order_state=OrderState.filled,

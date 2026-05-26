@@ -13,7 +13,7 @@ router = APIRouter(prefix="/api", tags=["price-bars"])
 
 @router.get("/price-bars", response_model=List[PriceBarResponse])
 async def list_price_bars(
-    symbol: str = Query("XAUUSD"),
+    symbol: str = Query("GOLD#"),
     tf: Timeframe = Query(Timeframe.M15),
     limit: int = Query(50, ge=1, le=500),
     session: AsyncSession = Depends(get_session),
