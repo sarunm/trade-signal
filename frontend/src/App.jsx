@@ -1,17 +1,16 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useState, useMemo } from 'react'
 import { usePolling } from './hooks/usePolling'
 import { useTradeAlerts } from './hooks/useTradeAlerts'
-import AccountBar from './components/AccountBar'
+import TopBar from './components/TopBar'
+import SectionDivider from './components/SectionDivider'
 import AlertsPanel from './components/AlertsPanel'
 import InsightsPanel from './components/InsightsPanel'
 import FibPanel from './components/FibPanel'
 import TraderProfile from './components/TraderProfile'
 import OpenPositions from './components/OpenPositions'
 import ClosedTrades from './components/ClosedTrades'
-import DailyPLPanel from './components/DailyPLPanel'
 import PnlChart from './components/PnlChart'
 import TradeAdvisor from './components/TradeAdvisor'
-import EAStatusBadge from './components/EAStatusBadge'
 import PaperTradeConsole from './components/PaperTradeConsole'
 
 const API = 'http://localhost:8000'
@@ -25,12 +24,10 @@ async function get(path) {
 export default function App() {
   const [closedLimit, setClosedLimit] = useState(20)
   const [closedOffset, setClosedOffset] = useState(0)
-  const [dailyDays, setDailyDays] = useState(14)
 
   const fetchAccount = useCallback(() => get('/api/account'), [])
   const fetchAlerts = useCallback(() => get('/api/alerts'), [])
   const fetchInsights = useCallback(() => get('/api/insights'), [])
-  const fetchDailyPL = useCallback(() => get(`/api/daily-pl?days=${dailyDays}`), [dailyDays])
   const fetchOpen = useCallback(() => get('/api/trades?state=open'), [])
   const fetchClosed = useCallback(
     () => get(`/api/trades?state=closed&limit=${closedLimit}&offset=${closedOffset}`),
@@ -40,17 +37,18 @@ export default function App() {
   const fetchFib = useCallback(() => get('/api/fib-levels'), [])
   const fetchTraderProfile = useCallback(() => get('/api/trader-profile'), [])
   const fetchAdvisor = useCallback(() => get('/api/trade-advisor'), [])
+  const fetchEa = useCallback(() => get('/api/ea-status'), [])
 
   const account = usePolling(fetchAccount, 3000)
   const alerts = usePolling(fetchAlerts)
   const insights = usePolling(fetchInsights)
-  const dailyPL = usePolling(fetchDailyPL)
   const openTrades = usePolling(fetchOpen)
   const closedTrades = usePolling(fetchClosed)
   const pnlHistory = usePolling(fetchPnl)
   const fib = usePolling(fetchFib)
   const traderProfile = usePolling(fetchTraderProfile, 60000)
   const advisor = usePolling(fetchAdvisor)
+  const eaStatus = usePolling(fetchEa, 5000)
   useTradeAlerts()
 
   const acknowledgeAlert = useCallback(async (id) => {
@@ -67,52 +65,87 @@ export default function App() {
     } catch (_) {}
   }, [alerts.refetch])
 
-  const handleTradeTagged = useCallback(() => {
-    openTrades.refetch()
-  }, [openTrades.refetch])
+  const handleTradeTagged = useCallback(() => openTrades.refetch(), [openTrades.refetch])
+
+  const todaySummary = advisor.data?.basket?.pnl_summary?.today
+  const xauPrice = advisor.data?.basket?.current
+  const alertCount = useMemo(
+    () => (alerts.data ?? []).filter(a => !a.acknowledged_at).length,
+    [alerts.data]
+  )
+  const eaOnline = (eaStatus.data?.status === 'online') || (eaStatus.data?.online === true)
+
+  const scrollToAlerts = useCallback(() => {
+    const el = document.getElementById('alerts-anchor')
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 p-4 space-y-4">
-      <div className="flex items-start gap-3">
-        <AccountBar data={account.data} error={account.error} lastUpdated={account.lastUpdated} />
-        <EAStatusBadge accountId={account.data?.account_id} />
-      </div>
-      <TraderProfile data={traderProfile.data} error={traderProfile.error} />
-      <DailyPLPanel
-        data={dailyPL.data}
-        error={dailyPL.error}
-        days={dailyDays}
-        onDaysChange={setDailyDays}
+    <div className="min-h-screen bg-base text-text-primary">
+      <TopBar
+        equity={account.data?.equity}
+        todayPnlBaht={todaySummary?.baht}
+        todayPnlPct={todaySummary?.pct}
+        floatPl={account.data?.floating_pl}
+        xauPrice={xauPrice}
+        alertCount={alertCount}
+        eaOnline={eaOnline}
+        onAlertsClick={scrollToAlerts}
       />
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <AlertsPanel
-          data={alerts.data}
-          error={alerts.error}
-          onAcknowledge={acknowledgeAlert}
-          onAcknowledgeAll={acknowledgeAll}
-        />
-        <InsightsPanel data={insights.data} error={insights.error} />
-        <FibPanel data={fib.data?.[0]} accountData={account.data} error={fib.error} />
-      </div>
-      <OpenPositions
-        data={openTrades.data}
-        error={openTrades.error}
-        onTradeTagged={handleTradeTagged}
-      />
-      <ClosedTrades
-        data={closedTrades.data}
-        error={closedTrades.error}
-        limit={closedLimit}
-        onLimitChange={setClosedLimit}
-        offset={closedOffset}
-        onOffsetChange={setClosedOffset}
-      />
-      <PnlChart data={pnlHistory.data} error={pnlHistory.error} />
-      <PaperTradeConsole />
-      <section>
-        <h2 className="text-lg font-semibold mb-2">Trade Advisor</h2>
-        <TradeAdvisor data={advisor.data} />
-      </section>
+      <main className="px-4 pb-8">
+        <SectionDivider label="Real Trading" />
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          <div className="lg:col-span-7">
+            <OpenPositions
+              data={openTrades.data}
+              error={openTrades.error}
+              onTradeTagged={handleTradeTagged}
+            />
+          </div>
+          <div className="lg:col-span-5">
+            <TradeAdvisor data={advisor.data} />
+          </div>
+        </div>
+        <div id="alerts-anchor" className="grid grid-cols-1 lg:grid-cols-12 gap-4 mt-4">
+          <div className="lg:col-span-4">
+            <AlertsPanel
+              data={alerts.data}
+              error={alerts.error}
+              onAcknowledge={acknowledgeAlert}
+              onAcknowledgeAll={acknowledgeAll}
+            />
+          </div>
+          <div className="lg:col-span-4">
+            <InsightsPanel data={insights.data} error={insights.error} />
+          </div>
+          <div className="lg:col-span-4">
+            <FibPanel data={fib.data?.[0]} accountData={account.data} error={fib.error} />
+          </div>
+        </div>
+
+        <SectionDivider label="Paper Lab" />
+        <PaperTradeConsole />
+
+        <SectionDivider label="History" />
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          <div className="lg:col-span-7">
+            <ClosedTrades
+              data={closedTrades.data}
+              error={closedTrades.error}
+              limit={closedLimit}
+              onLimitChange={setClosedLimit}
+              offset={closedOffset}
+              onOffsetChange={setClosedOffset}
+            />
+          </div>
+          <div className="lg:col-span-5">
+            <PnlChart data={pnlHistory.data} error={pnlHistory.error} />
+          </div>
+        </div>
+        <div className="mt-4">
+          <TraderProfile data={traderProfile.data} account={account.data} error={traderProfile.error} />
+        </div>
+      </main>
     </div>
   )
 }
