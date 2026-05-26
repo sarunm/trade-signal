@@ -62,7 +62,19 @@ function CandidateRow({ candidate }) {
   )
 }
 
-export default function TraderProfile({ data, error }) {
+function Stat({ label, value, isString }) {
+  let display = '—'
+  if (isString) display = value
+  else if (value != null) display = `฿${Math.round(Number(value)).toLocaleString()}`
+  return (
+    <div>
+      <div className="text-text-dim">{label}</div>
+      <div className="font-mono text-text-primary">{display}</div>
+    </div>
+  )
+}
+
+export default function TraderProfile({ data, account, error }) {
   if (error || !data) return null
 
   const { summary, candidates } = data
@@ -71,6 +83,16 @@ export default function TraderProfile({ data, error }) {
   return (
     <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
       <h2 className="mb-3 text-sm font-semibold text-gray-400">Trader Profile</h2>
+      <div className="mb-3 grid grid-cols-2 lg:grid-cols-4 gap-3 text-xs border-b border-border-default pb-3">
+        <Stat label="Balance" value={account?.balance} />
+        <Stat label="Margin" value={account?.margin} />
+        <Stat label="Free margin" value={account?.free_margin} />
+        <Stat label="Margin level" value={
+          account && Number(account.margin) > 0
+            ? `${((Number(account.equity) / Number(account.margin)) * 100).toFixed(1)}%`
+            : '—'
+        } isString />
+      </div>
       <div className="mb-3">
         {narrative ? (
           <>
