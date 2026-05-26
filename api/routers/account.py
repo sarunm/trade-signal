@@ -1,3 +1,4 @@
+import os
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
@@ -10,11 +11,21 @@ from sqlalchemy import select
 
 from database import get_session
 from models.account_snapshot import AccountSnapshot
+from models.ea_status import EAStatus
+from models.price_bar import PriceBar
 from models.trade import OrderState, Trade
-from schemas.account import AccountResponse, AccountSnapshotResponse, PnlHistoryItem, PnlHistoryResponse
+from schemas.account import (
+    AccountResponse,
+    AccountSnapshotResponse,
+    HeaderSnapshotResponse,
+    PnlHistoryItem,
+    PnlHistoryResponse,
+)
 
 router = APIRouter(prefix="/api", tags=["account"])
 _ICT = timezone(timedelta(hours=7))
+EA_DISCONNECT_UI_THRESHOLD_SEC = int(os.getenv("EA_DISCONNECT_UI_THRESHOLD_SEC", 120))
+HEADER_SYMBOL = os.getenv("HEADER_PRICE_SYMBOL", "GOLD#")
 
 
 @router.get("/account", response_model=AccountResponse)
@@ -42,6 +53,63 @@ def _as_utc(dt: datetime) -> datetime:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)
+
+
+@router.get("/header-snapshot", response_model=HeaderSnapshotResponse)
+async def get_header_snapshot(session: AsyncSession = Depends(get_session)):
+    snap_res = await session.execute(
+        select(AccountSnapshot).order_by(AccountSnapshot.timestamp.desc()).limit(1)
+    )
+    snapshot = snap_res.scalar_one_or_none()
+
+    price_res = await session.execute(
+        select(PriceBar.close)
+        .where(PriceBar.symbol == HEADER_SYMBOL)
+        .order_by(PriceBar.time.desc())
+        .limit(1)
+    )
+    xau_price = price_res.scalar_one_or_none()
+
+    today_baht: Optional[Decimal] = None
+    today_pct: Optional[Decimal] = None
+    if snapshot is not None:
+        today = datetime.now(_ICT).date()
+        trade_stmt = select(Trade.profit).where(
+            Trade.is_paper == False,
+            Trade.order_state == OrderState.filled,
+            Trade.close_time.isnot(None),
+            Trade.profit.isnot(None),
+        )
+        if snapshot.account_id is not None:
+            trade_stmt = trade_stmt.where(Trade.account_id == snapshot.account_id)
+        trade_res = await session.execute(
+            trade_stmt.where(Trade.close_time >= datetime.combine(today, datetime.min.time(), tzinfo=_ICT))
+        )
+        today_baht = sum((p for p in trade_res.scalars().all()), Decimal("0.00"))
+        if snapshot.balance and snapshot.balance != 0:
+            today_pct = (today_baht / snapshot.balance * Decimal("100")).quantize(Decimal("0.01"))
+        today_baht = today_baht.quantize(Decimal("0.01"))
+
+    ea_online = False
+    if snapshot is not None and snapshot.account_id is not None:
+        ea = await session.get(EAStatus, snapshot.account_id)
+        if ea is not None:
+            last = ea.last_seen_at
+            if last.tzinfo is None:
+                last = last.replace(tzinfo=timezone.utc)
+            seconds = (datetime.now(timezone.utc) - last).total_seconds()
+            ea_online = seconds <= EA_DISCONNECT_UI_THRESHOLD_SEC
+
+    return HeaderSnapshotResponse(
+        account_id=snapshot.account_id if snapshot else None,
+        balance=snapshot.balance if snapshot else None,
+        equity=snapshot.equity if snapshot else None,
+        floating_pl=snapshot.floating_pl if snapshot else None,
+        today_pnl_baht=today_baht,
+        today_pnl_pct=today_pct,
+        xau_price=xau_price.quantize(Decimal("0.01")) if xau_price is not None else None,
+        ea_online=ea_online,
+    )
 
 
 @router.get("/account-snapshots", response_model=List[AccountSnapshotResponse])

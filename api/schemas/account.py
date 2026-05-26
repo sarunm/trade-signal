@@ -41,3 +41,14 @@ class PnlHistoryResponse(BaseModel):
     page_size: int
     total_pages: int
     total_count: int
+
+
+class HeaderSnapshotResponse(BaseModel):
+    account_id: Optional[int] = None
+    balance: Optional[Decimal] = None
+    equity: Optional[Decimal] = None
+    floating_pl: Optional[Decimal] = None
+    today_pnl_baht: Optional[Decimal] = None
+    today_pnl_pct: Optional[Decimal] = None
+    xau_price: Optional[Decimal] = None
+    ea_online: bool = False
