@@ -26,7 +26,7 @@ export default function BasketExitPlan({ basket }) {
   const [pnlOpen, setPnlOpen] = useState(false)
   if (!basket || basket.direction === 'flat') {
     return (
-      <div className="bg-card border border-border-default rounded-lg p-4 text-text-dim text-sm">
+      <div className="bg-card border border-border-default rounded-lg p-4 text-text-dim text-sm h-full">
         No open positions
         {basket?.pnl_summary && (
           <PnlSummaryBox summary={basket.pnl_summary} onClick={() => setPnlOpen(true)} />
@@ -37,21 +37,32 @@ export default function BasketExitPlan({ basket }) {
   }
 
   const floatTone = (basket.net_float ?? 0) >= 0 ? 'text-profit' : 'text-loss'
+  const dirTone = basket.direction === 'buy' ? 'text-profit' : 'text-loss'
+  const meanEntry = basket.mean_entry ?? basket.avg_entry
 
   return (
-    <div className="bg-card border border-border-default rounded-lg p-4 space-y-3">
+    <div className="bg-card border border-border-default rounded-lg p-4 space-y-3 h-full">
       <div className="text-text-dim text-xs uppercase tracking-wider">Basket Exit Plan</div>
       <div className="text-sm space-y-1">
         <div>
-          Net direction: <span className="font-semibold text-text-primary">
+          Net direction: <span className={`font-semibold ${dirTone}`}>
             {basket.direction.toUpperCase()}
           </span>
-          <span className="text-text-dim"> ({basket.lot_total} lot, {basket.order_count} orders)</span>
+          <span
+            className="text-text-dim cursor-help"
+            title="Net lot exposure (sum buy − sum sell), total open orders"
+          >
+            {' '}({basket.lot_total} lot, {basket.order_count} orders)
+          </span>
         </div>
         <div className="grid grid-cols-2 gap-x-4 font-mono text-text-primary">
-          <span>Avg entry: {basket.avg_entry?.toFixed(2) ?? '—'}</span>
+          <span title="Volume-weighted mean of entry prices, ignores direction">
+            Avg entry: {meanEntry != null ? Number(meanEntry).toFixed(2) : '—'}
+          </span>
           <span>Current: {basket.current?.toFixed(2) ?? '—'}</span>
-          <span>Basket BE: {basket.basket_be?.toFixed(2) ?? '—'}</span>
+          <span title="Signed-weighted price where basket float = 0">
+            Basket BE: {basket.basket_be?.toFixed(2) ?? '—'}
+          </span>
           <span className={floatTone}>Net float: {fmtBaht(basket.net_float)}</span>
         </div>
       </div>

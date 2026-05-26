@@ -80,6 +80,23 @@ async def test_basket_mixed_direction_nets_by_lot(client, db_session):
 
 
 @pytest.mark.asyncio
+async def test_basket_mean_entry_distinct_from_basket_be_for_mixed_directions(client, db_session):
+    db_session.add_all([
+        _t(8101, Direction.buy, "0.30", "4540.00"),
+        _t(8102, Direction.sell, "0.10", "4500.00"),
+    ])
+    await db_session.commit()
+
+    res = await client.get("/api/trade-advisor")
+    b = res.json()["basket"]
+    # mean_entry uses |volume|: (4540*0.30 + 4500*0.10) / 0.40 = 4530
+    assert Decimal(str(b["mean_entry"])) == Decimal("4530.00")
+    # basket_be uses signed volume: (4540*0.30 - 4500*0.10) / 0.20 = 4560
+    assert Decimal(str(b["basket_be"])) == Decimal("4560.00")
+    assert b["mean_entry"] != b["basket_be"]
+
+
+@pytest.mark.asyncio
 async def test_basket_uses_latest_m5_close_for_current_and_net_float(client, db_session):
     db_session.add_all([
         _t(9001, Direction.buy, "0.10", "1955.00"),

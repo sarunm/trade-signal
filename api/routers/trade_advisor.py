@@ -131,11 +131,16 @@ def _aggregate_basket(
 
     weight = Decimal("0")
     notional = Decimal("0")
+    abs_weight = Decimal("0")
+    abs_notional = Decimal("0")
     for t in open_trades:
         s = Decimal("1") if t.direction == Direction.buy else Decimal("-1")
         notional += t.open_price * t.volume * s
         weight += t.volume * s
+        abs_notional += t.open_price * t.volume
+        abs_weight += t.volume
     basket_be = (notional / weight).quantize(Decimal("0.01")) if weight != 0 else None
+    mean_entry = (abs_notional / abs_weight).quantize(Decimal("0.01")) if abs_weight != 0 else None
 
     current = latest_close.quantize(Decimal("0.01")) if latest_close is not None else None
     net_float = None
@@ -148,7 +153,8 @@ def _aggregate_basket(
         "direction": direction,
         "lot_total": float(abs(net)),
         "order_count": len(open_trades),
-        "avg_entry": float(basket_be) if basket_be is not None else None,
+        "mean_entry": float(mean_entry) if mean_entry is not None else None,
+        "avg_entry": float(mean_entry) if mean_entry is not None else None,
         "current": float(current) if current is not None else None,
         "basket_be": float(basket_be) if basket_be is not None else None,
         "net_float": float(net_float) if net_float is not None else None,
@@ -234,6 +240,7 @@ def _flat_basket() -> dict[str, Any]:
         "direction": "flat",
         "lot_total": 0,
         "order_count": 0,
+        "mean_entry": None,
         "avg_entry": None,
         "current": None,
         "basket_be": None,
