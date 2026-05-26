@@ -1,5 +1,6 @@
 from models.account_snapshot import AccountSnapshot  # noqa: F401
 from models.alert import Alert  # noqa: F401
+from models.cost_calibration import CostCalibration  # noqa: F401
 from models.ea_status import EAStatus  # noqa: F401
 from models.fib_level import FibLevel  # noqa: F401
 from models.indicator_signal import TradeIndicatorSignal  # noqa: F401
