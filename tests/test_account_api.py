@@ -92,12 +92,14 @@ async def test_get_daily_pl_uses_closed_real_trades_and_ignores_deposits(client,
 
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 1
-    assert data[0]["date"] == "2026-05-20"
-    assert float(data[0]["profit"]) == pytest.approx(200.00)
-    assert float(data[0]["profit_pct"]) == pytest.approx(2.0)
-    assert float(data[0]["base_balance"]) == pytest.approx(10000.00)
-    assert data[0]["trade_count"] == 2
+    assert len(data) == 7
+    by_date = {r["date"]: r for r in data}
+    assert "2026-05-20" in by_date
+    row = by_date["2026-05-20"]
+    assert float(row["profit"]) == pytest.approx(200.00)
+    assert float(row["profit_pct"]) == pytest.approx(2.0)
+    assert float(row["base_balance"]) == pytest.approx(10000.00)
+    assert row["trade_count"] == 2
 
 
 @pytest.mark.asyncio
@@ -147,6 +149,63 @@ async def test_get_account_snapshots_filters_by_window_and_account(client, db_se
     assert len(data) == 1
     assert float(data[0]["equity"]) == pytest.approx(1100.00)
     assert data[0]["account_id"] == 335297575
+
+
+@pytest.mark.asyncio
+async def test_get_daily_pl_fills_empty_days_with_zero(client, db_session):
+    base = datetime(2026, 5, 20, tzinfo=timezone.utc)
+    db_session.add_all([
+        AccountSnapshot(
+            timestamp=base.replace(hour=0, minute=5),
+            equity=Decimal("10000.00"),
+            balance=Decimal("10000.00"),
+            margin=Decimal("0.00"),
+            free_margin=Decimal("10000.00"),
+            floating_pl=Decimal("0.00"),
+            account_id=335297575,
+        ),
+        _closed_trade(3001, base.replace(hour=10), "100.00"),
+        _closed_trade(3002, (base + timedelta(days=2)).replace(hour=10), "200.00"),
+    ])
+    await db_session.commit()
+
+    response = await client.get("/api/daily-pl?days=3")
+
+    assert response.status_code == 200
+    data = response.json()
+    by_date = {r["date"]: r for r in data}
+    assert "2026-05-20" in by_date
+    assert "2026-05-21" in by_date
+    assert "2026-05-22" in by_date
+    assert by_date["2026-05-21"]["trade_count"] == 0
+    assert float(by_date["2026-05-21"]["profit"]) == pytest.approx(0.0)
+    assert float(by_date["2026-05-22"]["profit"]) == pytest.approx(200.0)
+
+
+@pytest.mark.asyncio
+async def test_get_daily_pl_forward_fills_base_balance(client, db_session):
+    base = datetime(2026, 5, 20, tzinfo=timezone.utc)
+    db_session.add_all([
+        AccountSnapshot(
+            timestamp=base.replace(hour=0, minute=5),
+            equity=Decimal("10000.00"),
+            balance=Decimal("10000.00"),
+            margin=Decimal("0.00"),
+            free_margin=Decimal("10000.00"),
+            floating_pl=Decimal("0.00"),
+            account_id=335297575,
+        ),
+        _closed_trade(4001, base.replace(hour=10), "100.00"),
+        _closed_trade(4002, (base + timedelta(days=2)).replace(hour=10), "200.00"),
+    ])
+    await db_session.commit()
+
+    response = await client.get("/api/daily-pl?days=3")
+
+    assert response.status_code == 200
+    by_date = {r["date"]: r for r in response.json()}
+    assert float(by_date["2026-05-22"]["base_balance"]) == pytest.approx(10000.0)
+    assert float(by_date["2026-05-21"]["base_balance"]) == pytest.approx(10000.0)
 
 
 @pytest.mark.asyncio

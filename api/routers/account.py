@@ -104,26 +104,40 @@ async def get_daily_pl(
         grouped[close_date]["profit"] += trade.profit
         grouped[close_date]["trade_count"] += 1
 
-    base_by_date = {}
+    first_snapshot_per_day: dict = {}
     for snapshot in snapshots:
         snapshot_date = _as_utc(snapshot.timestamp).astimezone(_ICT).date()
-        if snapshot_date < oldest or snapshot_date > anchor_day:
-            continue
-        base_by_date.setdefault(snapshot_date, snapshot.balance)
+        first_snapshot_per_day.setdefault(snapshot_date, snapshot.balance)
+
+    base_by_date: dict = {}
+    running = None
+    for d in sorted(first_snapshot_per_day):
+        if d <= oldest:
+            running = first_snapshot_per_day[d]
+    cur = oldest
+    while cur <= anchor_day:
+        if cur in first_snapshot_per_day:
+            running = first_snapshot_per_day[cur]
+        if running is not None:
+            base_by_date[cur] = running
+        cur += timedelta(days=1)
 
     rows = []
-    for day, stats in sorted(grouped.items(), reverse=True):
-        base_balance = base_by_date.get(day)
+    cur = anchor_day
+    while cur >= oldest:
+        stats = grouped.get(cur, {"profit": Decimal("0.00"), "trade_count": 0})
+        base_balance = base_by_date.get(cur)
         profit = stats["profit"].quantize(Decimal("0.01"))
         profit_pct = None
         if base_balance is not None and base_balance != 0:
             profit_pct = ((profit / base_balance) * Decimal("100")).quantize(Decimal("0.01"))
         rows.append(DailyPLResponse(
-            date=day,
+            date=cur,
             profit=profit,
             profit_pct=profit_pct,
             base_balance=base_balance,
             trade_count=stats["trade_count"],
         ))
+        cur -= timedelta(days=1)
 
     return rows
