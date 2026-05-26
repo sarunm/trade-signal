@@ -1,6 +1,6 @@
 # Plan 1 — Paper Trade Redesign: Foundation Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Spec:** `docs/superpowers/specs/2026-05-25-paper-trade-system-redesign.md` (FROZEN rev 1)
 
@@ -48,7 +48,7 @@ Migration 012 (Adaptive Tuning filters) and 013 (paper_signals hypertable extens
 - Create: `api/alembic/versions/011_paper_redesign_schema.py`
 - Test: `tests/test_migration_011.py`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```python
 # tests/test_migration_011.py
@@ -103,7 +103,7 @@ async def test_score_calibrations_table_exists(engine):
     assert "score_calibrations" in tables
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -112,7 +112,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL with `paper_signals not in tables` / missing columns.
 
-- [ ] **Step 3: Write the migration**
+- [x] **Step 3: Write the migration**
 
 ```python
 # api/alembic/versions/011_paper_redesign_schema.py
@@ -224,7 +224,7 @@ def downgrade() -> None:
             op.drop_column("paper_trader_rules", name)
 ```
 
-- [ ] **Step 4: Mirror columns into the ORM so `Base.metadata.create_all` covers them in tests**
+- [x] **Step 4: Mirror columns into the ORM so `Base.metadata.create_all` covers them in tests**
 
 Update `api/models/pattern.py`:
 
@@ -289,7 +289,7 @@ class PaperTraderRule(Base):
     last_signal_status: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 ```
 
-- [ ] **Step 5: Add ORM stubs for the new tables**
+- [x] **Step 5: Add ORM stubs for the new tables**
 
 Create `api/models/paper_signal.py`:
 
@@ -372,7 +372,7 @@ from models.score_calibration import ScoreCalibration  # noqa: F401
 from models.trade import Trade  # noqa: F401
 ```
 
-- [ ] **Step 6: Run test to verify it passes**
+- [x] **Step 6: Run test to verify it passes**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -381,7 +381,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS (3 tests).
 
-- [ ] **Step 7: Run the migration against Postgres to confirm it applies cleanly**
+- [x] **Step 7: Run the migration against Postgres to confirm it applies cleanly**
 
 ```
 docker compose up -d db
@@ -392,7 +392,7 @@ docker compose exec db psql -U tradesignal -d tradesignal -c "\dt paper_signals"
 
 Expected: column list shows `mode, virtual_balance_start, ...`; `paper_signals` table exists.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add api/alembic/versions/011_paper_redesign_schema.py \
@@ -413,7 +413,7 @@ git commit -m "feat: migration 011 — paper redesign schema (rule columns, pape
 - Modify: `api/models/__init__.py`
 - Test: `tests/test_migration_014.py`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```python
 # tests/test_migration_014.py
@@ -455,7 +455,7 @@ async def test_trades_has_paper_trader_rule_id(engine):
     assert "paper_trader_rule_id" in cols
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -464,7 +464,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL with `ea_status not in tables`.
 
-- [ ] **Step 3: Write the migration**
+- [x] **Step 3: Write the migration**
 
 ```python
 # api/alembic/versions/014_recovery_foundation.py
@@ -538,7 +538,7 @@ def downgrade() -> None:
         op.drop_table("ea_status")
 ```
 
-- [ ] **Step 4: Mirror columns in ORM**
+- [x] **Step 4: Mirror columns in ORM**
 
 Add to `api/models/trade.py` (after `recovery_plan`):
 
@@ -575,7 +575,7 @@ Add to `api/models/__init__.py`:
 from models.ea_status import EAStatus  # noqa: F401
 ```
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -584,7 +584,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS (2 tests).
 
-- [ ] **Step 6: Apply migration**
+- [x] **Step 6: Apply migration**
 
 ```
 docker compose run --rm api alembic upgrade head
@@ -594,7 +594,7 @@ docker compose exec db psql -U tradesignal -d tradesignal -c "\d trades" | grep 
 
 Expected: `ea_status` table exists, `paper_trader_rule_id` column present.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add api/alembic/versions/014_recovery_foundation.py \
@@ -610,7 +610,7 @@ git commit -m "feat: migration 014 — ea_status table + denormalized paper_trad
 **Files:**
 - Create: `api/schemas/ea_status.py`
 
-- [ ] **Step 1: Write the schemas**
+- [x] **Step 1: Write the schemas**
 
 ```python
 # api/schemas/ea_status.py
@@ -638,7 +638,7 @@ class EAStatusResponse(BaseModel):
     model_config = {"from_attributes": True}
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add api/schemas/ea_status.py
@@ -654,7 +654,7 @@ git commit -m "feat: add EA heartbeat + status schemas"
 - Modify: `api/main.py`
 - Test: `tests/test_ea_status_api.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_ea_status_api.py
@@ -714,7 +714,7 @@ async def test_get_status_returns_404_when_no_row(client):
     assert res.status_code == 404
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -723,7 +723,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL with `404 Not Found` on `/api/ea-heartbeat`.
 
-- [ ] **Step 3: Write the router**
+- [x] **Step 3: Write the router**
 
 ```python
 # api/routers/ea_status.py
@@ -789,7 +789,7 @@ def _to_response(row: EAStatus, now: datetime) -> EAStatusResponse:
     )
 ```
 
-- [ ] **Step 4: Wire the router into the app**
+- [x] **Step 4: Wire the router into the app**
 
 Edit `api/main.py`:
 
@@ -805,7 +805,7 @@ Register it after `price_bars_router`:
 app.include_router(ea_status_router)
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -814,7 +814,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS (4 tests).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/routers/ea_status.py api/main.py tests/test_ea_status_api.py
@@ -828,7 +828,7 @@ git commit -m "feat: add /api/ea-heartbeat + /api/ea-status endpoints"
 **Files:**
 - Modify: `ea/TradeSignalBridge.mq5`
 
-- [ ] **Step 1: Add `SendHeartbeat()` helper**
+- [x] **Step 1: Add `SendHeartbeat()` helper**
 
 After the `SendPriceTick()` function (around line 471–514), add:
 
@@ -851,7 +851,7 @@ void SendHeartbeat()
 }
 ```
 
-- [ ] **Step 2: Call `SendHeartbeat()` in `OnTimer()`**
+- [x] **Step 2: Call `SendHeartbeat()` in `OnTimer()`**
 
 Replace the `OnTimer()` body (around line 621–625):
 
@@ -864,7 +864,7 @@ void OnTimer()
 }
 ```
 
-- [ ] **Step 3: Bump version banner**
+- [x] **Step 3: Bump version banner**
 
 Change line 6 from `#property version   "1.08"` to `#property version   "1.09"` and update the print at line 304:
 
@@ -872,7 +872,7 @@ Change line 6 from `#property version   "1.08"` to `#property version   "1.09"` 
 Print("TradeSignalBridge v1.09 started. Sending to: ", InpServerURL, " | Symbol: ", InpSymbol);
 ```
 
-- [ ] **Step 4: Manual verify**
+- [x] **Step 4: Manual verify**
 
 ```
 # Compile + attach EA to chart, then watch heartbeats land
@@ -880,7 +880,7 @@ docker compose logs -f api | grep ea-heartbeat
 # Expected: every 60s a 200 response on POST /api/ea-heartbeat
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add ea/TradeSignalBridge.mq5
@@ -896,7 +896,7 @@ git commit -m "feat(ea): send heartbeat to /api/ea-heartbeat every InpTimerSec"
 - Create: `frontend/src/components/EAStatusBadge.jsx`
 - Modify: `frontend/src/App.jsx`
 
-- [ ] **Step 1: Write the polling hook**
+- [x] **Step 1: Write the polling hook**
 
 ```javascript
 // frontend/src/hooks/useEAStatus.js
@@ -940,7 +940,7 @@ export function useEAStatus(accountId) {
 }
 ```
 
-- [ ] **Step 2: Write the badge component**
+- [x] **Step 2: Write the badge component**
 
 ```jsx
 // frontend/src/components/EAStatusBadge.jsx
@@ -989,7 +989,7 @@ export default function EAStatusBadge({ accountId }) {
 }
 ```
 
-- [ ] **Step 3: Mount the badge in `App.jsx`**
+- [x] **Step 3: Mount the badge in `App.jsx`**
 
 Edit `frontend/src/App.jsx`:
 
@@ -1008,7 +1008,7 @@ Replace the existing `<AccountBar ... />` line with a wrapper that puts the badg
       </div>
 ```
 
-- [ ] **Step 4: Build to confirm no syntax errors**
+- [x] **Step 4: Build to confirm no syntax errors**
 
 ```
 cd frontend && npm run build
@@ -1016,7 +1016,7 @@ cd frontend && npm run build
 
 Expected: build succeeds, no errors.
 
-- [ ] **Step 5: Manual verify**
+- [x] **Step 5: Manual verify**
 
 Start everything:
 
@@ -1027,7 +1027,7 @@ cd frontend && npm run dev
 
 Open http://localhost:3000. With the EA running you should see the green badge update every ≤ 10s. Stop the EA — within ~`EA_DISCONNECT_UI_THRESHOLD_SEC` (120s) the badge flips to red.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add frontend/src/hooks/useEAStatus.js frontend/src/components/EAStatusBadge.jsx frontend/src/App.jsx
@@ -1038,7 +1038,7 @@ git commit -m "feat(ui): EA connection status badge in dashboard header"
 
 ## Task 7: Full regression
 
-- [ ] **Step 1: Run the full backend suite**
+- [x] **Step 1: Run the full backend suite**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -1047,13 +1047,13 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: previous test count + 9 new tests, all green.
 
-- [ ] **Step 2: Frontend build**
+- [x] **Step 2: Frontend build**
 
 ```
 cd frontend && npm run build
 ```
 
-- [ ] **Step 3: Smoke check the new endpoints**
+- [x] **Step 3: Smoke check the new endpoints**
 
 ```
 curl -X POST http://localhost:8000/api/ea-heartbeat \
@@ -1064,7 +1064,7 @@ curl "http://localhost:8000/api/ea-status?account_id=1"
 
 Expected: both return 200, second response has `"connected": true`.
 
-- [ ] **Step 4: Tag end of plan in handoff**
+- [x] **Step 4: Tag end of plan in handoff**
 
 Update `.agents/handoff.md` (or commit message body) with:
 

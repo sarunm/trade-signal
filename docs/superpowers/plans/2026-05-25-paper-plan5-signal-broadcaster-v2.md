@@ -1,6 +1,6 @@
 # Plan 5 — Signal Broadcaster + Console UI + Trust Badges Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Spec:** `docs/superpowers/specs/2026-05-25-paper-trade-system-redesign-v2.md` § "Component 5 — Signal broadcaster + Console UI" (carry-over) + § "Trust tier (4-badge UI)"
 
@@ -44,7 +44,7 @@
 - Create: `api/services/signal_broadcaster.py`
 - Test: `tests/test_signal_broadcaster.py`
 
-- [ ] **Step 1: Write failing test for `compute_status()`**
+- [x] **Step 1: Write failing test for `compute_status()`**
 
 ```python
 # tests/test_signal_broadcaster.py
@@ -88,7 +88,7 @@ def test_status_active_when_open_paper_overrides():
     assert compute_status(inputs) == STATUS_ACTIVE
 ```
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -97,7 +97,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement `compute_status()`**
+- [x] **Step 3: Implement `compute_status()`**
 
 ```python
 # api/services/signal_broadcaster.py
@@ -148,7 +148,7 @@ def compute_status(inputs: SignalEvalInputs) -> str:
     return STATUS_FAR
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -157,7 +157,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS (5 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/services/signal_broadcaster.py tests/test_signal_broadcaster.py
@@ -172,7 +172,7 @@ git commit -m "feat: paper signal status compute (active/near/far/idle)"
 - Modify: `api/services/signal_broadcaster.py`
 - Test: `tests/test_signal_broadcaster.py`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 Append to `tests/test_signal_broadcaster.py`:
 
@@ -281,7 +281,7 @@ async def test_broadcasts_again_when_status_flips(session):
     assert flipped[0].status == STATUS_FAR
 ```
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -290,7 +290,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL — `RuleEval`/`broadcast_status_changes` not defined.
 
-- [ ] **Step 3: Implement `broadcast_status_changes()`**
+- [x] **Step 3: Implement `broadcast_status_changes()`**
 
 Append to `api/services/signal_broadcaster.py`:
 
@@ -371,7 +371,7 @@ async def broadcast_status_changes(
     return written
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -380,7 +380,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/services/signal_broadcaster.py tests/test_signal_broadcaster.py
@@ -396,7 +396,7 @@ git commit -m "feat: status-change-only paper signal persistence"
 - Modify: `api/routers/market_tick.py`
 - Test: `tests/test_signal_broadcaster.py`
 
-- [ ] **Step 1: Add a function that turns the paper-trader cache into a `list[RuleEval]`**
+- [x] **Step 1: Add a function that turns the paper-trader cache into a `list[RuleEval]`**
 
 In `api/services/paper_trader.py`, add a public helper at module level:
 
@@ -467,7 +467,7 @@ async def run_paper_trader(
     }
 ```
 
-- [ ] **Step 2: Wire `broadcast_status_changes()` into `routers/market_tick.py`**
+- [x] **Step 2: Wire `broadcast_status_changes()` into `routers/market_tick.py`**
 
 Read the existing router first:
 
@@ -507,7 +507,7 @@ async def post_market_tick(
 
 (If `push_spread` does not yet exist because Plan 4 hasn't landed, gate the import with a try/except — see comment in `market_tick.py` at integration time.)
 
-- [ ] **Step 3: Run market-tick test if exists; otherwise skip**
+- [x] **Step 3: Run market-tick test if exists; otherwise skip**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -516,7 +516,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS or no tests collected.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add api/services/paper_trader.py api/routers/market_tick.py
@@ -533,7 +533,7 @@ git commit -m "feat: wire signal broadcaster into market tick handler"
 - Modify: `api/main.py`
 - Test: `tests/test_paper_signals_api.py`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```python
 # tests/test_paper_signals_api.py
@@ -615,7 +615,7 @@ async def test_list_paper_signals_since_filter(client):
     assert "far" not in statuses
 ```
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -624,7 +624,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL with 404.
 
-- [ ] **Step 3: Schema**
+- [x] **Step 3: Schema**
 
 ```python
 # api/schemas/paper_signal.py
@@ -650,7 +650,7 @@ class PaperSignalResponse(BaseModel):
     emitted_at: datetime
 ```
 
-- [ ] **Step 4: Router**
+- [x] **Step 4: Router**
 
 ```python
 # api/routers/paper_signals.py
@@ -687,7 +687,7 @@ async def list_paper_signals(
     return result.scalars().all()
 ```
 
-- [ ] **Step 5: Register the router**
+- [x] **Step 5: Register the router**
 
 In `api/main.py`:
 
@@ -697,7 +697,7 @@ from routers.paper_signals import router as paper_signals_router
 app.include_router(paper_signals_router)
 ```
 
-- [ ] **Step 6: Run to verify it passes**
+- [x] **Step 6: Run to verify it passes**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -706,7 +706,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add api/schemas/paper_signal.py api/routers/paper_signals.py api/main.py \
@@ -722,7 +722,7 @@ git commit -m "feat: GET /api/paper-signals endpoint"
 - Modify: `api/schemas/pattern.py`
 - Modify: `api/routers/patterns.py`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 Add to `tests/test_paper_signals_api.py`:
 
@@ -740,7 +740,7 @@ async def test_paper_trader_rule_response_includes_trust_tier(client):
         assert key in sample
 ```
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -749,7 +749,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL — fields missing.
 
-- [ ] **Step 3: Read current schema** then modify `api/schemas/pattern.py` to add fields:
+- [x] **Step 3: Read current schema** then modify `api/schemas/pattern.py` to add fields:
 
 ```python
 # Append/modify in api/schemas/pattern.py — preserve existing fields
@@ -773,7 +773,7 @@ class PaperTraderRuleResponse(BaseModel):
 
 (Imports: `from decimal import Decimal`, `from typing import Optional`, `from datetime import datetime`, `from uuid import UUID`.)
 
-- [ ] **Step 4: Modify `api/routers/patterns.py` to compute `age_seconds` per rule**
+- [x] **Step 4: Modify `api/routers/patterns.py` to compute `age_seconds` per rule**
 
 ```python
 # api/routers/patterns.py — replace the list_paper_trader_rules() body
@@ -816,7 +816,7 @@ async def list_paper_trader_rules(
     return out
 ```
 
-- [ ] **Step 5: Run to verify it passes**
+- [x] **Step 5: Run to verify it passes**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -825,7 +825,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/schemas/pattern.py api/routers/patterns.py tests/test_paper_signals_api.py
@@ -839,7 +839,7 @@ git commit -m "feat: enrich paper-trader-rules response with trust tier, age, EV
 **Files:**
 - Create: `frontend/src/components/TrustTierBadge.jsx`
 
-- [ ] **Step 1: Implement the component**
+- [x] **Step 1: Implement the component**
 
 ```jsx
 // frontend/src/components/TrustTierBadge.jsx
@@ -867,7 +867,7 @@ export const TIER_RANK = {
 }
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add frontend/src/components/TrustTierBadge.jsx
@@ -881,7 +881,7 @@ git commit -m "feat: TrustTierBadge component"
 **Files:**
 - Create: `frontend/src/components/PaperRuleCard.jsx`
 
-- [ ] **Step 1: Implement card**
+- [x] **Step 1: Implement card**
 
 ```jsx
 // frontend/src/components/PaperRuleCard.jsx
@@ -938,7 +938,7 @@ export default function PaperRuleCard({ rule, pattern }) {
 }
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add frontend/src/components/PaperRuleCard.jsx
@@ -954,7 +954,7 @@ git commit -m "feat: PaperRuleCard component"
 - Create: `frontend/src/components/PaperTradeConsole.jsx`
 - Modify: `frontend/src/App.jsx`
 
-- [ ] **Step 1: Implement hook**
+- [x] **Step 1: Implement hook**
 
 ```jsx
 // frontend/src/hooks/usePaperSignals.js
@@ -983,7 +983,7 @@ export function usePatternsById() {
 }
 ```
 
-- [ ] **Step 2: Implement console page**
+- [x] **Step 2: Implement console page**
 
 ```jsx
 // frontend/src/components/PaperTradeConsole.jsx
@@ -1046,7 +1046,7 @@ export default function PaperTradeConsole() {
 }
 ```
 
-- [ ] **Step 3: Mount in `App.jsx`**
+- [x] **Step 3: Mount in `App.jsx`**
 
 In `frontend/src/App.jsx`, add the import and mount it after `PnlChart`:
 
@@ -1058,7 +1058,7 @@ import PaperTradeConsole from './components/PaperTradeConsole'
       <section>
 ```
 
-- [ ] **Step 4: Smoke test in the browser**
+- [x] **Step 4: Smoke test in the browser**
 
 ```
 docker compose up -d
@@ -1066,7 +1066,7 @@ docker compose up -d
 
 Open `http://localhost:3000`. The console section should render below the PnL chart. With no rules in the DB the grid is empty (this is expected).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/hooks/usePaperSignals.js \
@@ -1082,13 +1082,13 @@ git commit -m "feat: PaperTradeConsole with tier filter + sort"
 **Files:**
 - Modify: `frontend/src/hooks/useTradeAlerts.js`
 
-- [ ] **Step 1: Read existing file** to understand current notification behavior
+- [x] **Step 1: Read existing file** to understand current notification behavior
 
 ```
 grep -n "" frontend/src/hooks/useTradeAlerts.js
 ```
 
-- [ ] **Step 2: Add a separate hook `usePaperSignalNotifications`**
+- [x] **Step 2: Add a separate hook `usePaperSignalNotifications`**
 
 Append to `frontend/src/hooks/usePaperSignals.js`:
 
@@ -1123,7 +1123,7 @@ export function usePaperSignalNotifications(rules) {
 }
 ```
 
-- [ ] **Step 3: Wire it into `PaperTradeConsole`**
+- [x] **Step 3: Wire it into `PaperTradeConsole`**
 
 In `frontend/src/components/PaperTradeConsole.jsx`, import and call:
 
@@ -1138,9 +1138,9 @@ export default function PaperTradeConsole() {
 }
 ```
 
-- [ ] **Step 4: Smoke test** — temporarily set a rule's `trust_tier='live_proven'` + `last_signal_status='near'` in the DB; reload UI; expect a browser notification once permission is granted.
+- [x] **Step 4: Smoke test** — temporarily set a rule's `trust_tier='live_proven'` + `last_signal_status='near'` in the DB; reload UI; expect a browser notification once permission is granted.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/hooks/usePaperSignals.js \
@@ -1152,7 +1152,7 @@ git commit -m "feat: gate browser noti by trust tier (live_proven/ea_candidate)"
 
 ## Task 10: Full regression
 
-- [ ] **Step 1: Backend tests**
+- [x] **Step 1: Backend tests**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -1161,14 +1161,14 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS.
 
-- [ ] **Step 2: Frontend smoke**
+- [x] **Step 2: Frontend smoke**
 
 Start dev server, open browser, verify:
 - `PaperTradeConsole` renders below `PnlChart`
 - Filter chips toggle the visible cards
 - An EA-Candidate-tier rule with `last_signal_status='near'` triggers a browser notification
 
-- [ ] **Step 3: Commit if any test fixups**
+- [x] **Step 3: Commit if any test fixups**
 
 ```bash
 git add -A tests/ frontend/

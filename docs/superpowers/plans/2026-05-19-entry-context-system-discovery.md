@@ -1,6 +1,6 @@
 # Entry Context & Trading System Discovery — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 >
 > **Maintain `implementation-notes.md`** at project root throughout development. Record every decision not in this spec, deviation, trade-off, and open question.
 
@@ -44,7 +44,7 @@
 - Create: `api/alembic/versions/005_add_entry_context.py`
 - Modify: `api/models/trade.py`
 
-- [ ] **Step 1: Write the failing migration test**
+- [x] **Step 1: Write the failing migration test**
 
 Create `tests/test_migration_005.py`:
 
@@ -76,14 +76,14 @@ async def test_trade_model_has_entry_context_columns():
     await engine.dispose()
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 ```bash
 cd api && pytest ../tests/test_migration_005.py -v
 ```
 Expected: FAIL (columns don't exist yet)
 
-- [ ] **Step 3: Add 8 columns to Trade model**
+- [x] **Step 3: Add 8 columns to Trade model**
 
 In `api/models/trade.py`, after the `paper_exit_reason` column:
 
@@ -99,7 +99,7 @@ In `api/models/trade.py`, after the `paper_exit_reason` column:
     post_close_run_pts: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2), nullable=True)
 ```
 
-- [ ] **Step 4: Create migration file**
+- [x] **Step 4: Create migration file**
 
 ```python
 # api/alembic/versions/005_add_entry_context.py
@@ -137,21 +137,21 @@ def downgrade() -> None:
         op.drop_column("trades", col)
 ```
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 ```bash
 cd api && pytest ../tests/test_migration_005.py -v
 ```
 Expected: PASS
 
-- [ ] **Step 6: Run full suite to check no regressions**
+- [x] **Step 6: Run full suite to check no regressions**
 
 ```bash
 cd api && pytest ../tests/ -v
 ```
 Expected: all existing tests pass
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add api/models/trade.py api/alembic/versions/005_add_entry_context.py tests/test_migration_005.py
@@ -165,7 +165,7 @@ git commit -m "feat: add 8 entry context columns to trades table (migration 005)
 **Files:**
 - Modify: `api/schemas/trade.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_trades_api.py`:
 
@@ -214,14 +214,14 @@ async def test_trade_response_includes_entry_context_fields(client, db_session):
     assert t["post_close_run_pts"] is None
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 ```bash
 cd api && pytest ../tests/test_trades_api.py::test_trade_response_includes_entry_context_fields -v
 ```
 Expected: FAIL (fields missing from response)
 
-- [ ] **Step 3: Update TradeResponse + add TradeTagSchema**
+- [x] **Step 3: Update TradeResponse + add TradeTagSchema**
 
 Replace `api/schemas/trade.py` with:
 
@@ -278,14 +278,14 @@ class TradeResponse(BaseModel):
     model_config = {"from_attributes": True}
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 ```bash
 cd api && pytest ../tests/test_trades_api.py::test_trade_response_includes_entry_context_fields -v
 ```
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/schemas/trade.py tests/test_trades_api.py
@@ -300,7 +300,7 @@ git commit -m "feat: add 8 entry context fields to TradeResponse + TradeTagSchem
 - Create: `api/services/entry_context.py`
 - Create: `tests/test_entry_context.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/test_entry_context.py`:
 
@@ -393,14 +393,14 @@ async def test_fill_fib_proximity_skips_when_no_fib_data(db_session):
     assert trade.fib_distance_pts is None
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 ```bash
 cd api && pytest ../tests/test_entry_context.py::test_fill_fib_proximity_finds_nearest_level ../tests/test_entry_context.py::test_fill_fib_proximity_labels_pp_correctly ../tests/test_entry_context.py::test_fill_fib_proximity_skips_when_no_fib_data -v
 ```
 Expected: FAIL (module not found)
 
-- [ ] **Step 3: Create entry_context.py with skeleton + `_fill_fib_proximity`**
+- [x] **Step 3: Create entry_context.py with skeleton + `_fill_fib_proximity`**
 
 Create `api/services/entry_context.py`:
 
@@ -544,14 +544,14 @@ async def _fill_is_rescue(session: AsyncSession, trade: Trade) -> None:
     trade.is_rescue = len(existing) > 0
 ```
 
-- [ ] **Step 4: Run the fib proximity tests to verify they pass**
+- [x] **Step 4: Run the fib proximity tests to verify they pass**
 
 ```bash
 cd api && pytest ../tests/test_entry_context.py::test_fill_fib_proximity_finds_nearest_level ../tests/test_entry_context.py::test_fill_fib_proximity_labels_pp_correctly ../tests/test_entry_context.py::test_fill_fib_proximity_skips_when_no_fib_data -v
 ```
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/services/entry_context.py tests/test_entry_context.py
@@ -565,7 +565,7 @@ git commit -m "feat: entry_context service with fib proximity auto-fill"
 **Files:**
 - Modify: `tests/test_entry_context.py`
 
-- [ ] **Step 1: Write the failing entry_candle tests**
+- [x] **Step 1: Write the failing entry_candle tests**
 
 Append to `tests/test_entry_context.py`:
 
@@ -647,14 +647,14 @@ async def test_fill_entry_candle_returns_none_when_no_pattern_any_tf(db_session)
     assert trade.entry_candle_tf is None
 ```
 
-- [ ] **Step 2: Run to verify they pass** (implementation already done in Task 3)
+- [x] **Step 2: Run to verify they pass** (implementation already done in Task 3)
 
 ```bash
 cd api && pytest ../tests/test_entry_context.py::test_fill_entry_candle_detects_pin_bar_on_h4 ../tests/test_entry_context.py::test_fill_entry_candle_falls_back_to_h1_when_no_h4_bar ../tests/test_entry_context.py::test_fill_entry_candle_returns_none_when_no_pattern_any_tf -v
 ```
 Expected: PASS
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/test_entry_context.py
@@ -669,7 +669,7 @@ git commit -m "test: entry_candle auto-fill tests (TF fallback, no pattern)"
 - Modify: `tests/test_entry_context.py`
 - Modify: `api/services/trade_logger.py`
 
-- [ ] **Step 1: Write the failing is_rescue tests**
+- [x] **Step 1: Write the failing is_rescue tests**
 
 Append to `tests/test_entry_context.py`:
 
@@ -720,7 +720,7 @@ async def test_fill_is_rescue_false_when_no_existing(db_session):
     assert trade.is_rescue is False
 ```
 
-- [ ] **Step 2: Write integration test for auto-fill on trade event**
+- [x] **Step 2: Write integration test for auto-fill on trade event**
 
 Append to `tests/test_entry_context.py`:
 
@@ -763,14 +763,14 @@ async def test_entry_context_auto_filled_on_trade_event(client, db_session):
     assert trade.is_rescue is not None
 ```
 
-- [ ] **Step 3: Run to verify they fail**
+- [x] **Step 3: Run to verify they fail**
 
 ```bash
 cd api && pytest ../tests/test_entry_context.py::test_fill_is_rescue_true_when_same_direction_open ../tests/test_entry_context.py::test_fill_is_rescue_false_when_no_existing ../tests/test_entry_context.py::test_entry_context_auto_filled_on_trade_event -v
 ```
 Expected: first two PASS (implementation done in Task 3), last one FAIL (not wired up yet)
 
-- [ ] **Step 4: Wire fill_entry_context into trade_logger.py**
+- [x] **Step 4: Wire fill_entry_context into trade_logger.py**
 
 In `api/services/trade_logger.py`, add import and call:
 
@@ -819,21 +819,21 @@ async def upsert_trade(session: AsyncSession, event: TradeEventSchema) -> Trade:
     return trade
 ```
 
-- [ ] **Step 5: Run all entry_context tests**
+- [x] **Step 5: Run all entry_context tests**
 
 ```bash
 cd api && pytest ../tests/test_entry_context.py -v
 ```
 Expected: all PASS
 
-- [ ] **Step 6: Run full suite**
+- [x] **Step 6: Run full suite**
 
 ```bash
 cd api && pytest ../tests/ -v
 ```
 Expected: all pass
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add api/services/trade_logger.py tests/test_entry_context.py
@@ -848,7 +848,7 @@ git commit -m "feat: wire fill_entry_context into trade_logger on ENTRY_IN event
 - Modify: `api/routers/trades.py`
 - Modify: `tests/test_trades_api.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_trades_api.py`:
 
@@ -909,14 +909,14 @@ async def test_patch_tag_returns_404_for_unknown_ticket(client, db_session):
     assert resp.status_code == 404
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 ```bash
 cd api && pytest ../tests/test_trades_api.py::test_patch_tag_updates_setup_pattern ../tests/test_trades_api.py::test_patch_tag_rejects_invalid_pattern ../tests/test_trades_api.py::test_patch_tag_returns_404_for_unknown_ticket -v
 ```
 Expected: FAIL (endpoint doesn't exist)
 
-- [ ] **Step 3: Add PATCH endpoint to trades router**
+- [x] **Step 3: Add PATCH endpoint to trades router**
 
 Replace `api/routers/trades.py` with:
 
@@ -972,20 +972,20 @@ async def tag_trade(
     return trade
 ```
 
-- [ ] **Step 4: Run tag tests**
+- [x] **Step 4: Run tag tests**
 
 ```bash
 cd api && pytest ../tests/test_trades_api.py::test_patch_tag_updates_setup_pattern ../tests/test_trades_api.py::test_patch_tag_rejects_invalid_pattern ../tests/test_trades_api.py::test_patch_tag_returns_404_for_unknown_ticket -v
 ```
 Expected: all PASS
 
-- [ ] **Step 5: Run full suite**
+- [x] **Step 5: Run full suite**
 
 ```bash
 cd api && pytest ../tests/ -v
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/routers/trades.py tests/test_trades_api.py
@@ -1001,7 +1001,7 @@ git commit -m "feat: PATCH /api/trades/{ticket}/tag + offset param on GET /api/t
 - Create: `tests/test_alerts_api.py`
 - Modify: `tests/test_trades_api.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/test_alerts_api.py`:
 
@@ -1065,14 +1065,14 @@ async def test_list_trades_respects_offset(client, db_session):
     assert len(resp_offset.json()) == 3
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 ```bash
 cd api && pytest ../tests/test_alerts_api.py ../tests/test_trades_api.py::test_list_trades_respects_offset -v
 ```
 Expected: acknowledge-all FAIL (endpoint missing), offset test may PASS (offset already added in Task 6)
 
-- [ ] **Step 3: Add acknowledge-all to alerts router**
+- [x] **Step 3: Add acknowledge-all to alerts router**
 
 Replace `api/routers/alerts.py` with:
 
@@ -1128,20 +1128,20 @@ async def acknowledge_all_alerts(session: AsyncSession = Depends(get_session)):
     return {"acknowledged": count}
 ```
 
-- [ ] **Step 4: Run all alert + trades api tests**
+- [x] **Step 4: Run all alert + trades api tests**
 
 ```bash
 cd api && pytest ../tests/test_alerts_api.py ../tests/test_trades_api.py -v
 ```
 Expected: all PASS
 
-- [ ] **Step 5: Run full suite**
+- [x] **Step 5: Run full suite**
 
 ```bash
 cd api && pytest ../tests/ -v
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/routers/alerts.py tests/test_alerts_api.py tests/test_trades_api.py
@@ -1156,7 +1156,7 @@ git commit -m "feat: POST /api/alerts/acknowledge-all endpoint"
 - Modify: `api/services/insight_engine.py`
 - Modify: `tests/test_insight_engine.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/test_insight_engine.py`:
 
@@ -1189,14 +1189,14 @@ async def test_setup_win_rate_insight_created(db_session):
     assert pytest.approx(float(insights[0].confidence), abs=0.01) == 4/6
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 ```bash
 cd api && pytest ../tests/test_insight_engine.py::test_setup_win_rate_insight_created -v
 ```
 Expected: FAIL
 
-- [ ] **Step 3: Add constant + function + call in run_insight_engine**
+- [x] **Step 3: Add constant + function + call in run_insight_engine**
 
 In `api/services/insight_engine.py`, add after existing constants:
 
@@ -1271,20 +1271,20 @@ In `run_insight_engine`, add before `await session.commit()`:
     await _compute_setup_win_rate(session, tagged)
 ```
 
-- [ ] **Step 4: Run test**
+- [x] **Step 4: Run test**
 
 ```bash
 cd api && pytest ../tests/test_insight_engine.py::test_setup_win_rate_insight_created -v
 ```
 Expected: PASS
 
-- [ ] **Step 5: Run full suite**
+- [x] **Step 5: Run full suite**
 
 ```bash
 cd api && pytest ../tests/ -v
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/services/insight_engine.py tests/test_insight_engine.py
@@ -1299,7 +1299,7 @@ git commit -m "feat: setup_win_rate insight (group by pattern+bias+fib_level)"
 - Modify: `api/services/insight_engine.py`
 - Modify: `tests/test_insight_engine.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/test_insight_engine.py`:
 
@@ -1345,14 +1345,14 @@ async def test_fib_proximity_win_rate_insight_created(db_session):
     assert insights[0].confidence >= 0.20  # at least 20pp difference
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 ```bash
 cd api && pytest ../tests/test_insight_engine.py::test_fib_proximity_win_rate_insight_created -v
 ```
 Expected: FAIL
 
-- [ ] **Step 3: Add function + call**
+- [x] **Step 3: Add function + call**
 
 Add function in `api/services/insight_engine.py`:
 
@@ -1427,14 +1427,14 @@ In `run_insight_engine`, add after `_compute_setup_win_rate`:
     await _compute_fib_proximity_win_rate(session, tagged)
 ```
 
-- [ ] **Step 4: Run test**
+- [x] **Step 4: Run test**
 
 ```bash
 cd api && pytest ../tests/test_insight_engine.py::test_fib_proximity_win_rate_insight_created -v
 ```
 Expected: PASS
 
-- [ ] **Step 5: Full suite + commit**
+- [x] **Step 5: Full suite + commit**
 
 ```bash
 cd api && pytest ../tests/ -v
@@ -1450,7 +1450,7 @@ git commit -m "feat: fib_proximity_win_rate insight (close/medium/far bucket com
 - Modify: `api/services/insight_engine.py`
 - Modify: `tests/test_insight_engine.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/test_insight_engine.py`:
 
@@ -1490,14 +1490,14 @@ async def test_rescue_outcome_insight_created(db_session):
     assert pytest.approx(data["initial_win_rate"], abs=0.01) == 4/5
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 ```bash
 cd api && pytest ../tests/test_insight_engine.py::test_rescue_outcome_insight_created -v
 ```
 Expected: FAIL
 
-- [ ] **Step 3: Add function + call**
+- [x] **Step 3: Add function + call**
 
 ```python
 async def _compute_rescue_outcome(session: AsyncSession, trades: list) -> None:
@@ -1542,7 +1542,7 @@ In `run_insight_engine`, add after `_compute_fib_proximity_win_rate`:
     await _compute_rescue_outcome(session, trades)
 ```
 
-- [ ] **Step 4: Run test + full suite + commit**
+- [x] **Step 4: Run test + full suite + commit**
 
 ```bash
 cd api && pytest ../tests/test_insight_engine.py::test_rescue_outcome_insight_created -v
@@ -1559,7 +1559,7 @@ git commit -m "feat: rescue_outcome insight (compare rescue vs initial trade win
 - Modify: `api/services/insight_engine.py`
 - Modify: `tests/test_insight_engine.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/test_insight_engine.py`:
 
@@ -1589,14 +1589,14 @@ async def test_best_combo_insight_created(db_session):
     assert combo["win_rate"] == pytest.approx(1.0)
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 ```bash
 cd api && pytest ../tests/test_insight_engine.py::test_best_combo_insight_created -v
 ```
 Expected: FAIL
 
-- [ ] **Step 3: Add function + call**
+- [x] **Step 3: Add function + call**
 
 Add at the top of `insight_engine.py` (if not already there — `timezone` and `timedelta` are already imported):
 
@@ -1683,7 +1683,7 @@ In `run_insight_engine`, add after `_compute_rescue_outcome`:
     await _compute_best_combo(session, tagged)
 ```
 
-- [ ] **Step 4: Run test + full suite + commit**
+- [x] **Step 4: Run test + full suite + commit**
 
 ```bash
 cd api && pytest ../tests/test_insight_engine.py::test_best_combo_insight_created -v
@@ -1700,7 +1700,7 @@ git commit -m "feat: best_combo insight (top 3 session+pattern+bias+fib combinat
 - Modify: `api/services/insight_engine.py`
 - Modify: `tests/test_insight_engine.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_insight_engine.py`:
 
@@ -1760,14 +1760,14 @@ async def test_post_close_run_insight_created(db_session):
     assert "double_bottom" in insights[0].data["by_pattern"]
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 ```bash
 cd api && pytest ../tests/test_insight_engine.py::test_post_close_run_backfills_trade ../tests/test_insight_engine.py::test_post_close_run_insight_created -v
 ```
 Expected: FAIL
 
-- [ ] **Step 3: Add function + call**
+- [x] **Step 3: Add function + call**
 
 Add in `api/services/insight_engine.py` (note: `func`, `Direction`, `PriceBar`, `Timeframe` are already imported):
 
@@ -1864,7 +1864,7 @@ In `run_insight_engine`, add after `_compute_best_combo` and before `await sessi
     await _compute_post_close_run(session, trades)
 ```
 
-- [ ] **Step 4: Run tests + full suite + commit**
+- [x] **Step 4: Run tests + full suite + commit**
 
 ```bash
 cd api && pytest ../tests/test_insight_engine.py::test_post_close_run_backfills_trade ../tests/test_insight_engine.py::test_post_close_run_insight_created -v
@@ -1881,7 +1881,7 @@ git commit -m "feat: post_close_run insight (backfill MFE after close + pattern 
 - Modify: `api/services/alert_manager.py`
 - Modify: `tests/test_alert_manager.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/test_alert_manager.py`:
 
@@ -2013,14 +2013,14 @@ async def test_rescue_ineffective_alert_fires(db_session):
     assert len(alerts) == 1
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 ```bash
 cd api && pytest ../tests/test_alert_manager.py::test_low_winrate_setup_alert_fires ../tests/test_alert_manager.py::test_low_winrate_setup_no_alert_when_good_winrate ../tests/test_alert_manager.py::test_rescue_ineffective_alert_fires -v
 ```
 Expected: FAIL (function not found)
 
-- [ ] **Step 3: Add functions to alert_manager.py**
+- [x] **Step 3: Add functions to alert_manager.py**
 
 Add these constants after existing ones in `api/services/alert_manager.py`:
 
@@ -2136,7 +2136,7 @@ Wait — `tagged` is already defined earlier in `run_insight_engine`. Just add:
     await check_insight_alerts(session, tagged, trades)
 ```
 
-- [ ] **Step 4: Run tests + full suite + commit**
+- [x] **Step 4: Run tests + full suite + commit**
 
 ```bash
 cd api && pytest ../tests/test_alert_manager.py -v
@@ -2153,7 +2153,7 @@ git commit -m "feat: low_winrate_setup and rescue_ineffective alert checks (24h 
 - Create: `frontend/src/components/SetupTag.jsx`
 - Modify: `frontend/src/components/OpenPositions.jsx`
 
-- [ ] **Step 1: Create SetupTag.jsx**
+- [x] **Step 1: Create SetupTag.jsx**
 
 ```jsx
 // frontend/src/components/SetupTag.jsx
@@ -2217,7 +2217,7 @@ export default function SetupTag({ ticket, currentPattern, currentBias, nearFibL
 }
 ```
 
-- [ ] **Step 2: Add tag dropdowns to OpenPositions.jsx**
+- [x] **Step 2: Add tag dropdowns to OpenPositions.jsx**
 
 In `frontend/src/components/OpenPositions.jsx`:
 
@@ -2250,7 +2250,7 @@ export default function OpenPositions({ data, error, onTradeTagged }) {
                   </td>
 ```
 
-- [ ] **Step 3: Verify in browser**
+- [x] **Step 3: Verify in browser**
 
 ```bash
 cd frontend && npm run dev
@@ -2258,7 +2258,7 @@ cd frontend && npm run dev
 
 Open http://localhost:3000. Open positions table should show Pattern and Bias dropdowns in the last column. Selecting a value should PATCH the API and show a response (check Network tab).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add frontend/src/components/SetupTag.jsx frontend/src/components/OpenPositions.jsx
@@ -2272,7 +2272,7 @@ git commit -m "feat: SetupTag component + pattern/bias dropdowns in open positio
 **Files:**
 - Modify: `frontend/src/components/ClosedTrades.jsx`
 
-- [ ] **Step 1: Rewrite ClosedTrades.jsx**
+- [x] **Step 1: Rewrite ClosedTrades.jsx**
 
 Replace `frontend/src/components/ClosedTrades.jsx` with:
 
@@ -2377,13 +2377,13 @@ export default function ClosedTrades({ data, error, limit, onLimitChange, offset
 }
 ```
 
-- [ ] **Step 2: Verify in browser**
+- [x] **Step 2: Verify in browser**
 
 Open http://localhost:3000. Closed trades should show as cards with Real/Paper rows. The row count selector (10/20/50/100) should appear at top right of the section. Prev/Next should appear when applicable.
 
 (Note: paging won't function yet until App.jsx is wired up in Task 16.)
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add frontend/src/components/ClosedTrades.jsx
@@ -2398,7 +2398,7 @@ git commit -m "feat: ClosedTrades 2-row card layout with paging controls"
 - Modify: `frontend/src/components/AlertsPanel.jsx`
 - Modify: `frontend/src/App.jsx`
 
-- [ ] **Step 1: Add Ack All button to AlertsPanel.jsx**
+- [x] **Step 1: Add Ack All button to AlertsPanel.jsx**
 
 In `frontend/src/components/AlertsPanel.jsx`, change the component signature:
 
@@ -2419,7 +2419,7 @@ In the header row, after the unacked count badge and before `{error && ...}`, ad
         )}
 ```
 
-- [ ] **Step 2: Update App.jsx to wire paging + ack-all + tag callback**
+- [x] **Step 2: Update App.jsx to wire paging + ack-all + tag callback**
 
 Replace `frontend/src/App.jsx` with:
 
@@ -2511,20 +2511,20 @@ export default function App() {
 }
 ```
 
-- [ ] **Step 3: Verify in browser**
+- [x] **Step 3: Verify in browser**
 
 Open http://localhost:3000:
 - Alerts panel: "Ack All" button appears when there are unacknowledged alerts. Click it — all alerts should grey out.
 - Closed trades: changing the row count selector (10/20/50/100) should reload the list. Prev/Next should page through results.
 - Open positions: tagging a trade (select pattern or bias) should save to API and re-fetch open positions.
 
-- [ ] **Step 4: Full test suite**
+- [x] **Step 4: Full test suite**
 
 ```bash
 cd api && pytest ../tests/ -v
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/components/AlertsPanel.jsx frontend/src/App.jsx
@@ -2535,7 +2535,7 @@ git commit -m "feat: Ack All button + closed trades paging wired up in App"
 
 ## Post-Implementation Checklist
 
-- [ ] Run Alembic migration on the running DB: `docker compose exec api alembic upgrade head`
-- [ ] Verify no import cycles: `cd api && python -c "from services.insight_engine import run_insight_engine"`
-- [ ] Smoke test via browser: open dashboard, tag a trade, verify near_fib_level appears in grey text
-- [ ] Update `implementation-notes.md` with any decisions made during implementation
+- [x] Run Alembic migration on the running DB: `docker compose exec api alembic upgrade head`
+- [x] Verify no import cycles: `cd api && python -c "from services.insight_engine import run_insight_engine"`
+- [x] Smoke test via browser: open dashboard, tag a trade, verify near_fib_level appears in grey text
+- [x] Update `implementation-notes.md` with any decisions made during implementation

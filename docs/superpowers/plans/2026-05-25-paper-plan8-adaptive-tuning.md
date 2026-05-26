@@ -1,6 +1,6 @@
 # Plan 8 — Adaptive Tuning Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Spec:** `docs/superpowers/specs/2026-05-25-paper-trade-system-redesign.md` § "Component 3 — Adaptive Tuning" (v1 — kept unchanged in v2 spec line 354).
 
@@ -48,7 +48,7 @@
 - Create: `api/services/feature_extractor.py`
 - Test: `tests/test_feature_extractor.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_feature_extractor.py
@@ -106,7 +106,7 @@ def test_volatility_regime_unknown_when_history_too_short():
     assert volatility_regime(10.0, [12.0, 11.0]) == "unknown"
 ```
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -115,7 +115,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```python
 # api/services/feature_extractor.py
@@ -182,7 +182,7 @@ def volatility_regime(atr_value: float, history: Sequence[float]) -> str:
     return VOL_MID
 ```
 
-- [ ] **Step 4: Run to verify**
+- [x] **Step 4: Run to verify**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -191,7 +191,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS (5 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/services/feature_extractor.py tests/test_feature_extractor.py
@@ -206,7 +206,7 @@ git commit -m "feat: feature extractor (session, hour bucket, dow, volatility re
 - Create: `api/services/adaptive_tuner.py`
 - Test: `tests/test_adaptive_tuner.py`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```python
 # tests/test_adaptive_tuner.py
@@ -325,7 +325,7 @@ async def test_propose_filters_skips_when_delta_below_threshold(session):
     assert not any(p.feature == "session" for p in proposals)
 ```
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -334,7 +334,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```python
 # api/services/adaptive_tuner.py
@@ -477,7 +477,7 @@ async def propose_filters_for_rule(
     return proposals
 ```
 
-- [ ] **Step 4: Run to verify**
+- [x] **Step 4: Run to verify**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -486,7 +486,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS (3 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/services/adaptive_tuner.py tests/test_adaptive_tuner.py
@@ -501,7 +501,7 @@ git commit -m "feat: adaptive tuner — propose filters from per-bucket loss-rat
 - Modify: `api/services/adaptive_tuner.py`
 - Modify: `tests/test_adaptive_tuner.py`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 Append to `tests/test_adaptive_tuner.py`:
 
@@ -543,7 +543,7 @@ async def test_spawn_shadow_is_idempotent_for_same_proposal(session):
     assert len(rules) == 1
 ```
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -552,7 +552,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL — `spawn_shadow_rule` not defined.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Append to `api/services/adaptive_tuner.py`:
 
@@ -610,7 +610,7 @@ async def spawn_shadow_rule(
     return shadow
 ```
 
-- [ ] **Step 4: Run to verify**
+- [x] **Step 4: Run to verify**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -619,7 +619,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS (2 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/services/adaptive_tuner.py tests/test_adaptive_tuner.py
@@ -634,7 +634,7 @@ git commit -m "feat: spawn shadow rule from filter proposal (idempotent)"
 - Modify: `api/services/paper_trader.py`
 - Test: `tests/test_paper_trader_filters.py`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```python
 # tests/test_paper_trader_filters.py
@@ -683,7 +683,7 @@ def test_rejects_on_unknown_feature_passes_through():
     assert _passes_filters(rule, _ctx(datetime(2026, 5, 25, 10, 0, tzinfo=timezone.utc)))
 ```
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -692,7 +692,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL — `_passes_filters` not defined.
 
-- [ ] **Step 3: Implement** — append to `api/services/paper_trader.py`
+- [x] **Step 3: Implement** — append to `api/services/paper_trader.py`
 
 ```python
 # Adaptive-tuning filter gate
@@ -722,7 +722,7 @@ def _passes_filters(rule, ctx: dict) -> bool:
     return True
 ```
 
-- [ ] **Step 4: Run to verify**
+- [x] **Step 4: Run to verify**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -731,7 +731,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS (6 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/services/paper_trader.py tests/test_paper_trader_filters.py
@@ -746,7 +746,7 @@ git commit -m "feat: filter gate for paper trader (rejects entries on excluded s
 - Modify: `api/services/paper_trader.py`
 - Modify: `tests/test_paper_trader_filters.py`
 
-- [ ] **Step 1: Write failing integration test**
+- [x] **Step 1: Write failing integration test**
 
 Append to `tests/test_paper_trader_filters.py`:
 
@@ -808,7 +808,7 @@ async def test_open_papers_skips_rule_when_filter_excludes_now(session):
 
 > **Note:** `_RuleSnapshot.from_rule` and `_open_papers_for_rules` signatures are defined in Plan 3 (Task — `_open_papers_for_rules` returns `dict[UUID, list[Trade]]`). If those signatures changed during Plan 3 execution, mirror that change here — the **call to `_passes_filters` is the only behavior this task adds**.
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -817,7 +817,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL — rule still opens a paper despite the filter.
 
-- [ ] **Step 3: Insert filter check in `_open_papers_for_rules`**
+- [x] **Step 3: Insert filter check in `_open_papers_for_rules`**
 
 In `api/services/paper_trader.py`, locate the loop in `_open_papers_for_rules` that iterates `rule_snapshots` and, immediately before opening any paper trade for that rule, add:
 
@@ -828,7 +828,7 @@ if not _passes_filters(snapshot, {"now": now}):
 
 Where `snapshot` is the loop variable for each `_RuleSnapshot`. The snapshot dataclass already carries `filters` (it was added in Plan 1 / Plan 3) — if it doesn't, **add `filters: list = field(default_factory=list)` to `_RuleSnapshot` and copy from `rule.filters` in `from_rule()`**.
 
-- [ ] **Step 4: Run to verify**
+- [x] **Step 4: Run to verify**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -837,7 +837,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS (all tests).
 
-- [ ] **Step 5: Run full paper_trader suite to confirm no regression**
+- [x] **Step 5: Run full paper_trader suite to confirm no regression**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -846,7 +846,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS — all prior paper_trader tests still pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/services/paper_trader.py tests/test_paper_trader_filters.py
@@ -861,7 +861,7 @@ git commit -m "feat: enforce filter gate in paper_trader entry path"
 - Modify: `api/services/adaptive_tuner.py`
 - Modify: `tests/test_adaptive_tuner.py`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 Append to `tests/test_adaptive_tuner.py`:
 
@@ -969,7 +969,7 @@ async def test_does_not_promote_shadow_below_min_trades(session):
     assert promoted is False
 ```
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -978,7 +978,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL — `promote_shadow_if_outperforms` not defined.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Append to `api/services/adaptive_tuner.py`:
 
@@ -1041,7 +1041,7 @@ async def promote_shadow_if_outperforms(
     return True
 ```
 
-- [ ] **Step 4: Run to verify**
+- [x] **Step 4: Run to verify**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -1050,7 +1050,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS (3 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/services/adaptive_tuner.py tests/test_adaptive_tuner.py
@@ -1065,7 +1065,7 @@ git commit -m "feat: auto-promote shadow rule when it outperforms parent by ≥ 
 - Modify: `api/services/adaptive_tuner.py`
 - Modify: `tests/test_adaptive_tuner.py`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 Append to `tests/test_adaptive_tuner.py`:
 
@@ -1107,7 +1107,7 @@ async def test_run_adaptive_tuner_skips_baseline_rules(session):
     assert summary["rules_evaluated"] == 0
 ```
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -1116,7 +1116,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL — `run_adaptive_tuner` not defined.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Append to `api/services/adaptive_tuner.py`:
 
@@ -1182,7 +1182,7 @@ async def run_adaptive_tuner(session: AsyncSession) -> dict:
     return summary
 ```
 
-- [ ] **Step 4: Run to verify**
+- [x] **Step 4: Run to verify**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -1191,7 +1191,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS (all adaptive_tuner tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/services/adaptive_tuner.py tests/test_adaptive_tuner.py
@@ -1205,7 +1205,7 @@ git commit -m "feat: adaptive tuner daily orchestrator"
 **Files:**
 - Modify: `api/main.py`
 
-- [ ] **Step 1: Wire APScheduler job**
+- [x] **Step 1: Wire APScheduler job**
 
 In `api/main.py`, add:
 
@@ -1243,7 +1243,7 @@ if ADAPTIVE_ENABLED:
 
 Update the `needs_scheduler` boolean to include `ADAPTIVE_ENABLED` (alongside `PATTERN_DISCOVERY_ENABLED`, `BASELINE_ENABLED`, `PROMOTION_GATE_ENABLED`).
 
-- [ ] **Step 2: Smoke-check imports**
+- [x] **Step 2: Smoke-check imports**
 
 ```
 docker compose run --rm api python -c "from main import _safe_run_adaptive_tuner; print('ok')"
@@ -1251,7 +1251,7 @@ docker compose run --rm api python -c "from main import _safe_run_adaptive_tuner
 
 Expected: prints `ok`.
 
-- [ ] **Step 3: Verify cron is registered**
+- [x] **Step 3: Verify cron is registered**
 
 Add a quick test:
 
@@ -1276,7 +1276,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add api/main.py tests/test_adaptive_cron_registered.py
@@ -1291,7 +1291,7 @@ git commit -m "feat: register adaptive tuner daily cron at 00:45 UTC"
 - Modify: `api/routers/patterns.py`
 - Test: `tests/test_shadows_api.py`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```python
 # tests/test_shadows_api.py
@@ -1381,7 +1381,7 @@ async def test_shadows_endpoint_404_for_unknown_id(client):
     assert res.status_code == 404
 ```
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -1390,7 +1390,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL — endpoint not defined (404 on existing parent).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Add to `api/routers/patterns.py`:
 
@@ -1474,7 +1474,7 @@ async def get_shadows(
 
 > If the `router` / `get_session` import names differ in `patterns.py`, mirror the existing pattern used by `/api/paper-trader-rules` instead of introducing new imports.
 
-- [ ] **Step 4: Run to verify**
+- [x] **Step 4: Run to verify**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -1483,7 +1483,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS (2 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/routers/patterns.py tests/test_shadows_api.py
@@ -1499,7 +1499,7 @@ git commit -m "feat: GET /api/paper-trader-rules/{id}/shadows (parent + shadows 
 - Modify: `frontend/src/components/PaperTradeConsole.jsx`
 - Test: manual smoke test (no Jest setup yet)
 
-- [ ] **Step 1: Add a "Shadow" sub-section to `PaperRuleCard`**
+- [x] **Step 1: Add a "Shadow" sub-section to `PaperRuleCard`**
 
 In `PaperRuleCard.jsx`, after the existing trust-tier / score / virtual-balance block, add:
 
@@ -1525,7 +1525,7 @@ In `PaperRuleCard.jsx`, after the existing trust-tier / score / virtual-balance 
 ) : null}
 ```
 
-- [ ] **Step 2: Filter out shadow rules from the main console list by default**
+- [x] **Step 2: Filter out shadow rules from the main console list by default**
 
 In `PaperTradeConsole.jsx`, locate the `rules.filter(...)` call and add a clause:
 
@@ -1535,7 +1535,7 @@ const visibleRules = rules.filter((r) => r.status !== "shadow");
 
 Pass `visibleRules` to the existing render loop. Do **not** remove shadow rules from the API response — just hide them from the default view; a future "show shadows" toggle can be added later.
 
-- [ ] **Step 3: Manual smoke check**
+- [x] **Step 3: Manual smoke check**
 
 Start the dev stack and seed a shadow rule by running:
 
@@ -1565,7 +1565,7 @@ Open `http://localhost:3000`, navigate to the Paper Console:
 - Calling `GET /api/paper-trader-rules/<parent>/shadows` returns the shadow with its filter.
 - The shadow does **not** appear in the main rule list.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add frontend/src/components/PaperRuleCard.jsx frontend/src/components/PaperTradeConsole.jsx
@@ -1578,7 +1578,7 @@ git commit -m "feat: show shadow filter chip on rule card; hide shadows from mai
 
 Before declaring this plan complete, walk through:
 
-- [ ] **Spec coverage** — every line of v1 spec § "Component 3 — Adaptive Tuning" is implemented:
+- [x] **Spec coverage** — every line of v1 spec § "Component 3 — Adaptive Tuning" is implemented:
   - Daily cron after pattern discovery → Task 8 (00:45 UTC, after promotion's 00:30)
   - ≥ 30 trades per rule → `ADAPTIVE_MIN_TRADES=30`
   - Loss-rate diff ≥ 0.20 → `ADAPTIVE_LOSS_DELTA=0.20`
@@ -1586,13 +1586,13 @@ Before declaring this plan complete, walk through:
   - Shadow rule with `active=false` for 30 days → `status='shadow'`, `ADAPTIVE_SHADOW_AGE_DAYS=30`
   - Promotion: shadow winrate > parent + 5% → `ADAPTIVE_PROMOTE_DELTA=0.05`
 
-- [ ] **Placeholder scan** — no "TBD" / "implement later" in any task body.
+- [x] **Placeholder scan** — no "TBD" / "implement later" in any task body.
 
-- [ ] **Schema reuse** — `filters JSONB`, `shadow_of_rule_id UUID` both already exist (migration 011, Plan 1). No new migration.
+- [x] **Schema reuse** — `filters JSONB`, `shadow_of_rule_id UUID` both already exist (migration 011, Plan 1). No new migration.
 
-- [ ] **No regression** — Task 5's full paper_trader test run confirms entry path filter doesn't break v2 flows.
+- [x] **No regression** — Task 5's full paper_trader test run confirms entry path filter doesn't break v2 flows.
 
-- [ ] **Type consistency** —
+- [x] **Type consistency** —
   - `FilterProposal.to_filter()` shape matches the clause shape consumed by `_passes_filters` (`{"feature": ..., "exclude": ...}`).
   - `_load_rule_trades` is shared between `propose_filters_for_rule` and `promote_shadow_if_outperforms`.
   - Cron name `adaptive_tuner_daily` does not collide with existing `pattern_discovery_daily`, `promotion_gate_daily`, `baseline_*`.

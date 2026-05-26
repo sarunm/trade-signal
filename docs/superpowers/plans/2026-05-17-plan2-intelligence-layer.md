@@ -1,6 +1,6 @@
 # Phase 2 Intelligence Layer Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Add Insight Engine (behavioral pattern analysis with pandas), Mirror Paper Trader (parallel paper entry on every real entry), and Alert Manager (real-time risk warnings) to the Trade Signal Partner backend, plus read APIs that expose the results.
 
@@ -49,7 +49,7 @@
 - Modify: `api/models/__init__.py`
 - Modify: `api/requirements.txt`
 
-- [ ] **Step 1: Write failing model creation test**
+- [x] **Step 1: Write failing model creation test**
 
 ```python
 # tests/test_models_phase2.py
@@ -96,14 +96,14 @@ async def test_create_alert(db_session):
     assert alert.acknowledged is False
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/test_models_phase2.py -v
 ```
 Expected: FAIL with `ModuleNotFoundError: No module named 'models.insight'`
 
-- [ ] **Step 3: Create `api/models/insight.py`**
+- [x] **Step 3: Create `api/models/insight.py`**
 
 ```python
 import uuid
@@ -129,7 +129,7 @@ class Insight(Base):
     data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 ```
 
-- [ ] **Step 4: Create `api/models/alert.py`**
+- [x] **Step 4: Create `api/models/alert.py`**
 
 ```python
 import uuid
@@ -153,7 +153,7 @@ class Alert(Base):
     acknowledged: Mapped[bool] = mapped_column(Boolean, default=False)
 ```
 
-- [ ] **Step 5: Update `api/models/__init__.py`**
+- [x] **Step 5: Update `api/models/__init__.py`**
 
 ```python
 from .trade import Trade
@@ -165,7 +165,7 @@ from .alert import Alert
 __all__ = ["Trade", "PriceBar", "AccountSnapshot", "Insight", "Alert"]
 ```
 
-- [ ] **Step 6: Create `api/schemas/insight.py`**
+- [x] **Step 6: Create `api/schemas/insight.py`**
 
 ```python
 from datetime import datetime
@@ -187,7 +187,7 @@ class InsightResponse(BaseModel):
     model_config = {"from_attributes": True}
 ```
 
-- [ ] **Step 7: Create `api/schemas/alert.py`**
+- [x] **Step 7: Create `api/schemas/alert.py`**
 
 ```python
 from datetime import datetime
@@ -207,7 +207,7 @@ class AlertResponse(BaseModel):
     model_config = {"from_attributes": True}
 ```
 
-- [ ] **Step 8: Update `api/requirements.txt`**
+- [x] **Step 8: Update `api/requirements.txt`**
 
 ```
 fastapi==0.115.0
@@ -223,14 +223,14 @@ pandas==2.2.3
 aiosqlite==0.20.0
 ```
 
-- [ ] **Step 9: Install pandas in local venv for tests**
+- [x] **Step 9: Install pandas in local venv for tests**
 
 ```bash
 /Users/nick/.venv/bin/pip install pandas==2.2.3
 ```
 Expected: Successfully installed pandas-2.2.3
 
-- [ ] **Step 10: Create `api/alembic/versions/002_add_insights_alerts.py`**
+- [x] **Step 10: Create `api/alembic/versions/002_add_insights_alerts.py`**
 
 ```python
 """add insights and alerts
@@ -285,28 +285,28 @@ def downgrade() -> None:
     op.drop_table("insights")
 ```
 
-- [ ] **Step 11: Run tests to verify they pass**
+- [x] **Step 11: Run tests to verify they pass**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/test_models_phase2.py -v
 ```
 Expected: PASS (2 tests)
 
-- [ ] **Step 12: Run full suite to check no regressions**
+- [x] **Step 12: Run full suite to check no regressions**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/ -v
 ```
 Expected: All existing tests pass
 
-- [ ] **Step 13: Apply migration in Docker**
+- [x] **Step 13: Apply migration in Docker**
 
 ```bash
 docker compose run --rm --no-deps api alembic -c alembic.ini upgrade head
 ```
 Expected: `Running upgrade 001 -> 002`
 
-- [ ] **Step 14: Commit**
+- [x] **Step 14: Commit**
 
 ```bash
 git add api/models/insight.py api/models/alert.py api/schemas/insight.py api/schemas/alert.py
@@ -324,7 +324,7 @@ git commit -m "feat: add Insight and Alert models, schemas, and migration 002"
 - Create: `api/services/insight_engine.py`
 - Create: `tests/test_insight_engine.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_insight_engine.py
@@ -450,14 +450,14 @@ async def test_skips_paper_trades(db_session):
     assert result.scalars().all() == []
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/test_insight_engine.py -v
 ```
 Expected: FAIL with `ModuleNotFoundError: No module named 'services.insight_engine'`
 
-- [ ] **Step 3: Create `api/services/insight_engine.py`**
+- [x] **Step 3: Create `api/services/insight_engine.py`**
 
 ```python
 import json
@@ -592,21 +592,21 @@ async def _compute_session_bias(session: AsyncSession, df: pd.DataFrame) -> None
     ))
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/test_insight_engine.py -v
 ```
 Expected: PASS (5 tests)
 
-- [ ] **Step 5: Run full suite**
+- [x] **Step 5: Run full suite**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/ -v
 ```
 Expected: All tests pass
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/services/insight_engine.py tests/test_insight_engine.py
@@ -621,7 +621,7 @@ git commit -m "feat: add Insight Engine with time_bias and session_bias analysis
 - Create: `api/services/mirror_trader.py`
 - Create: `tests/test_mirror_trader.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_mirror_trader.py
@@ -744,14 +744,14 @@ async def test_mirror_direction_sell(db_session):
     assert paper.direction == Direction.sell
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/test_mirror_trader.py -v
 ```
 Expected: FAIL with `ModuleNotFoundError: No module named 'services.mirror_trader'`
 
-- [ ] **Step 3: Create `api/services/mirror_trader.py`**
+- [x] **Step 3: Create `api/services/mirror_trader.py`**
 
 ```python
 from datetime import datetime, timezone
@@ -855,21 +855,21 @@ async def _compute_paper_sl(session: AsyncSession, event: TradeEventSchema):
     return Decimal(str(round(open_price + avg_offset, 5)))
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/test_mirror_trader.py -v
 ```
 Expected: PASS (5 tests)
 
-- [ ] **Step 5: Run full suite**
+- [x] **Step 5: Run full suite**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/ -v
 ```
 Expected: All tests pass
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/services/mirror_trader.py tests/test_mirror_trader.py
@@ -884,7 +884,7 @@ git commit -m "feat: add Mirror Paper Trader that shadows real entries with stat
 - Create: `api/services/alert_manager.py`
 - Create: `tests/test_alert_manager.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_alert_manager.py
@@ -1045,14 +1045,14 @@ async def test_equity_buffer_no_alert_when_sufficient(db_session):
     assert result.scalars().all() == []
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/test_alert_manager.py -v
 ```
 Expected: FAIL with `ModuleNotFoundError: No module named 'services.alert_manager'`
 
-- [ ] **Step 3: Create `api/services/alert_manager.py`**
+- [x] **Step 3: Create `api/services/alert_manager.py`**
 
 ```python
 from datetime import datetime, timezone
@@ -1190,21 +1190,21 @@ async def _check_consecutive_loss(session: AsyncSession, event: TradeEventSchema
     await session.commit()
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/test_alert_manager.py -v
 ```
 Expected: PASS (6 tests)
 
-- [ ] **Step 5: Run full suite**
+- [x] **Step 5: Run full suite**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/ -v
 ```
 Expected: All tests pass
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/services/alert_manager.py tests/test_alert_manager.py
@@ -1221,7 +1221,7 @@ git commit -m "feat: add Alert Manager with equity_buffer, double_down, consecut
 - Create: `tests/test_insights_api.py`
 - Create: `tests/test_alerts_api.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_insights_api.py
@@ -1348,14 +1348,14 @@ async def test_acknowledge_alert_not_found(client):
     assert response.status_code == 404
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/test_insights_api.py tests/test_alerts_api.py -v
 ```
 Expected: FAIL with 404 (routes not registered yet)
 
-- [ ] **Step 3: Create `api/routers/insights.py`**
+- [x] **Step 3: Create `api/routers/insights.py`**
 
 ```python
 from typing import List
@@ -1380,7 +1380,7 @@ async def list_insights(session: AsyncSession = Depends(get_session)):
     return result.scalars().all()
 ```
 
-- [ ] **Step 4: Create `api/routers/alerts.py`**
+- [x] **Step 4: Create `api/routers/alerts.py`**
 
 ```python
 from typing import List
@@ -1423,7 +1423,7 @@ async def acknowledge_alert(
     return alert
 ```
 
-- [ ] **Step 5: Register routers in `api/main.py`**
+- [x] **Step 5: Register routers in `api/main.py`**
 
 ```python
 from contextlib import asynccontextmanager
@@ -1456,21 +1456,21 @@ async def health():
     return {"status": "ok"}
 ```
 
-- [ ] **Step 6: Run tests to verify they pass**
+- [x] **Step 6: Run tests to verify they pass**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/test_insights_api.py tests/test_alerts_api.py -v
 ```
 Expected: PASS (7 tests)
 
-- [ ] **Step 7: Run full suite**
+- [x] **Step 7: Run full suite**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/ -v
 ```
 Expected: All tests pass
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add api/routers/insights.py api/routers/alerts.py api/main.py
@@ -1486,7 +1486,7 @@ git commit -m "feat: add /api/insights and /api/alerts read endpoints"
 - Modify: `api/routers/trade_events.py`
 - Modify: `api/routers/price_tick.py`
 
-- [ ] **Step 1: Write failing integration tests**
+- [x] **Step 1: Write failing integration tests**
 
 ```python
 # tests/test_wire_up.py
@@ -1567,14 +1567,14 @@ async def test_double_down_alert_from_endpoint(client, db_session):
     assert "buy" in alerts[0].message
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/test_wire_up.py -v
 ```
 Expected: FAIL — mirror trade and alerts not created (services not wired yet)
 
-- [ ] **Step 3: Update `api/routers/trade_events.py`**
+- [x] **Step 3: Update `api/routers/trade_events.py`**
 
 ```python
 from fastapi import APIRouter, Depends, status
@@ -1602,7 +1602,7 @@ async def receive_trade_event(
     return {"id": str(trade.id), "ticket": trade.ticket}
 ```
 
-- [ ] **Step 4: Update `api/routers/price_tick.py`**
+- [x] **Step 4: Update `api/routers/price_tick.py`**
 
 ```python
 from fastapi import APIRouter, Depends
@@ -1626,21 +1626,21 @@ async def receive_price_tick(
     return {"status": "saved", "timestamp": tick.timestamp.isoformat()}
 ```
 
-- [ ] **Step 5: Run integration tests to verify they pass**
+- [x] **Step 5: Run integration tests to verify they pass**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/test_wire_up.py -v
 ```
 Expected: PASS (3 tests)
 
-- [ ] **Step 6: Run full suite**
+- [x] **Step 6: Run full suite**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/ -v
 ```
 Expected: All tests pass (22+ tests)
 
-- [ ] **Step 7: Rebuild Docker and verify stack**
+- [x] **Step 7: Rebuild Docker and verify stack**
 
 ```bash
 docker compose up --build -d
@@ -1648,7 +1648,7 @@ docker compose logs -f api
 ```
 Expected: API starts without errors, `POST /api/price-tick` returns 200
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add api/routers/trade_events.py api/routers/price_tick.py tests/test_wire_up.py

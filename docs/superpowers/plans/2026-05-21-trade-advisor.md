@@ -1,6 +1,6 @@
 # Trade Advisor Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** เพิ่ม entry scoring, recovery map (fib-based TP/Add/Cut zones), และ live zone alerts พร้อม macOS notification ผ่าน Browser Web Notifications API
 
@@ -40,7 +40,7 @@
 - Modify: `api/models/alert.py`
 - Modify: `api/schemas/alert.py`
 
-- [ ] **Step 1: Create migration 008**
+- [x] **Step 1: Create migration 008**
 
 ```python
 # api/alembic/versions/008_add_trade_advisor_fields.py
@@ -74,7 +74,7 @@ def downgrade() -> None:
     op.drop_column("trades", "entry_score")
 ```
 
-- [ ] **Step 2: Apply migration**
+- [x] **Step 2: Apply migration**
 
 ```bash
 cd api && alembic upgrade head
@@ -82,7 +82,7 @@ cd api && alembic upgrade head
 
 Expected: `Running upgrade 007 -> 008`
 
-- [ ] **Step 3: Update Trade model** — เพิ่ม 3 columns ใน `api/models/trade.py`
+- [x] **Step 3: Update Trade model** — เพิ่ม 3 columns ใน `api/models/trade.py`
 
 เพิ่มหลัง `account_id`:
 ```python
@@ -95,7 +95,7 @@ entry_verdict: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 recovery_plan: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 ```
 
-- [ ] **Step 4: Update Alert model** — เพิ่ม `trade_id` ใน `api/models/alert.py`
+- [x] **Step 4: Update Alert model** — เพิ่ม `trade_id` ใน `api/models/alert.py`
 
 ```python
 import uuid
@@ -120,7 +120,7 @@ class Alert(Base):
     trade_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
 ```
 
-- [ ] **Step 5: Update AlertResponse schema** — เพิ่ม `trade_id` ใน `api/schemas/alert.py`
+- [x] **Step 5: Update AlertResponse schema** — เพิ่ม `trade_id` ใน `api/schemas/alert.py`
 
 ```python
 from datetime import datetime
@@ -141,7 +141,7 @@ class AlertResponse(BaseModel):
     model_config = {"from_attributes": True}
 ```
 
-- [ ] **Step 6: Verify models load**
+- [x] **Step 6: Verify models load**
 
 ```bash
 cd api && python -c "from models.trade import Trade; from models.alert import Alert; print('OK')"
@@ -157,7 +157,7 @@ Expected: `OK`
 - Create: `tests/test_trade_advisor.py`
 - Create: `api/services/trade_advisor.py`
 
-- [ ] **Step 1: Write failing tests for entry scoring**
+- [x] **Step 1: Write failing tests for entry scoring**
 
 ```python
 # tests/test_trade_advisor.py
@@ -350,7 +350,7 @@ async def test_entry_score_peak_hours_penalty(db_session):
     assert trade_peak.entry_score > trade_offpeak.entry_score
 ```
 
-- [ ] **Step 2: Run — verify tests fail**
+- [x] **Step 2: Run — verify tests fail**
 
 ```bash
 cd api && pytest ../tests/test_trade_advisor.py -v 2>&1 | head -20
@@ -358,7 +358,7 @@ cd api && pytest ../tests/test_trade_advisor.py -v 2>&1 | head -20
 
 Expected: `ImportError` or `ModuleNotFoundError` for `trade_advisor`
 
-- [ ] **Step 3: Implement `api/services/trade_advisor.py`**
+- [x] **Step 3: Implement `api/services/trade_advisor.py`**
 
 ```python
 from datetime import datetime, timezone
@@ -529,7 +529,7 @@ async def compute_entry_score(session: AsyncSession, trade: Trade) -> None:
         trade.entry_verdict = "high_risk"
 ```
 
-- [ ] **Step 4: Run entry scoring tests — verify pass**
+- [x] **Step 4: Run entry scoring tests — verify pass**
 
 ```bash
 cd api && pytest ../tests/test_trade_advisor.py::test_entry_score_good_entry ../tests/test_trade_advisor.py::test_entry_score_high_risk ../tests/test_trade_advisor.py::test_entry_score_idempotent ../tests/test_trade_advisor.py::test_entry_score_rescue_at_fib_gives_bonus ../tests/test_trade_advisor.py::test_entry_score_rescue_not_at_fib_gives_penalty ../tests/test_trade_advisor.py::test_entry_score_peak_hours_penalty -v
@@ -537,7 +537,7 @@ cd api && pytest ../tests/test_trade_advisor.py::test_entry_score_good_entry ../
 
 Expected: 6 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/alembic/versions/008_add_trade_advisor_fields.py api/models/trade.py api/models/alert.py api/schemas/alert.py api/services/trade_advisor.py tests/test_trade_advisor.py
@@ -552,7 +552,7 @@ git commit -m "feat: add trade advisor migration, models, and entry scoring serv
 - Modify: `tests/test_trade_advisor.py`
 - Modify: `api/services/trade_advisor.py`
 
-- [ ] **Step 1: Add recovery plan tests**
+- [x] **Step 1: Add recovery plan tests**
 
 เพิ่มใน `tests/test_trade_advisor.py`:
 
@@ -654,7 +654,7 @@ async def test_recovery_plan_idempotent(db_session):
     assert trade.recovery_plan == first_plan
 ```
 
-- [ ] **Step 2: Run — verify tests fail**
+- [x] **Step 2: Run — verify tests fail**
 
 ```bash
 cd api && pytest ../tests/test_trade_advisor.py::test_recovery_plan_buy -v 2>&1 | head -10
@@ -662,7 +662,7 @@ cd api && pytest ../tests/test_trade_advisor.py::test_recovery_plan_buy -v 2>&1 
 
 Expected: `ImportError` for `compute_recovery_plan`
 
-- [ ] **Step 3: Implement `compute_recovery_plan()` — เพิ่มใน `api/services/trade_advisor.py`**
+- [x] **Step 3: Implement `compute_recovery_plan()` — เพิ่มใน `api/services/trade_advisor.py`**
 
 ```python
 async def compute_recovery_plan(session: AsyncSession, trade: Trade) -> None:
@@ -726,7 +726,7 @@ async def compute_recovery_plan(session: AsyncSession, trade: Trade) -> None:
     }
 ```
 
-- [ ] **Step 4: Run recovery plan tests — verify pass**
+- [x] **Step 4: Run recovery plan tests — verify pass**
 
 ```bash
 cd api && pytest ../tests/test_trade_advisor.py::test_recovery_plan_buy ../tests/test_trade_advisor.py::test_recovery_plan_sell ../tests/test_trade_advisor.py::test_recovery_plan_null_when_no_fib ../tests/test_trade_advisor.py::test_recovery_plan_idempotent -v
@@ -734,7 +734,7 @@ cd api && pytest ../tests/test_trade_advisor.py::test_recovery_plan_buy ../tests
 
 Expected: 4 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/services/trade_advisor.py tests/test_trade_advisor.py
@@ -749,7 +749,7 @@ git commit -m "feat: add recovery plan computation to trade advisor service"
 - Modify: `tests/test_trade_advisor.py`
 - Modify: `api/services/trade_advisor.py`
 
-- [ ] **Step 1: Add zone monitoring tests**
+- [x] **Step 1: Add zone monitoring tests**
 
 เพิ่มใน `tests/test_trade_advisor.py`:
 
@@ -875,7 +875,7 @@ async def test_zone_check_no_alert_when_price_not_crossed(db_session):
     assert result.scalars().first() is None
 ```
 
-- [ ] **Step 2: Run — verify tests fail**
+- [x] **Step 2: Run — verify tests fail**
 
 ```bash
 cd api && pytest ../tests/test_trade_advisor.py::test_zone_check_add_alert -v 2>&1 | head -10
@@ -883,7 +883,7 @@ cd api && pytest ../tests/test_trade_advisor.py::test_zone_check_add_alert -v 2>
 
 Expected: `ImportError` for `check_advisor_zones`
 
-- [ ] **Step 3: Implement `check_advisor_zones()` — เพิ่มใน `api/services/trade_advisor.py`**
+- [x] **Step 3: Implement `check_advisor_zones()` — เพิ่มใน `api/services/trade_advisor.py`**
 
 ```python
 def _zone_crossed(bid: float, level: float, direction: Direction, side: str) -> bool:
@@ -961,7 +961,7 @@ async def check_advisor_zones(session: AsyncSession, tick: MarketTickSchema) -> 
     await session.commit()
 ```
 
-- [ ] **Step 4: Run zone monitoring tests — verify pass**
+- [x] **Step 4: Run zone monitoring tests — verify pass**
 
 ```bash
 cd api && pytest ../tests/test_trade_advisor.py::test_zone_check_tp_alert ../tests/test_trade_advisor.py::test_zone_check_add_alert ../tests/test_trade_advisor.py::test_zone_check_cut_alert ../tests/test_trade_advisor.py::test_zone_check_cooldown ../tests/test_trade_advisor.py::test_zone_check_no_alert_when_price_not_crossed -v
@@ -969,7 +969,7 @@ cd api && pytest ../tests/test_trade_advisor.py::test_zone_check_tp_alert ../tes
 
 Expected: 5 passed
 
-- [ ] **Step 5: Run all trade advisor tests**
+- [x] **Step 5: Run all trade advisor tests**
 
 ```bash
 cd api && pytest ../tests/test_trade_advisor.py -v
@@ -977,7 +977,7 @@ cd api && pytest ../tests/test_trade_advisor.py -v
 
 Expected: 14 passed
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/services/trade_advisor.py tests/test_trade_advisor.py
@@ -995,7 +995,7 @@ git commit -m "feat: add zone monitoring and alert firing to trade advisor servi
 - Modify: `api/routers/market_tick.py`
 - Modify: `api/main.py`
 
-- [ ] **Step 1: Create trade advisor router**
+- [x] **Step 1: Create trade advisor router**
 
 ```python
 # api/routers/trade_advisor.py
@@ -1034,7 +1034,7 @@ async def get_trade_advisor(session: AsyncSession = Depends(get_session)):
     ]
 ```
 
-- [ ] **Step 2: Add `types` filter to alerts router**
+- [x] **Step 2: Add `types` filter to alerts router**
 
 แก้ `api/routers/alerts.py` — เพิ่ม `types` param:
 
@@ -1094,7 +1094,7 @@ async def acknowledge_all_alerts(session: AsyncSession = Depends(get_session)):
     return {"acknowledged": count}
 ```
 
-- [ ] **Step 3: Wire entry scoring into `trade_logger.py`**
+- [x] **Step 3: Wire entry scoring into `trade_logger.py`**
 
 แก้ `api/services/trade_logger.py`:
 
@@ -1149,7 +1149,7 @@ async def upsert_trade(session: AsyncSession, event: TradeEventSchema) -> Trade:
     return trade
 ```
 
-- [ ] **Step 4: Wire zone check into `market_tick.py`**
+- [x] **Step 4: Wire zone check into `market_tick.py`**
 
 แก้ `api/routers/market_tick.py`:
 
@@ -1181,7 +1181,7 @@ async def receive_market_tick(
     }
 ```
 
-- [ ] **Step 5: Register router in `api/main.py`**
+- [x] **Step 5: Register router in `api/main.py`**
 
 เพิ่ม import และ `app.include_router(trade_advisor.router)` ต่อท้าย routers ที่มีอยู่:
 
@@ -1192,7 +1192,7 @@ from routers import trade_advisor  # เพิ่มบรรทัดนี้
 app.include_router(trade_advisor.router)
 ```
 
-- [ ] **Step 6: Run full test suite**
+- [x] **Step 6: Run full test suite**
 
 ```bash
 cd api && pytest ../tests/ -v
@@ -1200,7 +1200,7 @@ cd api && pytest ../tests/ -v
 
 Expected: all existing tests pass + test_trade_advisor (14 tests) pass
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add api/routers/trade_advisor.py api/routers/alerts.py api/services/trade_logger.py api/routers/market_tick.py api/main.py
@@ -1216,7 +1216,7 @@ git commit -m "feat: wire trade advisor router, zone check hook, and alerts type
 - Create: `frontend/src/hooks/useTradeAlerts.js`
 - Modify: `frontend/src/App.jsx`
 
-- [ ] **Step 1: Create `TradeAdvisor.jsx`**
+- [x] **Step 1: Create `TradeAdvisor.jsx`**
 
 ```jsx
 // frontend/src/components/TradeAdvisor.jsx
@@ -1293,7 +1293,7 @@ export default function TradeAdvisor({ data }) {
 }
 ```
 
-- [ ] **Step 2: Create `useTradeAlerts.js`**
+- [x] **Step 2: Create `useTradeAlerts.js`**
 
 ```javascript
 // frontend/src/hooks/useTradeAlerts.js
@@ -1331,7 +1331,7 @@ export function useTradeAlerts() {
 }
 ```
 
-- [ ] **Step 3: Wire into `App.jsx`**
+- [x] **Step 3: Wire into `App.jsx`**
 
 เพิ่ม import และ state/polling ใน `frontend/src/App.jsx`:
 
@@ -1354,7 +1354,7 @@ usePolling(() => fetch('/api/trade-advisor').then(r => r.json()).then(setAdvisor
 </section>
 ```
 
-- [ ] **Step 4: Build frontend**
+- [x] **Step 4: Build frontend**
 
 ```bash
 cd frontend && npm run build
@@ -1362,7 +1362,7 @@ cd frontend && npm run build
 
 Expected: build succeeds, no errors
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/components/TradeAdvisor.jsx frontend/src/hooks/useTradeAlerts.js frontend/src/App.jsx
@@ -1373,7 +1373,7 @@ git commit -m "feat: add TradeAdvisor component and useTradeAlerts hook"
 
 ## Task 7: Final Verification
 
-- [ ] **Step 1: Run full test suite**
+- [x] **Step 1: Run full test suite**
 
 ```bash
 cd api && pytest ../tests/ -v
@@ -1381,7 +1381,7 @@ cd api && pytest ../tests/ -v
 
 Expected: all tests pass (no regressions)
 
-- [ ] **Step 2: Build check**
+- [x] **Step 2: Build check**
 
 ```bash
 cd frontend && npm run build
@@ -1389,7 +1389,7 @@ cd frontend && npm run build
 
 Expected: success
 
-- [ ] **Step 3: Smoke test API**
+- [x] **Step 3: Smoke test API**
 
 ```bash
 curl -s http://localhost:8000/api/trade-advisor | python3 -m json.tool
@@ -1398,11 +1398,11 @@ curl -s "http://localhost:8000/api/alerts?types=tp_zone_reached,add_zone_reached
 
 Expected: valid JSON arrays
 
-- [ ] **Step 4: Update backlog**
+- [x] **Step 4: Update backlog**
 
 แก้ `.agents/backlog.md` — เปลี่ยน status ของ `Trade Advisor` task เป็น `done` + เพิ่ม commit hash ใน remark
 
-- [ ] **Step 5: Final commit**
+- [x] **Step 5: Final commit**
 
 ```bash
 git add .agents/backlog.md

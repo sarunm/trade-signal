@@ -1,6 +1,6 @@
 # Trader Profile, Phase 2 Candidates & MCP Query Layer — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Add a Trader Profile section to the dashboard showing dominant trading patterns + Phase 2 candidate rules, and expose trade data via MCP so Claude can answer trading questions directly.
 
@@ -34,7 +34,7 @@
 **Files:**
 - Create: `api/schemas/trader_profile.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/test_trader_profile.py
@@ -60,7 +60,7 @@ def test_trader_profile_response_structure():
     assert profile.candidates == []
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 ```bash
 docker compose exec api python -m pytest ../tests/test_trader_profile.py -v
@@ -68,7 +68,7 @@ docker compose exec api python -m pytest ../tests/test_trader_profile.py -v
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'schemas.trader_profile'`
 
-- [ ] **Step 3: Create schema file**
+- [x] **Step 3: Create schema file**
 
 ```python
 # api/schemas/trader_profile.py
@@ -98,7 +98,7 @@ class TraderProfileResponse(BaseModel):
     candidates: List[CandidateRule]
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 ```bash
 docker compose exec api python -m pytest ../tests/test_trader_profile.py -v
@@ -106,7 +106,7 @@ docker compose exec api python -m pytest ../tests/test_trader_profile.py -v
 
 Expected: PASS (2 tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/schemas/trader_profile.py tests/test_trader_profile.py
@@ -121,7 +121,7 @@ git commit -m "feat: add TraderProfile pydantic schemas"
 - Create: `api/routers/trader_profile.py`
 - Modify: `api/main.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Add to `tests/test_trader_profile.py`:
 
@@ -161,7 +161,7 @@ async def test_trader_profile_win_rate_shown_at_3(seed_tagged_trades_3):
     assert candidate["win_rate"] == pytest.approx(2/3, abs=0.01)
 ```
 
-- [ ] **Step 2: Add fixtures to `tests/conftest.py`**
+- [x] **Step 2: Add fixtures to `tests/conftest.py`**
 
 Open `tests/conftest.py` and add these fixtures after existing ones:
 
@@ -228,7 +228,7 @@ async def seed_tagged_trades_3(session):
     await session.commit()
 ```
 
-- [ ] **Step 3: Run tests to verify they fail**
+- [x] **Step 3: Run tests to verify they fail**
 
 ```bash
 docker compose exec api python -m pytest ../tests/test_trader_profile.py -v
@@ -236,7 +236,7 @@ docker compose exec api python -m pytest ../tests/test_trader_profile.py -v
 
 Expected: FAIL with `404` or import error (router not registered yet)
 
-- [ ] **Step 4: Create the router**
+- [x] **Step 4: Create the router**
 
 ```python
 # api/routers/trader_profile.py
@@ -349,7 +349,7 @@ async def get_trader_profile(session: AsyncSession = Depends(get_session)):
     )
 ```
 
-- [ ] **Step 5: Register router in main.py**
+- [x] **Step 5: Register router in main.py**
 
 Add after the last import:
 ```python
@@ -361,7 +361,7 @@ Add after the last `app.include_router(...)`:
 app.include_router(trader_profile_router)
 ```
 
-- [ ] **Step 6: Restart API and run tests**
+- [x] **Step 6: Restart API and run tests**
 
 ```bash
 docker compose restart api
@@ -370,7 +370,7 @@ docker compose exec api python -m pytest ../tests/test_trader_profile.py -v
 
 Expected: PASS (all 4 tests)
 
-- [ ] **Step 7: Smoke test**
+- [x] **Step 7: Smoke test**
 
 ```bash
 curl -s http://localhost:8000/api/trader-profile | python3 -m json.tool
@@ -378,7 +378,7 @@ curl -s http://localhost:8000/api/trader-profile | python3 -m json.tool
 
 Expected: JSON with `summary` and `candidates` keys
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add api/routers/trader_profile.py api/main.py tests/test_trader_profile.py tests/conftest.py
@@ -393,7 +393,7 @@ git commit -m "feat: add GET /api/trader-profile endpoint"
 - Create: `frontend/src/components/TraderProfile.jsx`
 - Modify: `frontend/src/App.jsx`
 
-- [ ] **Step 1: Create TraderProfile.jsx**
+- [x] **Step 1: Create TraderProfile.jsx**
 
 ```jsx
 // frontend/src/components/TraderProfile.jsx
@@ -488,7 +488,7 @@ export default function TraderProfile({ data, error }) {
 }
 ```
 
-- [ ] **Step 2: Add TraderProfile to App.jsx**
+- [x] **Step 2: Add TraderProfile to App.jsx**
 
 In `frontend/src/App.jsx`:
 
@@ -508,7 +508,7 @@ Add component in the JSX, immediately after `<AccountBar .../>` and before `<Dai
 <TraderProfile data={traderProfile.data} error={traderProfile.error} />
 ```
 
-- [ ] **Step 3: Verify in browser**
+- [x] **Step 3: Verify in browser**
 
 ```bash
 # API must be running
@@ -520,7 +520,7 @@ Check:
 - If no tagged trades: shows "Tag trades เพิ่มเพื่อดู profile..."
 - If tagged trades exist: shows narrative + candidate rows with progress bars
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add frontend/src/components/TraderProfile.jsx frontend/src/App.jsx
@@ -537,7 +537,7 @@ git commit -m "feat: add TraderProfile component to dashboard"
 - Modify: `api/requirements.txt`
 - Modify: `.claude/settings.local.json`
 
-- [ ] **Step 1: Add dependencies to requirements.txt**
+- [x] **Step 1: Add dependencies to requirements.txt**
 
 In `api/requirements.txt`, add after the last line:
 ```
@@ -545,7 +545,7 @@ mcp[cli]==1.9.0
 httpx==0.27.2
 ```
 
-- [ ] **Step 2: Install in container**
+- [x] **Step 2: Install in container**
 
 ```bash
 docker compose exec api pip install "mcp[cli]==1.9.0" "httpx==0.27.2"
@@ -558,7 +558,7 @@ docker compose exec api python -c "from mcp.server.fastmcp import FastMCP; print
 
 Expected: `ok`
 
-- [ ] **Step 3: Create MCP package**
+- [x] **Step 3: Create MCP package**
 
 ```python
 # api/mcp/__init__.py
@@ -566,7 +566,7 @@ Expected: `ok`
 
 (empty file — marks directory as Python package)
 
-- [ ] **Step 4: Create server.py**
+- [x] **Step 4: Create server.py**
 
 ```python
 # api/mcp/server.py
@@ -635,7 +635,7 @@ if __name__ == "__main__":
     mcp.run()
 ```
 
-- [ ] **Step 5: Test server starts**
+- [x] **Step 5: Test server starts**
 
 ```bash
 cd /Users/nick/2_SideProjects/trade-signal
@@ -646,7 +646,7 @@ kill %1
 
 Expected: starts without errors (prints MCP startup info)
 
-- [ ] **Step 6: Add mcpServers to .claude/settings.local.json**
+- [x] **Step 6: Add mcpServers to .claude/settings.local.json**
 
 Open `.claude/settings.local.json` and add `mcpServers` key at the top level alongside `permissions`:
 
@@ -669,7 +669,7 @@ Open `.claude/settings.local.json` and add `mcpServers` key at the top level alo
 }
 ```
 
-- [ ] **Step 7: Verify MCP tools load in Claude Code**
+- [x] **Step 7: Verify MCP tools load in Claude Code**
 
 Restart Claude Code in the project directory. Run:
 ```
@@ -678,14 +678,14 @@ Restart Claude Code in the project directory. Run:
 
 Expected: `trade-signal` server listed with 7 tools: `get_trades`, `get_trader_profile`, `get_insights`, `get_alerts`, `get_account_history`, `get_trade_stats`, `get_price_context`
 
-- [ ] **Step 8: Test a tool**
+- [x] **Step 8: Test a tool**
 
 In Claude Code, ask:
 > "ใช้ get_trader_profile tool แล้วบอกผมว่ามีอะไรบ้าง"
 
 Expected: Claude calls the tool and returns actual data from the API
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add api/mcp/__init__.py api/mcp/server.py api/requirements.txt .claude/settings.local.json

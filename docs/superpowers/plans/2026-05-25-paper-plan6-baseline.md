@@ -1,6 +1,6 @@
 # Plan 6 — Baseline Runner Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Spec:** `docs/superpowers/specs/2026-05-25-paper-trade-system-redesign-v2.md` § "Baseline rules"
 
@@ -34,7 +34,7 @@
 - Create: `api/services/baseline_runner.py`
 - Test: `tests/test_baseline_runner.py`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```python
 # tests/test_baseline_runner.py
@@ -98,7 +98,7 @@ async def test_ensure_baseline_idempotent(session):
     assert len(baselines) == 1
 ```
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -107,7 +107,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement `ensure_baseline_rule()`**
+- [x] **Step 3: Implement `ensure_baseline_rule()`**
 
 ```python
 # api/services/baseline_runner.py
@@ -192,7 +192,7 @@ async def ensure_baseline_rule(session: AsyncSession) -> PaperTraderRule:
     return rule
 ```
 
-- [ ] **Step 4: Run to verify**
+- [x] **Step 4: Run to verify**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -201,7 +201,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/services/baseline_runner.py tests/test_baseline_runner.py
@@ -216,7 +216,7 @@ git commit -m "feat: ensure baseline pattern + rule (idempotent)"
 - Modify: `api/services/baseline_runner.py`
 - Test: `tests/test_baseline_runner.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Append to `tests/test_baseline_runner.py`:
 
@@ -266,7 +266,7 @@ async def test_alternates_after_sell(session):
     assert direction == Direction.buy
 ```
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -275,7 +275,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL — `next_direction` not defined.
 
-- [ ] **Step 3: Implement `next_direction()`**
+- [x] **Step 3: Implement `next_direction()`**
 
 Append to `api/services/baseline_runner.py`:
 
@@ -317,7 +317,7 @@ async def next_direction(
     return Direction.sell
 ```
 
-- [ ] **Step 4: Run to verify**
+- [x] **Step 4: Run to verify**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -326,7 +326,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/services/baseline_runner.py tests/test_baseline_runner.py
@@ -341,7 +341,7 @@ git commit -m "feat: alternating direction selection for baseline runner"
 - Modify: `api/services/baseline_runner.py`
 - Modify: `tests/test_baseline_runner.py`
 
-- [ ] **Step 1: Write failing integration test**
+- [x] **Step 1: Write failing integration test**
 
 Append to `tests/test_baseline_runner.py`:
 
@@ -390,7 +390,7 @@ async def test_open_baseline_skipped_if_already_open(session):
     assert second is None
 ```
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -399,7 +399,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL — `open_baseline_trade` not defined.
 
-- [ ] **Step 3: Implement `open_baseline_trade()`**
+- [x] **Step 3: Implement `open_baseline_trade()`**
 
 Append to `api/services/baseline_runner.py`:
 
@@ -483,7 +483,7 @@ async def open_baseline_trade(
     return trade
 ```
 
-- [ ] **Step 4: Run to verify**
+- [x] **Step 4: Run to verify**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -492,7 +492,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/services/baseline_runner.py tests/test_baseline_runner.py
@@ -506,7 +506,7 @@ git commit -m "feat: open baseline trade at session boundary"
 **Files:**
 - Modify: `api/main.py`
 
-- [ ] **Step 1: Add session-boundary cron handler + 3 jobs**
+- [x] **Step 1: Add session-boundary cron handler + 3 jobs**
 
 Update `api/main.py`. Add the import:
 
@@ -577,7 +577,7 @@ async def lifespan(app: FastAPI):
     await engine.dispose()
 ```
 
-- [ ] **Step 2: Run app smoke test**
+- [x] **Step 2: Run app smoke test**
 
 ```
 docker compose up -d
@@ -590,7 +590,7 @@ Expected: log line `Scheduler started` once. No exceptions.
 docker compose down
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add api/main.py
@@ -605,7 +605,7 @@ git commit -m "feat: register baseline runner cron jobs (London/NY/Asia)"
 - Create: `api/services/baseline_stats.py`
 - Test: `tests/test_baseline_stats.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_baseline_stats.py
@@ -684,7 +684,7 @@ async def test_baseline_winrate_excludes_outside_window(session):
     assert await get_baseline_winrate(session, days=30) == 0.0
 ```
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -693,7 +693,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement `baseline_stats.py`**
+- [x] **Step 3: Implement `baseline_stats.py`**
 
 ```python
 # api/services/baseline_stats.py
@@ -753,7 +753,7 @@ async def get_baseline_winrate(
     return wins / total if total else 0.0
 ```
 
-- [ ] **Step 4: Run to verify**
+- [x] **Step 4: Run to verify**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -762,7 +762,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/services/baseline_stats.py tests/test_baseline_stats.py
@@ -773,7 +773,7 @@ git commit -m "feat: rolling baseline winrate query"
 
 ## Task 6: Full regression
 
-- [ ] **Step 1: Run all tests**
+- [x] **Step 1: Run all tests**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -782,7 +782,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS.
 
-- [ ] **Step 2: Smoke test app start**
+- [x] **Step 2: Smoke test app start**
 
 ```
 docker compose up -d
@@ -795,7 +795,7 @@ Expected: scheduler started, 3 baseline jobs registered (verify by checking job 
 docker compose down
 ```
 
-- [ ] **Step 3: Commit any test fixups**
+- [x] **Step 3: Commit any test fixups**
 
 ```bash
 git add -A tests/

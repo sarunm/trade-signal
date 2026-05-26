@@ -1,6 +1,6 @@
 # Plan 4 — Cost Model Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Spec:** `docs/superpowers/specs/2026-05-25-paper-trade-system-redesign-v2.md` § "Cost Model"
 
@@ -39,7 +39,7 @@
 - Create: `api/alembic/versions/015_cost_model.py`
 - Test: `tests/test_migration_015.py`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 ```python
 # tests/test_migration_015.py
@@ -85,7 +85,7 @@ async def test_cost_calibrations_columns(engine):
     assert expected.issubset(cols), f"missing: {expected - cols}"
 ```
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -94,7 +94,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL.
 
-- [ ] **Step 3: Write the migration**
+- [x] **Step 3: Write the migration**
 
 ```python
 # api/alembic/versions/015_cost_model.py
@@ -149,7 +149,7 @@ def downgrade() -> None:
         op.drop_table("cost_calibrations")
 ```
 
-- [ ] **Step 4: Add ORM model**
+- [x] **Step 4: Add ORM model**
 
 ```python
 # api/models/cost_calibration.py
@@ -184,7 +184,7 @@ Register in `api/models/__init__.py`:
 from models.cost_calibration import CostCalibration  # noqa: F401
 ```
 
-- [ ] **Step 5: Run to verify pass**
+- [x] **Step 5: Run to verify pass**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -193,14 +193,14 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS (2 tests).
 
-- [ ] **Step 6: Apply Postgres migration**
+- [x] **Step 6: Apply Postgres migration**
 
 ```
 docker compose run --rm api alembic upgrade head
 docker compose exec db psql -U tradesignal -d tradesignal -c "\d cost_calibrations"
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add api/alembic/versions/015_cost_model.py \
@@ -217,7 +217,7 @@ git commit -m "feat: migration 015 — cost_calibrations table"
 - Create: `api/services/spread_buffer.py`
 - Test: `tests/test_spread_buffer.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_spread_buffer.py
@@ -253,7 +253,7 @@ def test_clear():
     assert buf.size() == 0
 ```
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -262,7 +262,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL — module missing.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```python
 # api/services/spread_buffer.py
@@ -311,7 +311,7 @@ def get_buffer() -> SpreadBuffer:
     return _buffer
 ```
 
-- [ ] **Step 4: Run tests to pass**
+- [x] **Step 4: Run tests to pass**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -320,7 +320,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS (4 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/services/spread_buffer.py tests/test_spread_buffer.py
@@ -335,7 +335,7 @@ git commit -m "feat(cost): in-memory spread ring buffer (max 2000)"
 - Create: `api/services/cost_model.py`
 - Test: `tests/test_cost_model.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_cost_model.py
@@ -480,7 +480,7 @@ async def test_cache_invalidates_after_ttl(db_session, monkeypatch):
     assert cost3.spread_pip == Decimal("99")
 ```
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -489,7 +489,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL — module missing.
 
-- [ ] **Step 3: Implement `cost_model.py`**
+- [x] **Step 3: Implement `cost_model.py`**
 
 ```python
 # api/services/cost_model.py
@@ -658,7 +658,7 @@ async def _learn_commission(session: AsyncSession) -> Optional[dict]:
     return {"value": value, "sample_count": len(rows)}
 ```
 
-- [ ] **Step 4: Run cost_model tests to pass**
+- [x] **Step 4: Run cost_model tests to pass**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -667,7 +667,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS (6 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/services/cost_model.py tests/test_cost_model.py
@@ -681,7 +681,7 @@ git commit -m "feat(cost): TradeCost dataclass + estimate/apply + refresh job"
 **Files:**
 - Modify: `api/routers/market_tick.py`
 
-- [ ] **Step 1: Modify the route to push (ask − bid)**
+- [x] **Step 1: Modify the route to push (ask − bid)**
 
 Add the import at the top:
 
@@ -709,7 +709,7 @@ async def receive_market_tick(
     ...
 ```
 
-- [ ] **Step 2: Smoke**
+- [x] **Step 2: Smoke**
 
 ```
 docker compose up -d
@@ -722,7 +722,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: buffer size ≥ 1 inside the running container — note that buffer is process-local so test by reading from inside the same `api` container with `docker compose exec api python -c "..."` if needed.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add api/routers/market_tick.py
@@ -736,7 +736,7 @@ git commit -m "feat(cost): record (ask-bid) per market tick into spread buffer"
 **Files:**
 - Modify: `api/main.py`
 
-- [ ] **Step 1: Add the cron**
+- [x] **Step 1: Add the cron**
 
 Edit `api/main.py`:
 
@@ -779,7 +779,7 @@ async def _safe_refresh_cost() -> None:
         logger.exception("cost refresh cron failed")
 ```
 
-- [ ] **Step 2: Smoke**
+- [x] **Step 2: Smoke**
 
 ```
 docker compose up -d --build api
@@ -790,7 +790,7 @@ docker compose exec db psql -U tradesignal -d tradesignal -c \
   "SELECT learned_spread_pip, sample_count_spread, calibrated_at FROM cost_calibrations ORDER BY calibrated_at DESC LIMIT 1;"
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add api/main.py
@@ -801,7 +801,7 @@ git commit -m "feat(cost): hourly APScheduler cron for cost refresh"
 
 ## Task 6: Full regression
 
-- [ ] **Step 1: Run the suite**
+- [x] **Step 1: Run the suite**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -810,7 +810,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: previous count + new tests, all green.
 
-- [ ] **Step 2: Update handoff**
+- [x] **Step 2: Update handoff**
 
 ```
 Plan 4 done.

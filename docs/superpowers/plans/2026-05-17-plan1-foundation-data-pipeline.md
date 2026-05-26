@@ -1,6 +1,6 @@
 # Trade Signal Partner — Plan 1: Foundation & Data Pipeline
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Set up Docker infrastructure, PostgreSQL/TimescaleDB schema, FastAPI backend, and MQL5 EA so that MT5 trade events and real-time price bars flow into the database end-to-end.
 
@@ -65,7 +65,7 @@ trade-signal/
 - Create: `api/Dockerfile`
 - Create: `api/requirements.txt`
 
-- [ ] **Step 1: Create `.gitignore`**
+- [x] **Step 1: Create `.gitignore`**
 
 ```
 .env
@@ -79,20 +79,20 @@ venv/
 .superpowers/
 ```
 
-- [ ] **Step 2: Create `.env.example`**
+- [x] **Step 2: Create `.env.example`**
 
 ```env
 DATABASE_URL=postgresql+asyncpg://tradesignal:tradesignal@db:5432/tradesignal
 DATABASE_URL_SYNC=postgresql+psycopg2://tradesignal:tradesignal@db:5432/tradesignal
 ```
 
-- [ ] **Step 3: Create `.env` from example**
+- [x] **Step 3: Create `.env` from example**
 
 ```bash
 cp .env.example .env
 ```
 
-- [ ] **Step 4: Create `api/requirements.txt`**
+- [x] **Step 4: Create `api/requirements.txt`**
 
 ```
 fastapi==0.115.0
@@ -110,7 +110,7 @@ pytest-asyncio==0.24.0
 pytest-httpx==0.30.0
 ```
 
-- [ ] **Step 5: Create `api/Dockerfile`**
+- [x] **Step 5: Create `api/Dockerfile`**
 
 ```dockerfile
 FROM python:3.12-slim
@@ -121,7 +121,7 @@ COPY . .
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 ```
 
-- [ ] **Step 6: Create `docker-compose.yml`**
+- [x] **Step 6: Create `docker-compose.yml`**
 
 ```yaml
 services:
@@ -156,7 +156,7 @@ volumes:
   pgdata:
 ```
 
-- [ ] **Step 7: Verify DB starts**
+- [x] **Step 7: Verify DB starts**
 
 ```bash
 docker compose up db -d
@@ -165,7 +165,7 @@ docker compose ps
 
 Expected: `db` service is `healthy`
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git init
@@ -184,7 +184,7 @@ git commit -m "feat: docker compose scaffold with timescaledb"
 - Create: `tests/test_health.py`
 - Create: `tests/conftest.py`
 
-- [ ] **Step 1: Write failing health check test**
+- [x] **Step 1: Write failing health check test**
 
 Create `tests/conftest.py`:
 ```python
@@ -242,7 +242,7 @@ async def test_health_returns_ok(client):
     assert response.json() == {"status": "ok"}
 ```
 
-- [ ] **Step 2: Run test — expect FAIL**
+- [x] **Step 2: Run test — expect FAIL**
 
 ```bash
 cd api && pip install -r requirements.txt
@@ -251,7 +251,7 @@ cd .. && pytest tests/test_health.py -v
 
 Expected: `ImportError` or `ModuleNotFoundError` (main.py doesn't exist yet)
 
-- [ ] **Step 3: Create `api/config.py`**
+- [x] **Step 3: Create `api/config.py`**
 
 ```python
 from pydantic_settings import BaseSettings
@@ -266,7 +266,7 @@ class Settings(BaseSettings):
 settings = Settings()
 ```
 
-- [ ] **Step 4: Create `api/database.py`**
+- [x] **Step 4: Create `api/database.py`**
 
 ```python
 from typing import AsyncGenerator
@@ -286,7 +286,7 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 ```
 
-- [ ] **Step 5: Create `api/main.py`**
+- [x] **Step 5: Create `api/main.py`**
 
 ```python
 from contextlib import asynccontextmanager
@@ -308,7 +308,7 @@ async def health():
     return {"status": "ok"}
 ```
 
-- [ ] **Step 6: Run test — expect PASS**
+- [x] **Step 6: Run test — expect PASS**
 
 ```bash
 pytest tests/test_health.py -v
@@ -316,7 +316,7 @@ pytest tests/test_health.py -v
 
 Expected: `PASSED`
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add api/config.py api/database.py api/main.py tests/conftest.py tests/test_health.py
@@ -336,7 +336,7 @@ git commit -m "feat: fastapi skeleton with health check and test harness"
 - Create: `api/alembic/env.py`
 - Create: `api/alembic/versions/001_initial_schema.py`
 
-- [ ] **Step 1: Create `api/models/__init__.py`**
+- [x] **Step 1: Create `api/models/__init__.py`**
 
 ```python
 from .trade import Trade
@@ -346,7 +346,7 @@ from .account_snapshot import AccountSnapshot
 __all__ = ["Trade", "PriceBar", "AccountSnapshot"]
 ```
 
-- [ ] **Step 2: Create `api/models/trade.py`**
+- [x] **Step 2: Create `api/models/trade.py`**
 
 ```python
 import uuid
@@ -407,7 +407,7 @@ class Trade(Base):
     paper_mode: Mapped[PaperMode | None] = mapped_column(SAEnum(PaperMode), nullable=True)
 ```
 
-- [ ] **Step 3: Create `api/models/price_bar.py`**
+- [x] **Step 3: Create `api/models/price_bar.py`**
 
 ```python
 from datetime import datetime
@@ -440,7 +440,7 @@ class PriceBar(Base):
     volume: Mapped[Decimal | None] = mapped_column(Numeric(20, 2), nullable=True)
 ```
 
-- [ ] **Step 4: Create `api/models/account_snapshot.py`**
+- [x] **Step 4: Create `api/models/account_snapshot.py`**
 
 ```python
 from datetime import datetime
@@ -461,7 +461,7 @@ class AccountSnapshot(Base):
     floating_pl: Mapped[Decimal] = mapped_column(Numeric(14, 2))
 ```
 
-- [ ] **Step 5: Update `api/main.py` to import models so Base.metadata is populated**
+- [x] **Step 5: Update `api/main.py` to import models so Base.metadata is populated**
 
 ```python
 from contextlib import asynccontextmanager
@@ -484,13 +484,13 @@ async def health():
     return {"status": "ok"}
 ```
 
-- [ ] **Step 6: Set up Alembic**
+- [x] **Step 6: Set up Alembic**
 
 ```bash
 cd api && alembic init alembic
 ```
 
-- [ ] **Step 7: Replace `api/alembic/env.py`** with this content:
+- [x] **Step 7: Replace `api/alembic/env.py`** with this content:
 
 ```python
 from logging.config import fileConfig
@@ -528,7 +528,7 @@ else:
     run_migrations_online()
 ```
 
-- [ ] **Step 8: Generate migration**
+- [x] **Step 8: Generate migration**
 
 ```bash
 cd api && alembic revision --autogenerate -m "initial schema"
@@ -536,7 +536,7 @@ cd api && alembic revision --autogenerate -m "initial schema"
 
 Expected: creates `api/alembic/versions/xxxx_initial_schema.py`
 
-- [ ] **Step 9: Edit the generated migration** to add TimescaleDB hypertable + insert the `create_hypertable` call after `price_bars` table creation. Open the generated file and add to the `upgrade()` function:
+- [x] **Step 9: Edit the generated migration** to add TimescaleDB hypertable + insert the `create_hypertable` call after `price_bars` table creation. Open the generated file and add to the `upgrade()` function:
 
 ```python
 def upgrade() -> None:
@@ -553,7 +553,7 @@ def downgrade() -> None:
     # ... (autogenerated drop code stays here) ...
 ```
 
-- [ ] **Step 10: Run migration against running DB**
+- [x] **Step 10: Run migration against running DB**
 
 ```bash
 docker compose up db -d
@@ -565,7 +565,7 @@ Expected:
 INFO  [alembic.runtime.migration] Running upgrade  -> xxxx, initial schema
 ```
 
-- [ ] **Step 11: Verify tables exist**
+- [x] **Step 11: Verify tables exist**
 
 ```bash
 docker compose exec db psql -U tradesignal -d tradesignal -c "\dt"
@@ -573,7 +573,7 @@ docker compose exec db psql -U tradesignal -d tradesignal -c "\dt"
 
 Expected: `trades`, `price_bars`, `account_snapshots` all listed
 
-- [ ] **Step 12: Run existing tests — expect still PASS**
+- [x] **Step 12: Run existing tests — expect still PASS**
 
 ```bash
 pytest tests/test_health.py -v
@@ -581,7 +581,7 @@ pytest tests/test_health.py -v
 
 Expected: `PASSED`
 
-- [ ] **Step 13: Commit**
+- [x] **Step 13: Commit**
 
 ```bash
 git add api/models/ api/alembic/ api/main.py
@@ -602,7 +602,7 @@ git commit -m "feat: db schema for trades, price_bars, account_snapshots with ti
 - Modify: `api/main.py`
 - Create: `tests/test_trade_events.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Create `tests/test_trade_events.py`:
 ```python
@@ -717,7 +717,7 @@ async def test_invalid_payload_returns_422(client):
     assert response.status_code == 422
 ```
 
-- [ ] **Step 2: Run tests — expect FAIL**
+- [x] **Step 2: Run tests — expect FAIL**
 
 ```bash
 pytest tests/test_trade_events.py -v
@@ -725,13 +725,13 @@ pytest tests/test_trade_events.py -v
 
 Expected: `ImportError` or `404` (router not registered)
 
-- [ ] **Step 3: Create `api/schemas/__init__.py`**
+- [x] **Step 3: Create `api/schemas/__init__.py`**
 
 ```python
 ```
 (empty)
 
-- [ ] **Step 4: Create `api/schemas/trade_event.py`**
+- [x] **Step 4: Create `api/schemas/trade_event.py`**
 
 ```python
 from datetime import datetime
@@ -762,13 +762,13 @@ class TradeEventSchema(BaseModel):
     model_config = {"from_attributes": True}
 ```
 
-- [ ] **Step 5: Create `api/services/__init__.py`**
+- [x] **Step 5: Create `api/services/__init__.py`**
 
 ```python
 ```
 (empty)
 
-- [ ] **Step 6: Create `api/services/trade_logger.py`**
+- [x] **Step 6: Create `api/services/trade_logger.py`**
 
 ```python
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -811,13 +811,13 @@ async def upsert_trade(session: AsyncSession, event: TradeEventSchema) -> Trade:
     return trade
 ```
 
-- [ ] **Step 7: Create `api/routers/__init__.py`**
+- [x] **Step 7: Create `api/routers/__init__.py`**
 
 ```python
 ```
 (empty)
 
-- [ ] **Step 8: Create `api/routers/trade_events.py`**
+- [x] **Step 8: Create `api/routers/trade_events.py`**
 
 ```python
 from fastapi import APIRouter, Depends, status
@@ -838,7 +838,7 @@ async def receive_trade_event(
     return {"id": str(trade.id), "ticket": trade.ticket}
 ```
 
-- [ ] **Step 9: Register router in `api/main.py`**
+- [x] **Step 9: Register router in `api/main.py`**
 
 ```python
 from contextlib import asynccontextmanager
@@ -863,7 +863,7 @@ async def health():
     return {"status": "ok"}
 ```
 
-- [ ] **Step 10: Run all tests — expect PASS**
+- [x] **Step 10: Run all tests — expect PASS**
 
 ```bash
 pytest tests/ -v
@@ -871,7 +871,7 @@ pytest tests/ -v
 
 Expected: all 6 tests `PASSED`
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add api/schemas/ api/routers/ api/services/ api/main.py tests/test_trade_events.py
@@ -889,7 +889,7 @@ git commit -m "feat: trade events endpoint with upsert trade logger"
 - Modify: `api/main.py`
 - Create: `tests/test_price_tick.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Create `tests/test_price_tick.py`:
 ```python
@@ -951,7 +951,7 @@ async def test_price_tick_deduplicates_bars(client, db_session):
     assert len(bars) == 7  # no duplicates on same timestamp+symbol+timeframe
 ```
 
-- [ ] **Step 2: Run tests — expect FAIL**
+- [x] **Step 2: Run tests — expect FAIL**
 
 ```bash
 pytest tests/test_price_tick.py -v
@@ -959,7 +959,7 @@ pytest tests/test_price_tick.py -v
 
 Expected: `404` (router not registered)
 
-- [ ] **Step 3: Create `api/schemas/price_tick.py`**
+- [x] **Step 3: Create `api/schemas/price_tick.py`**
 
 ```python
 from datetime import datetime
@@ -987,7 +987,7 @@ class PriceTickSchema(BaseModel):
     bars: dict[str, OHLCVSchema]
 ```
 
-- [ ] **Step 4: Create `api/services/price_handler.py`**
+- [x] **Step 4: Create `api/services/price_handler.py`**
 
 ```python
 from datetime import datetime
@@ -1036,7 +1036,7 @@ async def save_price_tick(session: AsyncSession, tick: PriceTickSchema) -> None:
         # Duplicate PK on same timestamp — silently ignore
 ```
 
-- [ ] **Step 5: Create `api/routers/price_tick.py`**
+- [x] **Step 5: Create `api/routers/price_tick.py`**
 
 ```python
 from fastapi import APIRouter, Depends
@@ -1057,7 +1057,7 @@ async def receive_price_tick(
     return {"status": "saved", "timestamp": tick.timestamp.isoformat()}
 ```
 
-- [ ] **Step 6: Register router in `api/main.py`**
+- [x] **Step 6: Register router in `api/main.py`**
 
 ```python
 from contextlib import asynccontextmanager
@@ -1084,7 +1084,7 @@ async def health():
     return {"status": "ok"}
 ```
 
-- [ ] **Step 7: Run all tests — expect PASS**
+- [x] **Step 7: Run all tests — expect PASS**
 
 ```bash
 pytest tests/ -v
@@ -1092,7 +1092,7 @@ pytest tests/ -v
 
 Expected: all 11 tests `PASSED`
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add api/schemas/price_tick.py api/routers/price_tick.py api/services/price_handler.py api/main.py tests/test_price_tick.py
@@ -1108,7 +1108,7 @@ git commit -m "feat: price tick endpoint saves ohlcv bars and account snapshots"
 
 Note: MQL5 code cannot be unit-tested automatically. Manual testing steps provided.
 
-- [ ] **Step 1: Create `ea/TradeSignalBridge.mq5`**
+- [x] **Step 1: Create `ea/TradeSignalBridge.mq5`**
 
 ```mql5
 //+------------------------------------------------------------------+
@@ -1369,7 +1369,7 @@ void OnTimer()
 }
 ```
 
-- [ ] **Step 2: Manual EA test instructions**
+- [x] **Step 2: Manual EA test instructions**
 
 ```
 1. Copy ea/TradeSignalBridge.mq5 to:
@@ -1401,7 +1401,7 @@ void OnTimer()
    → Should show the pending order
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add ea/TradeSignalBridge.mq5
@@ -1412,7 +1412,7 @@ git commit -m "feat: mql5 ea bridge for trade events and price ticks"
 
 ## Task 7: Full Stack Integration Smoke Test
 
-- [ ] **Step 1: Start full stack**
+- [x] **Step 1: Start full stack**
 
 ```bash
 docker compose up --build -d
@@ -1421,7 +1421,7 @@ docker compose ps
 
 Expected: `db` and `api` both `healthy`/`running`
 
-- [ ] **Step 2: Health check**
+- [x] **Step 2: Health check**
 
 ```bash
 curl http://localhost:8000/health
@@ -1429,7 +1429,7 @@ curl http://localhost:8000/health
 
 Expected: `{"status":"ok"}`
 
-- [ ] **Step 3: Simulate trade event**
+- [x] **Step 3: Simulate trade event**
 
 ```bash
 curl -s -X POST http://localhost:8000/api/trade-events \
@@ -1458,7 +1458,7 @@ curl -s -X POST http://localhost:8000/api/trade-events \
 
 Expected: `{"id":"...","ticket":999001}`
 
-- [ ] **Step 4: Verify trade in DB**
+- [x] **Step 4: Verify trade in DB**
 
 ```bash
 docker compose exec db psql -U tradesignal -d tradesignal \
@@ -1467,7 +1467,7 @@ docker compose exec db psql -U tradesignal -d tradesignal \
 
 Expected: 1 row with `ticket=999001`
 
-- [ ] **Step 5: Simulate price tick**
+- [x] **Step 5: Simulate price tick**
 
 ```bash
 curl -s -X POST http://localhost:8000/api/price-tick \
@@ -1490,7 +1490,7 @@ curl -s -X POST http://localhost:8000/api/price-tick \
 
 Expected: `{"status":"saved","timestamp":"2026-05-17T09:01:00+00:00"}`
 
-- [ ] **Step 6: Verify price bars in DB**
+- [x] **Step 6: Verify price bars in DB**
 
 ```bash
 docker compose exec db psql -U tradesignal -d tradesignal \
@@ -1499,7 +1499,7 @@ docker compose exec db psql -U tradesignal -d tradesignal \
 
 Expected: 7 rows (M5, M15, M30, H1, H4, D, W1)
 
-- [ ] **Step 7: Final test suite run**
+- [x] **Step 7: Final test suite run**
 
 ```bash
 pytest tests/ -v
@@ -1507,7 +1507,7 @@ pytest tests/ -v
 
 Expected: all 11 tests `PASSED`
 
-- [ ] **Step 8: Final commit**
+- [x] **Step 8: Final commit**
 
 ```bash
 git add .

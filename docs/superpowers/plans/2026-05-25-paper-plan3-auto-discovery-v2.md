@@ -1,6 +1,6 @@
 # Plan 3 — Auto Discovery v2 + 3 Variants + Score Sizing Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Spec:** `docs/superpowers/specs/2026-05-25-paper-trade-system-redesign-v2.md` § "Component 2 — Mining direction" (carry-over) + § "Variant C (user_style basket)"
 
@@ -37,7 +37,7 @@
 - Modify: `api/services/pattern_discovery.py`
 - Test: `tests/test_pattern_discovery.py`
 
-- [ ] **Step 1: Write failing test for `group_into_baskets()`**
+- [x] **Step 1: Write failing test for `group_into_baskets()`**
 
 ```python
 # tests/test_pattern_discovery.py — add at top
@@ -106,7 +106,7 @@ def test_group_into_baskets_max_size():
     assert max(sizes) == MINING_MAX_BASKET_SIZE
 ```
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -115,7 +115,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL with `cannot import name 'group_into_baskets'`.
 
-- [ ] **Step 3: Implement helper inside `pattern_discovery.py`**
+- [x] **Step 3: Implement helper inside `pattern_discovery.py`**
 
 Add near the top of `api/services/pattern_discovery.py`:
 
@@ -151,7 +151,7 @@ def group_into_baskets(
     return baskets
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -160,7 +160,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS (3 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/services/pattern_discovery.py tests/test_pattern_discovery.py
@@ -175,7 +175,7 @@ git commit -m "feat: basket grouping helper for pattern discovery"
 - Modify: `api/services/pattern_discovery.py`
 - Test: `tests/test_pattern_discovery.py`
 
-- [ ] **Step 1: Write failing test for size-weighted scoring**
+- [x] **Step 1: Write failing test for size-weighted scoring**
 
 Append to `tests/test_pattern_discovery.py`:
 
@@ -206,7 +206,7 @@ def test_basket_outcome_size_weighted_loss():
     assert _basket_outcome([(starter, set()), (rescue, set())]) is False
 ```
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -215,7 +215,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL with `ImportError`.
 
-- [ ] **Step 3: Implement anchor + outcome helpers**
+- [x] **Step 3: Implement anchor + outcome helpers**
 
 Add to `api/services/pattern_discovery.py`:
 
@@ -244,7 +244,7 @@ def _basket_outcome(basket: list[tuple[Trade, set[str]]]) -> bool:
 
 Add `from decimal import Decimal` at the top of the file.
 
-- [ ] **Step 4: Replace `_score_combinations()` to score baskets, not trades**
+- [x] **Step 4: Replace `_score_combinations()` to score baskets, not trades**
 
 Replace the function in `api/services/pattern_discovery.py`:
 
@@ -277,7 +277,7 @@ def _score_combinations(
     return {k: (v[0], v[1]) for k, v in scores.items()}
 ```
 
-- [ ] **Step 5: Run to verify it passes**
+- [x] **Step 5: Run to verify it passes**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -286,7 +286,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS for new tests; existing tests may need adjustment to use baskets (do that next step if any fail).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/services/pattern_discovery.py tests/test_pattern_discovery.py
@@ -301,7 +301,7 @@ git commit -m "feat: first-trade anchor + size-weighted basket outcome in patter
 - Modify: `api/services/pattern_discovery.py`
 - Test: `tests/test_pattern_discovery.py`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 Append to `tests/test_pattern_discovery.py`:
 
@@ -361,7 +361,7 @@ async def test_promotion_spawns_three_variants(db_session):
     assert by_mode["basket_50k"].virtual_balance_start == Decimal("50000")
 ```
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -370,7 +370,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL with only one rule spawned (current behavior).
 
-- [ ] **Step 3: Add 3-variant spawn in `_run()`**
+- [x] **Step 3: Add 3-variant spawn in `_run()`**
 
 Replace the `_run()` body's promotion block in `api/services/pattern_discovery.py`. Add a constant near the top:
 
@@ -407,7 +407,7 @@ Then change the rule-creation line inside `_run()`:
             active_rule_slugs.append(set(combo_key))
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -416,7 +416,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/services/pattern_discovery.py tests/test_pattern_discovery.py
@@ -431,7 +431,7 @@ git commit -m "feat: spawn 3 risk variants (strict/basket_5k/basket_50k) per pro
 - Create: `api/services/scoring.py`
 - Test: `tests/test_scoring.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_scoring.py
@@ -499,7 +499,7 @@ def test_lot_tier_mapping_high():
     assert score_to_lot(100) == LOT_TIER_HIGH
 ```
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -508,7 +508,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement `scoring.py`**
+- [x] **Step 3: Implement `scoring.py`**
 
 ```python
 # api/services/scoring.py
@@ -566,7 +566,7 @@ def score_to_lot(score: float) -> Decimal:
     return LOT_TIER_FLOOR
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -575,7 +575,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS (7 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/services/scoring.py tests/test_scoring.py
@@ -590,7 +590,7 @@ git commit -m "feat: signal score formula + lot tier mapping"
 - Modify: `api/services/paper_trader.py`
 - Test: `tests/test_paper_trader.py`
 
-- [ ] **Step 1: Write failing test asserting cache hit count**
+- [x] **Step 1: Write failing test asserting cache hit count**
 
 ```python
 # tests/test_paper_trader.py — add at top (rewrite if file already exists)
@@ -689,7 +689,7 @@ async def test_shared_cache_computes_each_slug_once(session):
     assert call_log.count("ema_50") == 1
 ```
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -698,7 +698,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL — `_build_indicator_cache` not exported, or each slug recomputed once per rule.
 
-- [ ] **Step 3: Implement `_build_indicator_cache()` and route entry/exit through it**
+- [x] **Step 3: Implement `_build_indicator_cache()` and route entry/exit through it**
 
 Replace the entry/exit functions in `api/services/paper_trader.py`. Add this helper:
 
@@ -735,7 +735,7 @@ def _cached_direction(
     return item[1]
 ```
 
-- [ ] **Step 4: Replace `_check_entries()` to use the cache**
+- [x] **Step 4: Replace `_check_entries()` to use the cache**
 
 ```python
 async def _check_entries(
@@ -848,7 +848,7 @@ Update `load_active_rules()` to populate `mode`:
         )
 ```
 
-- [ ] **Step 5: Replace `_check_exits()` to read from cache (momentum-flip path)**
+- [x] **Step 5: Replace `_check_exits()` to read from cache (momentum-flip path)**
 
 ```python
 async def _check_exits(
@@ -920,7 +920,7 @@ async def _check_exits(
     return closed
 ```
 
-- [ ] **Step 6: Update `run_paper_trader()` to build the cache once**
+- [x] **Step 6: Update `run_paper_trader()` to build the cache once**
 
 ```python
 async def run_paper_trader(
@@ -949,7 +949,7 @@ async def run_paper_trader(
     return {"opened": len(opened), "closed": len(closed)}
 ```
 
-- [ ] **Step 7: Run all paper trader tests**
+- [x] **Step 7: Run all paper trader tests**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -958,7 +958,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS (cache test + any pre-existing tests).
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add api/services/paper_trader.py tests/test_paper_trader.py
@@ -973,7 +973,7 @@ git commit -m "feat: shared per-tick indicator compute cache in paper trader"
 - Modify: `api/services/paper_trader.py`
 - Test: `tests/test_paper_trader.py`
 
-- [ ] **Step 1: Write failing test asserting slow-path indicators reuse a stale cache window**
+- [x] **Step 1: Write failing test asserting slow-path indicators reuse a stale cache window**
 
 ```python
 # tests/test_paper_trader.py — append
@@ -999,7 +999,7 @@ def test_slow_path_due_after_interval_returns_true():
     assert _slow_path_due(state, last + timedelta(seconds=20))
 ```
 
-- [ ] **Step 2: Add fast/slow constants + helper, run to fail**
+- [x] **Step 2: Add fast/slow constants + helper, run to fail**
 
 Run first: expect ImportError. Then add to `paper_trader.py`:
 
@@ -1031,7 +1031,7 @@ def _is_fast_slug(slug: str) -> bool:
     return spec is not None and spec.group in FAST_PATH_GROUPS
 ```
 
-- [ ] **Step 3: Run helper tests; should pass**
+- [x] **Step 3: Run helper tests; should pass**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -1040,7 +1040,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS.
 
-- [ ] **Step 4: Wire fast/slow into `_build_indicator_cache()`**
+- [x] **Step 4: Wire fast/slow into `_build_indicator_cache()`**
 
 Replace `_build_indicator_cache()`:
 
@@ -1075,7 +1075,7 @@ def _build_indicator_cache(
     return cache
 ```
 
-- [ ] **Step 5: Add score-based lot in `_check_entries()`**
+- [x] **Step 5: Add score-based lot in `_check_entries()`**
 
 Inside `_check_entries()` after computing `direction`, replace `volume=DEFAULT_VOLUME` with score-derived lot:
 
@@ -1119,7 +1119,7 @@ Inside `_check_entries()` after computing `direction`, replace `volume=DEFAULT_V
 
 (Drop the unused `from services.scoring import ...` if linting complains by hoisting it to module imports.)
 
-- [ ] **Step 6: Update test that asserts entry size now varies**
+- [x] **Step 6: Update test that asserts entry size now varies**
 
 Add to `tests/test_paper_trader.py`:
 
@@ -1161,7 +1161,7 @@ async def test_entry_uses_score_based_lot(session):
         assert trades[0].volume in {Decimal("0.01"), Decimal("0.03"), Decimal("0.05"), Decimal("0.10")}
 ```
 
-- [ ] **Step 7: Run all tests**
+- [x] **Step 7: Run all tests**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -1170,7 +1170,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add api/services/paper_trader.py tests/test_paper_trader.py
@@ -1186,7 +1186,7 @@ git commit -m "feat: fast/slow path split + score-based lot sizing in paper trad
 - Modify: `api/services/paper_trader.py`
 - Test: `tests/test_basket_recovery.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_basket_recovery.py
@@ -1263,7 +1263,7 @@ def test_no_recovery_within_cooldown():
     )
 ```
 
-- [ ] **Step 2: Run to confirm fail**
+- [x] **Step 2: Run to confirm fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -1272,7 +1272,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement `basket_recovery.py`**
+- [x] **Step 3: Implement `basket_recovery.py`**
 
 ```python
 # api/services/basket_recovery.py
@@ -1321,7 +1321,7 @@ def should_open_recovery(
     return abs(floating) >= loss_threshold
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -1330,7 +1330,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS (5 tests).
 
-- [ ] **Step 5: Wire recovery into paper_trader entry path**
+- [x] **Step 5: Wire recovery into paper_trader entry path**
 
 In `api/services/paper_trader.py` `_check_entries()`, change the early-skip on `open_by_rule`:
 
@@ -1405,7 +1405,7 @@ And in `_check_exits()`:
             del open_by_rule[rule_id]
 ```
 
-- [ ] **Step 6: Add an integration test**
+- [x] **Step 6: Add an integration test**
 
 ```python
 # tests/test_paper_trader.py — append
@@ -1468,7 +1468,7 @@ async def test_basket_recovery_opens_second_trade(session):
     assert len(paper_trades) >= 2
 ```
 
-- [ ] **Step 7: Run all tests**
+- [x] **Step 7: Run all tests**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -1477,7 +1477,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add api/services/basket_recovery.py api/services/paper_trader.py \
@@ -1489,7 +1489,7 @@ git commit -m "feat: basket recovery (basket_5k/basket_50k) with floating-loss +
 
 ## Task 8: Full regression
 
-- [ ] **Step 1: Run the entire test suite**
+- [x] **Step 1: Run the entire test suite**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -1498,11 +1498,11 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS — no regressions in `test_pattern_discovery.py`, `test_scoring.py`, `test_paper_trader.py`, `test_basket_recovery.py`, plus existing tests.
 
-- [ ] **Step 2: If regressions, fix in place; do NOT skip tests**
+- [x] **Step 2: If regressions, fix in place; do NOT skip tests**
 
 If `test_paper_trader.py` had legacy single-rule tests that now fail because of list-of-trades change, update them to call `open_by_rule[rule_id][0]`.
 
-- [ ] **Step 3: Final commit**
+- [x] **Step 3: Final commit**
 
 ```bash
 git add -A tests/

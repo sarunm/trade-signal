@@ -1,6 +1,6 @@
 # Phase 3: React Dashboard Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Build a single-page React dashboard showing account info, alerts, insights, and paper vs real trade comparisons in near-realtime (30s polling), backed by two new API endpoints, a PatternDetector service, and a `pattern_win_rate` insight type.
 
@@ -61,7 +61,7 @@
 - Modify: `api/main.py`
 - Create: `tests/test_account_api.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/test_account_api.py`:
 ```python
@@ -99,14 +99,14 @@ async def test_get_account_returns_latest(client, db_session):
     assert "timestamp" in data
 ```
 
-- [ ] **Step 2: Run to confirm FAIL**
+- [x] **Step 2: Run to confirm FAIL**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/test_account_api.py -v
 ```
 Expected: `FAILED` — `404 != 200` or route not found.
 
-- [ ] **Step 3: Create `api/schemas/account.py`**
+- [x] **Step 3: Create `api/schemas/account.py`**
 
 ```python
 from datetime import datetime
@@ -125,7 +125,7 @@ class AccountResponse(BaseModel):
     model_config = {"from_attributes": True}
 ```
 
-- [ ] **Step 4: Create `api/routers/account.py`**
+- [x] **Step 4: Create `api/routers/account.py`**
 
 ```python
 from fastapi import APIRouter, Depends, HTTPException
@@ -150,7 +150,7 @@ async def get_account(session: AsyncSession = Depends(get_session)):
     return snapshot
 ```
 
-- [ ] **Step 5: Update `api/main.py`** — add CORS and include the new router
+- [x] **Step 5: Update `api/main.py`** — add CORS and include the new router
 
 ```python
 from contextlib import asynccontextmanager
@@ -196,21 +196,21 @@ async def health():
     return {"status": "ok"}
 ```
 
-- [ ] **Step 6: Run tests — expect PASS**
+- [x] **Step 6: Run tests — expect PASS**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/test_account_api.py -v
 ```
 Expected: `2 passed`
 
-- [ ] **Step 7: Run full suite to check for regressions**
+- [x] **Step 7: Run full suite to check for regressions**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/ -v
 ```
 Expected: all existing tests still pass.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add api/schemas/account.py api/routers/account.py api/main.py tests/test_account_api.py
@@ -227,7 +227,7 @@ git commit -m "feat: add CORS and GET /api/account endpoint"
 - Modify: `api/main.py`
 - Create: `tests/test_trades_api.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/test_trades_api.py`:
 ```python
@@ -311,14 +311,14 @@ async def test_invalid_state_returns_422(client):
     assert response.status_code == 422
 ```
 
-- [ ] **Step 2: Run to confirm FAIL**
+- [x] **Step 2: Run to confirm FAIL**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/test_trades_api.py -v
 ```
 Expected: `FAILED` — route not found.
 
-- [ ] **Step 3: Create `api/schemas/trade.py`**
+- [x] **Step 3: Create `api/schemas/trade.py`**
 
 ```python
 from datetime import datetime
@@ -349,7 +349,7 @@ class TradeResponse(BaseModel):
     model_config = {"from_attributes": True}
 ```
 
-- [ ] **Step 4: Create `api/routers/trades.py`**
+- [x] **Step 4: Create `api/routers/trades.py`**
 
 ```python
 from typing import List, Literal
@@ -379,7 +379,7 @@ async def list_trades(
     return result.scalars().all()
 ```
 
-- [ ] **Step 5: Add trades router to `api/main.py`**
+- [x] **Step 5: Add trades router to `api/main.py`**
 
 Add to imports:
 ```python
@@ -391,21 +391,21 @@ Add after the existing `app.include_router(account_router)` line:
 app.include_router(trades_router)
 ```
 
-- [ ] **Step 6: Run tests — expect PASS**
+- [x] **Step 6: Run tests — expect PASS**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/test_trades_api.py -v
 ```
 Expected: `5 passed`
 
-- [ ] **Step 7: Run full suite**
+- [x] **Step 7: Run full suite**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/ -v
 ```
 Expected: all pass.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add api/schemas/trade.py api/routers/trades.py api/main.py tests/test_trades_api.py
@@ -422,7 +422,7 @@ Pattern detection logic lives in `api/services/pattern_detector.py`. Pure detect
 - Create: `api/services/pattern_detector.py`
 - Create: `tests/test_pattern_detector.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/test_pattern_detector.py`:
 ```python
@@ -554,14 +554,14 @@ async def test_run_pattern_detector_no_alert_when_no_bars(db_session):
     assert result.scalars().all() == []
 ```
 
-- [ ] **Step 2: Run to confirm FAIL**
+- [x] **Step 2: Run to confirm FAIL**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/test_pattern_detector.py -v
 ```
 Expected: `FAILED` — `cannot import name 'detect_pin_bar' from 'services.pattern_detector'`
 
-- [ ] **Step 3: Create `api/services/pattern_detector.py`**
+- [x] **Step 3: Create `api/services/pattern_detector.py`**
 
 ```python
 from datetime import datetime, timezone, timedelta
@@ -664,21 +664,21 @@ async def _is_duplicate(session: AsyncSession, timeframe: str, pattern: str, dir
     return False
 ```
 
-- [ ] **Step 4: Run tests — expect PASS**
+- [x] **Step 4: Run tests — expect PASS**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/test_pattern_detector.py -v
 ```
 Expected: `9 passed`
 
-- [ ] **Step 5: Run full suite**
+- [x] **Step 5: Run full suite**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/ -v
 ```
 Expected: all pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/services/pattern_detector.py tests/test_pattern_detector.py
@@ -694,7 +694,7 @@ git commit -m "feat: add PatternDetector service (pin bar + engulfing)"
 - Modify: `api/services/insight_engine.py`
 - Create: `tests/test_pattern_wire_up.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/test_pattern_wire_up.py`:
 ```python
@@ -769,14 +769,14 @@ async def test_pattern_win_rate_insight_created(db_session):
     assert "pin_bar" in insights[0].description
 ```
 
-- [ ] **Step 2: Run to confirm FAIL**
+- [x] **Step 2: Run to confirm FAIL**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/test_pattern_wire_up.py -v
 ```
 Expected: `FAILED` — pattern_alert not created (router doesn't call pattern_detector yet), pattern_win_rate insight not found.
 
-- [ ] **Step 3: Update `api/routers/price_tick.py`**
+- [x] **Step 3: Update `api/routers/price_tick.py`**
 
 ```python
 from fastapi import APIRouter, Depends
@@ -802,7 +802,7 @@ async def receive_price_tick(
     return {"status": "saved", "timestamp": tick.timestamp.isoformat()}
 ```
 
-- [ ] **Step 4: Update `api/services/insight_engine.py`** — add `_compute_pattern_win_rate` and call it from `run_insight_engine`
+- [x] **Step 4: Update `api/services/insight_engine.py`** — add `_compute_pattern_win_rate` and call it from `run_insight_engine`
 
 Replace the full file content:
 ```python
@@ -1016,21 +1016,21 @@ async def _compute_pattern_win_rate(session: AsyncSession, trades: list) -> None
         ))
 ```
 
-- [ ] **Step 5: Run tests — expect PASS**
+- [x] **Step 5: Run tests — expect PASS**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/test_pattern_wire_up.py -v
 ```
 Expected: `2 passed`
 
-- [ ] **Step 6: Run full suite**
+- [x] **Step 6: Run full suite**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/ -v
 ```
 Expected: all pass.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add api/routers/price_tick.py api/services/insight_engine.py tests/test_pattern_wire_up.py
@@ -1045,7 +1045,7 @@ Creates the React + Vite + TailwindCSS project. No components yet — just verif
 
 **Files:** `frontend/package.json`, `frontend/vite.config.js`, `frontend/tailwind.config.js`, `frontend/postcss.config.js`, `frontend/index.html`, `frontend/src/main.jsx`, `frontend/src/index.css`
 
-- [ ] **Step 1: Create `frontend/package.json`**
+- [x] **Step 1: Create `frontend/package.json`**
 
 ```json
 {
@@ -1071,7 +1071,7 @@ Creates the React + Vite + TailwindCSS project. No components yet — just verif
 }
 ```
 
-- [ ] **Step 2: Create `frontend/vite.config.js`**
+- [x] **Step 2: Create `frontend/vite.config.js`**
 
 ```js
 import { defineConfig } from 'vite'
@@ -1086,7 +1086,7 @@ export default defineConfig({
 })
 ```
 
-- [ ] **Step 3: Create `frontend/tailwind.config.js`**
+- [x] **Step 3: Create `frontend/tailwind.config.js`**
 
 ```js
 export default {
@@ -1096,7 +1096,7 @@ export default {
 }
 ```
 
-- [ ] **Step 4: Create `frontend/postcss.config.js`**
+- [x] **Step 4: Create `frontend/postcss.config.js`**
 
 ```js
 export default {
@@ -1107,7 +1107,7 @@ export default {
 }
 ```
 
-- [ ] **Step 5: Create `frontend/index.html`**
+- [x] **Step 5: Create `frontend/index.html`**
 
 ```html
 <!doctype html>
@@ -1124,7 +1124,7 @@ export default {
 </html>
 ```
 
-- [ ] **Step 6: Create `frontend/src/index.css`**
+- [x] **Step 6: Create `frontend/src/index.css`**
 
 ```css
 @tailwind base;
@@ -1132,7 +1132,7 @@ export default {
 @tailwind utilities;
 ```
 
-- [ ] **Step 7: Create `frontend/src/main.jsx`**
+- [x] **Step 7: Create `frontend/src/main.jsx`**
 
 ```jsx
 import React from 'react'
@@ -1146,7 +1146,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 )
 ```
 
-- [ ] **Step 8: Install dependencies and verify dev server starts**
+- [x] **Step 8: Install dependencies and verify dev server starts**
 
 ```bash
 cd /Users/nick/2_SideProjects/trade-signal/frontend
@@ -1155,7 +1155,7 @@ npm run dev
 ```
 Expected output includes: `Local: http://localhost:3000/` and no errors. Open browser to verify white text on dark background appears. Stop with Ctrl+C.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 cd /Users/nick/2_SideProjects/trade-signal
@@ -1172,7 +1172,7 @@ git commit -m "feat: scaffold React + Vite + TailwindCSS frontend"
 - Create: `frontend/src/App.jsx`
 - Modify: `frontend/src/main.jsx`
 
-- [ ] **Step 1: Create `frontend/src/hooks/usePolling.js`**
+- [x] **Step 1: Create `frontend/src/hooks/usePolling.js`**
 
 ```js
 import { useState, useEffect, useCallback } from 'react'
@@ -1211,7 +1211,7 @@ export function usePolling(fetcher, intervalMs = 30000) {
 }
 ```
 
-- [ ] **Step 2: Create `frontend/src/App.jsx`**
+- [x] **Step 2: Create `frontend/src/App.jsx`**
 
 At this stage, App renders placeholder divs for each section. Components are wired in Tasks 7–9.
 
@@ -1269,7 +1269,7 @@ export default function App() {
 }
 ```
 
-- [ ] **Step 3: Update `frontend/src/main.jsx`** to use App
+- [x] **Step 3: Update `frontend/src/main.jsx`** to use App
 
 ```jsx
 import React from 'react'
@@ -1284,7 +1284,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 )
 ```
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 ```bash
 cd /Users/nick/2_SideProjects/trade-signal/frontend
@@ -1292,7 +1292,7 @@ npm run dev
 ```
 Open `http://localhost:3000`. Confirm 5 gray boxes appear and that the account/alerts/insights boxes show either data or "loading..." / "error" (depending on whether the API is running). No console errors about missing modules.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/nick/2_SideProjects/trade-signal
@@ -1308,7 +1308,7 @@ git commit -m "feat: add usePolling hook and App.jsx shell"
 - Create: `frontend/src/components/AccountBar.jsx`
 - Modify: `frontend/src/App.jsx`
 
-- [ ] **Step 1: Create `frontend/src/components/AccountBar.jsx`**
+- [x] **Step 1: Create `frontend/src/components/AccountBar.jsx`**
 
 ```jsx
 import { useState, useEffect } from 'react'
@@ -1363,7 +1363,7 @@ export default function AccountBar({ data, error, lastUpdated }) {
 }
 ```
 
-- [ ] **Step 2: Update `frontend/src/App.jsx`** — replace the account placeholder div with the component
+- [x] **Step 2: Update `frontend/src/App.jsx`** — replace the account placeholder div with the component
 
 Add import at the top:
 ```jsx
@@ -1381,11 +1381,11 @@ With:
       <AccountBar data={account.data} error={account.error} lastUpdated={account.lastUpdated} />
 ```
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 Start the API (`docker compose up -d`) and the frontend (`npm run dev`). Open `http://localhost:3000`. Confirm the account bar shows 5 labeled values. If the API has no data yet, all values show `—`. The "Updated Xs ago" counter should tick up each second.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 cd /Users/nick/2_SideProjects/trade-signal
@@ -1402,7 +1402,7 @@ git commit -m "feat: add AccountBar component"
 - Create: `frontend/src/components/InsightsPanel.jsx`
 - Modify: `frontend/src/App.jsx`
 
-- [ ] **Step 1: Create `frontend/src/components/AlertsPanel.jsx`**
+- [x] **Step 1: Create `frontend/src/components/AlertsPanel.jsx`**
 
 ```jsx
 const TYPE_COLORS = {
@@ -1464,7 +1464,7 @@ export default function AlertsPanel({ data, error, onAcknowledge }) {
 }
 ```
 
-- [ ] **Step 2: Create `frontend/src/components/InsightsPanel.jsx`**
+- [x] **Step 2: Create `frontend/src/components/InsightsPanel.jsx`**
 
 ```jsx
 const TYPE_COLORS = {
@@ -1506,7 +1506,7 @@ export default function InsightsPanel({ data, error }) {
 }
 ```
 
-- [ ] **Step 3: Update `frontend/src/App.jsx`** — replace the alerts/insights placeholder divs
+- [x] **Step 3: Update `frontend/src/App.jsx`** — replace the alerts/insights placeholder divs
 
 Add imports:
 ```jsx
@@ -1522,11 +1522,11 @@ Replace the grid section:
       </div>
 ```
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 With the API running, open `http://localhost:3000`. The two-column row should show AlertsPanel on the left and InsightsPanel on the right. If no data, both show their "No alerts" / "No insights yet" empty states. If there are alerts, the Ack button should work (clicking it makes the alert move to the muted section on next render).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/nick/2_SideProjects/trade-signal
@@ -1543,7 +1543,7 @@ git commit -m "feat: add AlertsPanel and InsightsPanel components"
 - Create: `frontend/src/components/ClosedTrades.jsx`
 - Modify: `frontend/src/App.jsx`
 
-- [ ] **Step 1: Create `frontend/src/components/OpenPositions.jsx`**
+- [x] **Step 1: Create `frontend/src/components/OpenPositions.jsx`**
 
 ```jsx
 function fmt(v, d = 5) {
@@ -1604,7 +1604,7 @@ export default function OpenPositions({ data, error }) {
 }
 ```
 
-- [ ] **Step 2: Create `frontend/src/components/ClosedTrades.jsx`**
+- [x] **Step 2: Create `frontend/src/components/ClosedTrades.jsx`**
 
 ```jsx
 function fmtPL(v) {
@@ -1669,7 +1669,7 @@ export default function ClosedTrades({ data, error }) {
 }
 ```
 
-- [ ] **Step 3: Update `frontend/src/App.jsx`** — replace placeholder divs with components
+- [x] **Step 3: Update `frontend/src/App.jsx`** — replace placeholder divs with components
 
 Add imports:
 ```jsx
@@ -1683,11 +1683,11 @@ Replace the two remaining placeholder divs:
       <ClosedTrades data={closedTrades.data} error={closedTrades.error} />
 ```
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 With the API running, open `http://localhost:3000`. The full page should render all 5 sections with no console errors. Test empty states (no data), and if you have trades in the DB, verify real/paper pairing by ticket works in both tables.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/nick/2_SideProjects/trade-signal
@@ -1703,7 +1703,7 @@ git commit -m "feat: add OpenPositions and ClosedTrades components"
 - Create: `frontend/Dockerfile`
 - Modify: `docker-compose.yml`
 
-- [ ] **Step 1: Create `frontend/Dockerfile`**
+- [x] **Step 1: Create `frontend/Dockerfile`**
 
 ```dockerfile
 FROM node:20-alpine
@@ -1715,7 +1715,7 @@ EXPOSE 3000
 CMD ["npm", "run", "dev"]
 ```
 
-- [ ] **Step 2: Update `docker-compose.yml`** — add frontend service
+- [x] **Step 2: Update `docker-compose.yml`** — add frontend service
 
 ```yaml
 services:
@@ -1763,14 +1763,14 @@ volumes:
 
 Note: The `- /app/node_modules` volume prevents the host's `frontend/node_modules` from overwriting the container's npm-installed modules.
 
-- [ ] **Step 3: Build and start full stack**
+- [x] **Step 3: Build and start full stack**
 
 ```bash
 docker compose up --build -d
 ```
 Expected: db, api, and frontend containers all start. No build errors.
 
-- [ ] **Step 4: Smoke test**
+- [x] **Step 4: Smoke test**
 
 ```bash
 # API health
@@ -1784,14 +1784,14 @@ curl -I http://localhost:3000
 
 Open `http://localhost:3000` in a browser. The dashboard should load and poll the API. Check browser console for errors — there should be none.
 
-- [ ] **Step 5: Run full backend test suite one final time**
+- [x] **Step 5: Run full backend test suite one final time**
 
 ```bash
 /Users/nick/.venv/bin/python -m pytest tests/ -v
 ```
 Expected: all pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /Users/nick/2_SideProjects/trade-signal

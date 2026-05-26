@@ -1,6 +1,6 @@
 # Plan 2 — Mirror Paper Redesign Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Spec:** `docs/superpowers/specs/2026-05-25-paper-trade-system-redesign.md` (FROZEN rev 1) — Component 1.
 
@@ -34,7 +34,7 @@
 - Modify: `api/services/mirror_trader.py`
 - Rewrite: `tests/test_mirror_trader.py`
 
-- [ ] **Step 1: Replace tests with the new behavior contract**
+- [x] **Step 1: Replace tests with the new behavior contract**
 
 ```python
 # tests/test_mirror_trader.py
@@ -130,7 +130,7 @@ async def test_mirror_copies_account_id_and_direction(db_session):
     assert paper.direction == Direction.sell
 ```
 
-- [ ] **Step 2: Run tests to verify the old behavior fails**
+- [x] **Step 2: Run tests to verify the old behavior fails**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -139,7 +139,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: `test_mirror_does_not_set_tp_sl` FAILS (legacy code sets tp/sl).
 
-- [ ] **Step 3: Rewrite `mirror_trader.py`**
+- [x] **Step 3: Rewrite `mirror_trader.py`**
 
 ```python
 # api/services/mirror_trader.py
@@ -192,7 +192,7 @@ async def create_mirror_trade(session: AsyncSession, event: TradeEventSchema) ->
     ))
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -201,7 +201,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS (5 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/services/mirror_trader.py tests/test_mirror_trader.py
@@ -216,7 +216,7 @@ git commit -m "refactor(mirror): drop pre-set TP/SL — rule-driven exits handle
 - Create: `api/services/mirror_exit_manager.py`
 - Test: `tests/test_mirror_exit_manager.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```python
 # tests/test_mirror_exit_manager.py
@@ -416,7 +416,7 @@ async def test_no_exit_when_below_thresholds(db_session, monkeypatch):
     assert closed == 0
 ```
 
-- [ ] **Step 2: Run to confirm they fail**
+- [x] **Step 2: Run to confirm they fail**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -425,7 +425,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: FAIL — module does not exist.
 
-- [ ] **Step 3: Implement `mirror_exit_manager.py`**
+- [x] **Step 3: Implement `mirror_exit_manager.py`**
 
 ```python
 # api/services/mirror_exit_manager.py
@@ -586,7 +586,7 @@ def _floating_pnl(trade: Trade, mark_price: Decimal) -> Optional[Decimal]:
     return raw.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 ```
 
-- [ ] **Step 4: Run mirror-exit tests to verify pass**
+- [x] **Step 4: Run mirror-exit tests to verify pass**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -595,7 +595,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS (5 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/services/mirror_exit_manager.py tests/test_mirror_exit_manager.py
@@ -611,7 +611,7 @@ git commit -m "feat(mirror): tick-driven exits — tp_pivot, momentum_flip, hard
 - Modify: `api/services/paper_exit_manager.py`
 - Test: `tests/test_paper_exit_manager.py`
 
-- [ ] **Step 1: Read current paper_exit_manager test to see what coverage to keep**
+- [x] **Step 1: Read current paper_exit_manager test to see what coverage to keep**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -620,7 +620,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Note which tests cover `mirror` mode vs `independent` mode — we keep independent unchanged but mirror moves out.
 
-- [ ] **Step 2: Update `paper_exit_manager.py` to skip mirror trades**
+- [x] **Step 2: Update `paper_exit_manager.py` to skip mirror trades**
 
 Replace the `paper_mode == PaperMode.mirror` filter with `paper_mode == PaperMode.independent`:
 
@@ -640,7 +640,7 @@ result = await session.execute(
 
 This keeps the existing TP/SL touch logic available for `independent` (Plan 3) trades and removes responsibility for `mirror` trades from this manager.
 
-- [ ] **Step 3: Modify `market_tick.py` to call both managers**
+- [x] **Step 3: Modify `market_tick.py` to call both managers**
 
 ```python
 # api/routers/market_tick.py
@@ -685,11 +685,11 @@ async def receive_market_tick(
     }
 ```
 
-- [ ] **Step 4: Update existing paper_exit_manager test fixtures**
+- [x] **Step 4: Update existing paper_exit_manager test fixtures**
 
 If a test in `tests/test_paper_exit_manager.py` creates `paper_mode=PaperMode.mirror`, update those rows to `paper_mode=PaperMode.independent` so they continue to assert the same TP/SL logic now scoped to independent trades. Use `Edit` per occurrence to keep the diff minimal.
 
-- [ ] **Step 5: Run regression**
+- [x] **Step 5: Run regression**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -698,7 +698,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/routers/market_tick.py api/services/paper_exit_manager.py tests/test_paper_exit_manager.py
@@ -709,7 +709,7 @@ git commit -m "refactor: route mirror trades to mirror_exit_manager; paper_exit_
 
 ## Task 4: Full regression + smoke
 
-- [ ] **Step 1: Run the full backend suite**
+- [x] **Step 1: Run the full backend suite**
 
 ```
 docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
@@ -718,7 +718,7 @@ docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api \
 
 Expected: previous count + new mirror tests, all green.
 
-- [ ] **Step 2: Smoke**
+- [x] **Step 2: Smoke**
 
 ```
 docker compose up -d
@@ -728,7 +728,7 @@ docker compose exec db psql -U tradesignal -d tradesignal -c \
 # Expected: paper_mode='mirror', tp/sl NULL, paper_exit_strategy='rule_driven'
 ```
 
-- [ ] **Step 3: Update handoff**
+- [x] **Step 3: Update handoff**
 
 ```
 Plan 2 done.
