@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import TrustTierBadge from './TrustTierBadge'
+import PaperRuleDrawer from './PaperRuleDrawer'
 
-const STATUS_DOT = {
+const ALIVE_DOT = {
   active: 'bg-emerald-500',
   near: 'bg-amber-400',
   far: 'bg-gray-500',
@@ -14,57 +16,66 @@ function ageChip(seconds) {
   return `${Math.floor(seconds / 86400)}d`
 }
 
+function aliveTone(rule) {
+  const last = rule.last_activity_at ? new Date(rule.last_activity_at).getTime() : 0
+  const ageMs = last ? Date.now() - last : Infinity
+  if (rule.last_signal_status === 'active') return 'active'
+  if (rule.last_signal_status === 'near') return 'near'
+  if (ageMs > 30 * 60 * 1000) return 'idle'
+  return rule.last_signal_status || 'idle'
+}
+
+function formatBaht(n) {
+  if (n == null) return '—'
+  const v = Number(n)
+  const sign = v >= 0 ? '+' : ''
+  return `${sign}฿${Math.round(v).toLocaleString()}`
+}
+
 export default function PaperRuleCard({ rule, pattern }) {
-  const dot = STATUS_DOT[rule.last_signal_status] || STATUS_DOT.idle
-  const ev = rule.net_ev_per_trade != null
-    ? `฿${Number(rule.net_ev_per_trade).toFixed(0)}`
-    : '—'
-  const wilson = rule.wilson_lower_95 != null
-    ? `${(Number(rule.wilson_lower_95) * 100).toFixed(0)}%`
-    : '—'
-  const baseline = rule.baseline_delta != null
-    ? `${Number(rule.baseline_delta) >= 0 ? '+' : ''}${(Number(rule.baseline_delta) * 100).toFixed(1)}%`
-    : '—'
+  const [open, setOpen] = useState(false)
+  const tone = aliveTone(rule)
+  const dot = ALIVE_DOT[tone] || ALIVE_DOT.idle
+
+  const start = Number(rule.virtual_balance_start ?? 0)
+  const current = Number(rule.virtual_balance_current ?? 0)
+  const cumPnl = current - start
+  const cumPct = start > 0 ? (cumPnl / start) * 100 : 0
+  const balanceTone = current < start ? 'text-red-400' : 'text-gray-100'
+  const pnlTone = cumPnl > 0 ? 'text-emerald-400' : cumPnl < 0 ? 'text-red-400' : 'text-gray-300'
+
   return (
     <div className="bg-gray-900 border border-gray-800 rounded p-3 space-y-2">
-      <div className="flex items-center justify-between">
+      <button
+        type="button"
+        className="w-full flex items-center justify-between"
+        onClick={() => setOpen((v) => !v)}
+      >
         <div className="flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full ${dot}`} />
           <span className="text-sm font-medium">{rule.mode}</span>
           <span className="text-xs text-gray-400">[{ageChip(rule.age_seconds)}]</span>
         </div>
-        <TrustTierBadge tier={rule.trust_tier} />
-      </div>
-      <div className="text-xs text-gray-400">
+        <div className="flex items-center gap-2">
+          <TrustTierBadge tier={rule.trust_tier} />
+          <span className="text-gray-500 text-xs">{open ? '▴' : '▾'}</span>
+        </div>
+      </button>
+      <div className="text-xs text-gray-400 text-left">
         {pattern?.indicator_slugs?.join(' + ') || '—'}
       </div>
       <div className="flex justify-between text-xs">
-        <div>Net EV: <span className="text-gray-100">{ev}</span>/trade</div>
-        <div>Wilson: <span className="text-gray-100">{wilson}</span></div>
-        <div>vs Baseline: <span className="text-gray-100">{baseline}</span></div>
-      </div>
-      <div className="text-xs text-gray-500">
-        Trades {rule.total_trades} · Wins {rule.win_count}
-      </div>
-      {rule.shadow_of_rule_id ? (
-        <div className="text-xs text-amber-300">
-          🌗 Shadow of <code className="text-amber-200">{rule.shadow_of_rule_id.slice(0, 8)}</code> — testing:
-          {(rule.filters || []).map((f, i) => (
-            <span key={i} className="ml-1 inline-block rounded bg-amber-900/40 px-1">
-              {f.feature}≠{f.exclude}
-            </span>
-          ))}
+        <div>Open: <span className="text-gray-100">{rule.open_trades_count ?? 0}</span></div>
+        <div>
+          Balance: <span className={balanceTone}>฿{Math.round(current).toLocaleString()}</span>
+          <span className="text-gray-500"> / ฿{Math.round(start).toLocaleString()}</span>
         </div>
-      ) : (rule.filters || []).length > 0 ? (
-        <div className="text-xs text-gray-400">
-          Filters:
-          {rule.filters.map((f, i) => (
-            <span key={i} className="ml-1 inline-block rounded bg-gray-800 px-1">
-              {f.feature}≠{f.exclude}
-            </span>
-          ))}
-        </div>
-      ) : null}
+      </div>
+      <div className="text-xs">
+        Cum PnL: <span className={pnlTone}>{formatBaht(cumPnl)}</span>
+        <span className={`ml-1 ${pnlTone}`}>({cumPct >= 0 ? '+' : ''}{cumPct.toFixed(1)}%)</span>
+      </div>
+      {open && <PaperRuleDrawer rule={rule} pattern={pattern} />}
     </div>
   )
 }
