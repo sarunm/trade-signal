@@ -58,7 +58,6 @@ assumptions: <ถ้ามี หรือ none>
 |---|---|---|---|---|
 | 1 | Trader Profile MCP — Phase 1 | codex | 🟢 normal | done |
 | 2 | Trade Advisor — entry scoring + recovery map + live zone alerts | agy | 🟢 normal | done |
-| 3 | Migrate agent task system to file-per-task | claude | 🔵 low | pending |
 | 4 | Add missing MCP endpoints (account-snapshots, price-bars) | claude | 🔵 low | done |
 | 5 | Indicator Engine Infrastructure | codex | 🟢 normal | done |
 | 6–7 | Indicator tasks: Trend (29) + Momentum (39) | codex | 🟢 normal | done |
@@ -115,25 +114,6 @@ exact commands
 ---
 
 ## Queue
-
-### TASK: Migrate agent task system to file-per-task
-
-**assignee:** claude
-**status:** pending
-**priority:** low
-**remark:** ⚠️ ก่อนทำต้องคุยกับ user ละเอียดก่อน — ยังไม่ได้ตัดสินใจ design สุดท้าย (naming convention, rules file placement, migration strategy)
-
-**Why:** backlog.md เดียวทำให้ agent ต้องอ่านทั้งไฟล์เพื่อหา task ตัวเอง — file-per-task + status ใน filename ช่วยลด token ได้มาก
-**Files to touch:**
-- `.agents/tasks/` (new directory)
-- `.agents/backlog.md` (migrate + archive)
-- `.agents/RULES.md` (extract workflow rules)
-**Acceptance criteria:**
-- TBD — ออกแบบหลังคุยกับ user แล้ว
-**Verify:**
-- TBD
-
----
 
 <!-- 3 codex backlog tasks shipped 2026-05-26: migration 019 (legacy exit_strategy), test_market_tick integration test, migration 020 (NOT NULL filters/gate_status). Archived to task-done.md. -->
 
