@@ -1,7 +1,7 @@
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -97,6 +97,74 @@ async def pattern_gates(
             "reason": result.reason,
         })
     return {"pattern_id": str(pattern_id), "rules": summaries}
+
+
+def _serialize_rule(rule: PaperTraderRule) -> dict:
+    return {
+        "id": str(rule.id),
+        "pattern_id": str(rule.pattern_id),
+        "status": rule.status,
+        "mode": rule.mode,
+        "filters": rule.filters or [],
+        "shadow_of_rule_id": (
+            str(rule.shadow_of_rule_id) if rule.shadow_of_rule_id else None
+        ),
+        "spawned_at": rule.spawned_at.isoformat() if rule.spawned_at else None,
+        "total_trades": rule.total_trades,
+        "win_count": rule.win_count,
+    }
+
+
+async def _rule_winrate(session: AsyncSession, rule_id: UUID) -> tuple[float, int]:
+    result = await session.execute(
+        select(Trade).where(
+            Trade.is_paper.is_(True),
+            Trade.close_time.is_not(None),
+        )
+    )
+    target = str(rule_id)
+    total, wins = 0, 0
+    for t in result.scalars().all():
+        plan = t.recovery_plan or {}
+        if plan.get("paper_trader_rule_id") != target:
+            continue
+        if t.profit is None:
+            continue
+        total += 1
+        if t.profit > 0:
+            wins += 1
+    return (wins / total if total else 0.0), total
+
+
+@router.get("/paper-trader-rules/{rule_id}/shadows")
+async def get_rule_shadows(
+    rule_id: UUID,
+    session: AsyncSession = Depends(get_session),
+):
+    parent = await session.get(PaperTraderRule, rule_id)
+    if parent is None:
+        raise HTTPException(status_code=404, detail="rule not found")
+
+    parent_wr, parent_n = await _rule_winrate(session, parent.id)
+
+    result = await session.execute(
+        select(PaperTraderRule).where(PaperTraderRule.shadow_of_rule_id == parent.id)
+    )
+    shadows = []
+    for shadow in result.scalars().all():
+        s_wr, s_n = await _rule_winrate(session, shadow.id)
+        delta = s_wr - parent_wr if (s_n >= 30 and parent_n >= 30) else None
+        shadows.append({
+            **_serialize_rule(shadow),
+            "winrate": s_wr,
+            "trades": s_n,
+            "winrate_delta": delta,
+        })
+
+    return {
+        "parent": {**_serialize_rule(parent), "winrate": parent_wr, "trades": parent_n},
+        "shadows": shadows,
+    }
 
 
 @router.get("/paper-trades", response_model=List[PaperTradeResponse])
