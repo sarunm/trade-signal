@@ -12,6 +12,7 @@ import DailyPLPanel from './components/DailyPLPanel'
 import PnlChart from './components/PnlChart'
 import TradeAdvisor from './components/TradeAdvisor'
 import EAStatusBadge from './components/EAStatusBadge'
+import PaperTradeConsole from './components/PaperTradeConsole'
 
 const API = 'http://localhost:8000'
 
@@ -107,6 +108,7 @@ export default function App() {
         onOffsetChange={setClosedOffset}
       />
       <PnlChart data={pnlHistory.data} error={pnlHistory.error} />
+      <PaperTradeConsole />
       <section>
         <h2 className="text-lg font-semibold mb-2">Trade Advisor</h2>
         <TradeAdvisor data={advisor.data} />
