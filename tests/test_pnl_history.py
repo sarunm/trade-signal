@@ -155,3 +155,50 @@ async def test_pnl_history_all_returns_row_per_trade(client, db_session):
     # newest first
     assert body["items"][0]["period"].startswith("2026-05-26")
     assert Decimal(body["items"][0]["profit"]) == Decimal("200.00")
+
+
+@pytest.mark.asyncio
+async def test_pnl_history_pagination_truncates_to_page_size(client, db_session):
+    for i in range(5):
+        db_session.add(Trade(
+            id=uuid4(), ticket=5000 + i, symbol="XAUUSD", direction=Direction.buy,
+            order_state=OrderState.filled, is_paper=False,
+            open_time=_bkk(2026, 5, 20 + i),
+            close_time=_bkk(2026, 5, 20 + i, 15),
+            open_price=Decimal("1950"), close_price=Decimal("1955"),
+            volume=Decimal("0.10"), profit=Decimal("100.00"),
+        ))
+    await db_session.commit()
+
+    res = await client.get("/api/pnl-history?granularity=daily&page=1&page_size=2")
+    body = res.json()
+    assert body["total_count"] == 5
+    assert body["total_pages"] == 3
+    assert body["page"] == 1
+    assert len(body["items"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_pnl_history_out_of_range_page_returns_empty(client, db_session):
+    db_session.add(Trade(
+        id=uuid4(), ticket=6001, symbol="XAUUSD", direction=Direction.buy,
+        order_state=OrderState.filled, is_paper=False,
+        open_time=_bkk(2026, 5, 26),
+        close_time=_bkk(2026, 5, 26, 15),
+        open_price=Decimal("1955"), close_price=Decimal("1960"),
+        volume=Decimal("0.10"), profit=Decimal("100.00"),
+    ))
+    await db_session.commit()
+
+    res = await client.get("/api/pnl-history?granularity=daily&page=99&page_size=20")
+    body = res.json()
+    assert body["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_pnl_history_empty_db_returns_zero_counts(client, db_session):
+    res = await client.get("/api/pnl-history?granularity=daily")
+    body = res.json()
+    assert body["items"] == []
+    assert body["total_pages"] == 0
+    assert body["total_count"] == 0
