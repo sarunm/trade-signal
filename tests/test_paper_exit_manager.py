@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import select
 
 from models.pattern import PaperTraderRule
+from models.price_bar import PriceBar, Timeframe
 from models.trade import Direction, OrderState, PaperMode, Trade
 from schemas.market_tick import MarketTickSchema
 from services.paper_exit_manager import close_paper_trades_on_tick
@@ -321,3 +322,159 @@ async def test_no_rule_link_skips_trail(db_session):
     assert closed == 0
     await db_session.refresh(trade)
     assert trade.recovery_plan is None or "trail" not in (trade.recovery_plan or {})
+
+
+def _h1_bar(high: str, low: str, t: Optional[datetime] = None) -> PriceBar:
+    t = t or datetime(2026, 5, 18, 9, 0, tzinfo=timezone.utc)
+    return PriceBar(
+        time=t,
+        symbol="XAUUSD",
+        timeframe=Timeframe.H1,
+        open=Decimal(low),
+        high=Decimal(high),
+        low=Decimal(low),
+        close=Decimal(high),
+        volume=Decimal("100"),
+    )
+
+
+def _trail_paper_trade_with_levels(
+    direction: Direction,
+    open_price: str,
+    tp: str,
+    sl: str,
+    rule_id: uuid.UUID,
+    ticket: int,
+) -> Trade:
+    trade = _trail_paper_trade(direction, open_price, rule_id, ticket=ticket)
+    trade.tp = Decimal(tp)
+    trade.sl = Decimal(sl)
+    return trade
+
+
+@pytest.mark.asyncio
+async def test_shadow_uses_tp_when_h1_high_reached_tp(db_session):
+    rule = _trail_rule()
+    db_session.add(rule)
+    # Buy 1950, TP 2100 (15000 baht), SL 1900 (-5000 baht).
+    trade = _trail_paper_trade_with_levels(
+        Direction.buy, "1950.00", "2100.00", "1900.00", rule.id, ticket=7180
+    )
+    # Pre-armed peak so retrace closes; bid 1958 → unrealized 80; peak 100 → 80 ≤ 80 close.
+    trade.recovery_plan = {"trail": {"peak_profit": "100.00", "peak_price": "1960.00"}}
+    db_session.add(trade)
+    # H1 high reaches TP, low does not reach SL → shadow uses TP profit.
+    db_session.add(_h1_bar(high="2100.50", low="1955.00"))
+    await db_session.commit()
+
+    with patch(
+        "services.paper_exit_manager.compute_user_avg_profit",
+        new=AsyncMock(return_value=Decimal("500.00")),
+    ):
+        closed = await close_paper_trades_on_tick(db_session, _tick("1958.00", "1958.10"))
+
+    assert closed == 1
+    await db_session.refresh(trade)
+    assert trade.paper_exit_reason == "user_avg_trail"
+    # TP profit = (2100 - 1950) * 0.10 * 100 = 1500.00
+    assert trade.shadow_profit == Decimal("1500.00")
+
+
+@pytest.mark.asyncio
+async def test_shadow_uses_sl_when_h1_low_reached_sl(db_session):
+    rule = _trail_rule()
+    db_session.add(rule)
+    trade = _trail_paper_trade_with_levels(
+        Direction.buy, "1950.00", "2100.00", "1900.00", rule.id, ticket=7181
+    )
+    trade.recovery_plan = {"trail": {"peak_profit": "100.00", "peak_price": "1960.00"}}
+    db_session.add(trade)
+    # H1 low reaches SL → shadow uses SL profit.
+    db_session.add(_h1_bar(high="1965.00", low="1899.00"))
+    await db_session.commit()
+
+    with patch(
+        "services.paper_exit_manager.compute_user_avg_profit",
+        new=AsyncMock(return_value=Decimal("500.00")),
+    ):
+        closed = await close_paper_trades_on_tick(db_session, _tick("1958.00", "1958.10"))
+
+    assert closed == 1
+    await db_session.refresh(trade)
+    # SL profit = (1900 - 1950) * 0.10 * 100 = -500.00
+    assert trade.shadow_profit == Decimal("-500.00")
+
+
+@pytest.mark.asyncio
+async def test_shadow_falls_back_to_unrealized_when_neither_hit(db_session):
+    rule = _trail_rule()
+    db_session.add(rule)
+    trade = _trail_paper_trade_with_levels(
+        Direction.buy, "1950.00", "2100.00", "1900.00", rule.id, ticket=7182
+    )
+    trade.recovery_plan = {"trail": {"peak_profit": "100.00", "peak_price": "1960.00"}}
+    db_session.add(trade)
+    # Neither high nor low reaches the levels → shadow = unrealized at close.
+    db_session.add(_h1_bar(high="1965.00", low="1955.00"))
+    await db_session.commit()
+
+    with patch(
+        "services.paper_exit_manager.compute_user_avg_profit",
+        new=AsyncMock(return_value=Decimal("500.00")),
+    ):
+        closed = await close_paper_trades_on_tick(db_session, _tick("1958.00", "1958.10"))
+
+    assert closed == 1
+    await db_session.refresh(trade)
+    assert trade.shadow_profit == Decimal("80.00")
+
+
+@pytest.mark.asyncio
+async def test_shadow_sell_side_uses_tp_when_low_below_tp(db_session):
+    rule = _trail_rule()
+    db_session.add(rule)
+    # Sell 2050, TP 1900 (15000 baht), SL 2100 (-5000 baht).
+    trade = _trail_paper_trade_with_levels(
+        Direction.sell, "2050.00", "1900.00", "2100.00", rule.id, ticket=7183
+    )
+    trade.recovery_plan = {"trail": {"peak_profit": "100.00", "peak_price": "2040.00"}}
+    db_session.add(trade)
+    # H1 low reaches TP for sell side → shadow uses TP profit.
+    db_session.add(_h1_bar(high="2055.00", low="1899.00"))
+    await db_session.commit()
+
+    with patch(
+        "services.paper_exit_manager.compute_user_avg_profit",
+        new=AsyncMock(return_value=Decimal("500.00")),
+    ):
+        # Sell uses ask side; ask 2042 → unrealized 80; peak 100 → close.
+        closed = await close_paper_trades_on_tick(db_session, _tick("2041.90", "2042.00"))
+
+    assert closed == 1
+    await db_session.refresh(trade)
+    assert trade.paper_exit_reason == "user_avg_trail"
+    # TP profit = (2050 - 1900) * 0.10 * 100 = 1500.00
+    assert trade.shadow_profit == Decimal("1500.00")
+
+
+@pytest.mark.asyncio
+async def test_shadow_falls_back_when_no_h1_bar(db_session):
+    rule = _trail_rule()
+    db_session.add(rule)
+    trade = _trail_paper_trade_with_levels(
+        Direction.buy, "1950.00", "2100.00", "1900.00", rule.id, ticket=7184
+    )
+    trade.recovery_plan = {"trail": {"peak_profit": "100.00", "peak_price": "1960.00"}}
+    db_session.add(trade)
+    # No PriceBar seeded.
+    await db_session.commit()
+
+    with patch(
+        "services.paper_exit_manager.compute_user_avg_profit",
+        new=AsyncMock(return_value=Decimal("500.00")),
+    ):
+        closed = await close_paper_trades_on_tick(db_session, _tick("1958.00", "1958.10"))
+
+    assert closed == 1
+    await db_session.refresh(trade)
+    assert trade.shadow_profit == Decimal("80.00")

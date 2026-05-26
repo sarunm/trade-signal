@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
 from models.pattern import PaperTraderRule
+from models.price_bar import PriceBar, Timeframe
 from models.trade import Direction, OrderState, PaperMode, Trade
 from schemas.market_tick import MarketTickSchema
 from services.behavioral_mirror import compute_user_avg_profit
@@ -89,7 +90,7 @@ async def close_paper_trades_on_tick(
         trade.profit = _paper_profit(trade, exit_price)
         trade.paper_exit_reason = exit_reason
         if exit_reason == "user_avg_trail":
-            trade.shadow_profit = _shadow_projection(trade, tick)
+            trade.shadow_profit = await _shadow_projection(session, trade, tick)
         closed += 1
 
     if closed or any((t.recovery_plan or {}).get("trail") for t in open_papers):
@@ -140,7 +141,33 @@ def _update_peak(trade: Trade, unrealized: Decimal, price: Decimal) -> None:
     flag_modified(trade, "recovery_plan")
 
 
-def _shadow_projection(trade: Trade, tick: MarketTickSchema) -> Optional[Decimal]:
+async def _shadow_projection(
+    session: AsyncSession,
+    trade: Trade,
+    tick: MarketTickSchema,
+) -> Optional[Decimal]:
+    bar = (
+        await session.execute(
+            select(PriceBar)
+            .where(
+                PriceBar.symbol == trade.symbol,
+                PriceBar.timeframe == Timeframe.H1,
+            )
+            .order_by(PriceBar.time.desc())
+            .limit(1)
+        )
+    ).scalars().first()
+    if bar is not None and trade.tp is not None and trade.sl is not None:
+        if trade.direction == Direction.buy:
+            if bar.high >= trade.tp:
+                return _paper_profit(trade, trade.tp)
+            if bar.low <= trade.sl:
+                return _paper_profit(trade, trade.sl)
+        elif trade.direction == Direction.sell:
+            if bar.low <= trade.tp:
+                return _paper_profit(trade, trade.tp)
+            if bar.high >= trade.sl:
+                return _paper_profit(trade, trade.sl)
     return _paper_profit(trade, _side_price(trade, tick) or tick.bid)
 
 
