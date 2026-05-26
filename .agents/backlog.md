@@ -115,35 +115,7 @@ exact commands
 
 ## Queue
 
-### TASK: [BUG] Paper Trade Console — Cum PnL stuck at +฿0 (+0.0%)
-
-**assignee:** claude
-**status:** needs-design
-**priority:** normal
-**remark:** หลัง Paper Rule Drawer ship แล้ว user เห็นว่า Cum PnL ใน collapsed card แสดง `+฿0 (+0.0%)` ไม่ขยับเลย ทั้งที่มี trades ปิดไปแล้ว — สงสัย card คำนวณจาก `virtual_balance_current - virtual_balance_start` ซึ่งอาจไม่ถูก update หลัง trade ปิด หรือคำนวณผิด field
-
-**Why:** ถ้า Cum PnL ไม่ขยับ user จะ debug ไม่ได้ว่ารูลทำเงินไหม — ทำให้ feature ใหม่ไร้ค่า
-**Hypotheses ต้อง investigate:**
-1. `paper_trader_rules.virtual_balance_current` ไม่ถูก update เมื่อ paper trade ปิด (close_trade flow)
-2. Card คำนวณจาก field ที่ไม่ตรง — เช่น ใช้ rule field แทนที่จะ sum profit จาก closed trades ของรูล
-3. PaperRuleCard render อ่าน field ที่ผิด หรือ default = balance_start เลยให้ผลลัพธ์ 0
-**Files to investigate:**
-- `frontend/src/components/PaperRuleCard.jsx` — Cum PnL render logic
-- `api/services/paper_exit_manager.py` / `api/services/paper_trader.py` — close trade flow
-- `api/services/mirror_exit_manager.py` — mirror close path
-- `api/models/pattern.py` — virtual_balance_current field
-- `api/routers/patterns.py` — list_paper_trader_rules response builder
-**Acceptance criteria:**
-- [ ] หา root cause ที่แท้จริง (ดู DB row จริง vs UI value)
-- [ ] Cum PnL ใน card ขยับตาม trade ที่ปิด (positive ถ้า profit รวม > 0, negative ถ้าขาดทุน)
-- [ ] เพิ่ม test ป้องกัน regression
-**Verify:**
-```bash
-docker compose exec -T db psql -U tradesignal -d tradesignal -c "SELECT id, virtual_balance_start, virtual_balance_current, total_trades FROM paper_trader_rules LIMIT 5;"
-docker compose exec -T db psql -U tradesignal -d tradesignal -c "SELECT recovery_plan->>'paper_trader_rule_id' AS rule_id, COUNT(*), SUM(profit) FROM trades WHERE is_paper=true AND close_time IS NOT NULL GROUP BY 1;"
-```
-
----
+<!-- [BUG] Cum PnL stuck at +฿0: shipped 2026-05-26 — cum_pnl_realized field derived from SUM(profit), close flow updates virtual_balance_current. Archived. -->
 
 <!-- 3 codex backlog tasks shipped 2026-05-26: migration 019 (legacy exit_strategy), test_market_tick integration test, migration 020 (NOT NULL filters/gate_status). Archived to task-done.md. -->
 

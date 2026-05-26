@@ -312,3 +312,17 @@ cd frontend && npm run build
 **status:** done
 **priority:** low
 **remark:** shipped 2026-05-26 as migration 020 (commit 73c6b84). NULL backfill + `ALTER COLUMN ... SET NOT NULL` on `filters` and `gate_status`; sqlite path no-op for tests. ORM `Mapped[list]` / `Mapped[dict]` declarations now match DB. 338/338 tests pass.
+
+---
+
+### TASK: [BUG] Paper Trade Console — Cum PnL stuck at +฿0
+
+**assignee:** claude
+**status:** done
+**priority:** normal
+**remark:** shipped 2026-05-26 (commit 9696fc6). Root cause: `virtual_balance_current` was never updated when trades closed, so card showed `current - start = 0`. Two-part fix:
+1. Backend `_realized_pnl_by_rule` aggregates SUM(profit) of closed paper trades by `paper_trader_rule_id` (column + legacy `recovery_plan` fallback). New schema field `cum_pnl_realized` exposed via `/api/paper-trader-rules`.
+2. Close flows in `paper_exit_manager`, `paper_trader`, `mirror_exit_manager` now `rule.virtual_balance_current += trade.profit` so DB stays consistent.
+3. Card derives `current = start + cum_pnl_realized` (truth from trades, not mutable balance field).
+**Tests:** 2 new for cum_pnl aggregation, 1 new for close-flow balance update. 341/341 backend pass; clean frontend build.
+**Defer:** unrealized PnL from open trades — visible in drawer's active orders section.
