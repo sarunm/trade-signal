@@ -41,7 +41,7 @@
 - Modify: `api/schemas/pattern.py:23-47`
 - Test: `tests/test_paper_trader_rules_extended.py` (new)
 
-- [ ] **Step 1: Write the failing test for schema fields**
+- [x] **Step 1: Write the failing test for schema fields**
 
 Create `tests/test_paper_trader_rules_extended.py`:
 
@@ -91,13 +91,13 @@ async def test_list_rules_returns_balance_and_activity_fields(client, db_session
     assert row["last_activity_at"] is None
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api sh -c "cd /app && pytest tests/test_paper_trader_rules_extended.py -v"`
 
 Expected: FAIL — response JSON missing `virtual_balance_start`, `virtual_balance_current`, `open_trades_count`, `last_activity_at` keys.
 
-- [ ] **Step 3: Add fields to schema**
+- [x] **Step 3: Add fields to schema**
 
 Modify `api/schemas/pattern.py`. Replace existing `PaperTraderRuleResponse`:
 
@@ -133,7 +133,7 @@ class PaperTraderRuleResponse(BaseModel):
     model_config = {"from_attributes": True}
 ```
 
-- [ ] **Step 4: Wire fields into the list builder (without computing the new ones yet)**
+- [x] **Step 4: Wire fields into the list builder (without computing the new ones yet)**
 
 Modify `api/routers/patterns.py:46-71`. Update the `out.append(...)` block to include the 4 new fields. Replace the entire `for r in rules:` loop with:
 
@@ -169,19 +169,19 @@ Modify `api/routers/patterns.py:46-71`. Update the `out.append(...)` block to in
     return out
 ```
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Run: `docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api sh -c "cd /app && pytest tests/test_paper_trader_rules_extended.py -v"`
 
 Expected: PASS — schema now contains the 4 new keys; `open_trades_count=0` and `last_activity_at=None` match the test assertions.
 
-- [ ] **Step 6: Run full backend suite**
+- [x] **Step 6: Run full backend suite**
 
 Run: `docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api sh -c "cd /app && pytest tests/ -v --tb=short"`
 
 Expected: All tests pass (no regression).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add api/schemas/pattern.py api/routers/patterns.py tests/test_paper_trader_rules_extended.py
@@ -196,7 +196,7 @@ git commit -m "feat(api): expose virtual balance + open count + last activity on
 - Modify: `api/routers/patterns.py:33-71` (`list_paper_trader_rules`)
 - Test: `tests/test_paper_trader_rules_extended.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/test_paper_trader_rules_extended.py`:
 
@@ -254,13 +254,13 @@ async def test_open_trades_count_per_rule(client, db_session):
     assert body[str(rule_b.id)]["open_trades_count"] == 0
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api sh -c "cd /app && pytest tests/test_paper_trader_rules_extended.py::test_open_trades_count_per_rule -v"`
 
 Expected: FAIL — assertion `2 == 0` because handler always sets `open_trades_count=0`.
 
-- [ ] **Step 3: Implement the batched count**
+- [x] **Step 3: Implement the batched count**
 
 Modify `api/routers/patterns.py`. Add this helper above `list_paper_trader_rules`:
 
@@ -294,19 +294,19 @@ And replace `open_trades_count=0,` with:
                 open_trades_count=open_counts.get(str(r.id), 0),
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api sh -c "cd /app && pytest tests/test_paper_trader_rules_extended.py -v"`
 
 Expected: PASS for both tests in the file.
 
-- [ ] **Step 5: Run full backend suite**
+- [x] **Step 5: Run full backend suite**
 
 Run: `docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api sh -c "cd /app && pytest tests/ -v --tb=short"`
 
 Expected: All tests pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/routers/patterns.py tests/test_paper_trader_rules_extended.py
@@ -321,7 +321,7 @@ git commit -m "feat(api): compute open_trades_count per paper rule (batched)"
 - Modify: `api/routers/patterns.py` (helper + builder)
 - Test: `tests/test_paper_trader_rules_extended.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/test_paper_trader_rules_extended.py`:
 
@@ -370,13 +370,13 @@ async def test_last_activity_at_uses_latest_paper_signal(client, db_session):
     assert row["last_activity_at"].startswith("2026-05-26T12:00")
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api sh -c "cd /app && pytest tests/test_paper_trader_rules_extended.py::test_last_activity_at_uses_latest_paper_signal -v"`
 
 Expected: FAIL — `last_activity_at` is None.
 
-- [ ] **Step 3: Implement the batched lookup**
+- [x] **Step 3: Implement the batched lookup**
 
 In `api/routers/patterns.py`, add another helper above `list_paper_trader_rules`:
 
@@ -407,19 +407,19 @@ Replace `last_activity_at=None,` in the response builder with:
                 last_activity_at=last_activity.get(str(r.id)),
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api sh -c "cd /app && pytest tests/test_paper_trader_rules_extended.py -v"`
 
 Expected: PASS for all tests in the file.
 
-- [ ] **Step 5: Run full backend suite**
+- [x] **Step 5: Run full backend suite**
 
 Run: `docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api sh -c "cd /app && pytest tests/ -v --tb=short"`
 
 Expected: All tests pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add api/routers/patterns.py tests/test_paper_trader_rules_extended.py
@@ -433,7 +433,7 @@ git commit -m "feat(api): compute last_activity_at per paper rule from paper_sig
 **Files:**
 - Modify: `frontend/src/components/PaperRuleCard.jsx` (full rewrite of return block)
 
-- [ ] **Step 1: Replace `PaperRuleCard.jsx` with the new collapsed layout + expand state**
+- [x] **Step 1: Replace `PaperRuleCard.jsx` with the new collapsed layout + expand state**
 
 Replace the entire file `frontend/src/components/PaperRuleCard.jsx` with:
 
@@ -521,7 +521,7 @@ export default function PaperRuleCard({ rule, pattern }) {
 }
 ```
 
-- [ ] **Step 2: Create a placeholder `PaperRuleDrawer.jsx` so the build succeeds**
+- [x] **Step 2: Create a placeholder `PaperRuleDrawer.jsx` so the build succeeds**
 
 Create `frontend/src/components/PaperRuleDrawer.jsx`:
 
@@ -535,13 +535,13 @@ export default function PaperRuleDrawer({ rule, pattern }) {
 }
 ```
 
-- [ ] **Step 3: Build the frontend**
+- [x] **Step 3: Build the frontend**
 
 Run: `cd frontend && npm run build`
 
 Expected: build succeeds with no errors.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add frontend/src/components/PaperRuleCard.jsx frontend/src/components/PaperRuleDrawer.jsx
@@ -555,7 +555,7 @@ git commit -m "feat(ui): collapsed paper rule card with balance/pnl/open + expan
 **Files:**
 - Modify: `frontend/src/hooks/usePaperSignals.js` (append new export)
 
-- [ ] **Step 1: Replace the import line at the top of `frontend/src/hooks/usePaperSignals.js`**
+- [x] **Step 1: Replace the import line at the top of `frontend/src/hooks/usePaperSignals.js`**
 
 The file currently has:
 
@@ -569,7 +569,7 @@ Change it to:
 import { useCallback, useEffect, useRef, useState } from 'react'
 ```
 
-- [ ] **Step 2: Append `usePaperRuleDetail` hook to the same file**
+- [x] **Step 2: Append `usePaperRuleDetail` hook to the same file**
 
 Append to the end of `frontend/src/hooks/usePaperSignals.js`:
 
@@ -611,13 +611,13 @@ export function usePaperRuleDetail(ruleId, patternId) {
 }
 ```
 
-- [ ] **Step 3: Build to verify the hook compiles**
+- [x] **Step 3: Build to verify the hook compiles**
 
 Run: `cd frontend && npm run build`
 
 Expected: build succeeds.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add frontend/src/hooks/usePaperSignals.js
@@ -631,7 +631,7 @@ git commit -m "feat(ui): usePaperRuleDetail hook composes 4 endpoints for drawer
 **Files:**
 - Rewrite: `frontend/src/components/PaperRuleDrawer.jsx`
 
-- [ ] **Step 1: Replace the placeholder drawer with the full shell**
+- [x] **Step 1: Replace the placeholder drawer with the full shell**
 
 Replace `frontend/src/components/PaperRuleDrawer.jsx` with:
 
@@ -675,7 +675,7 @@ export default function PaperRuleDrawer({ rule, pattern }) {
 }
 ```
 
-- [ ] **Step 2: Create empty placeholders for the 5 sections so build succeeds**
+- [x] **Step 2: Create empty placeholders for the 5 sections so build succeeds**
 
 Create `frontend/src/components/drawer/SignalTrail.jsx`:
 
@@ -717,13 +717,13 @@ export default function ShadowsList({ shadows }) {
 }
 ```
 
-- [ ] **Step 3: Build**
+- [x] **Step 3: Build**
 
 Run: `cd frontend && npm run build`
 
 Expected: build succeeds.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add frontend/src/components/PaperRuleDrawer.jsx frontend/src/components/drawer/
@@ -737,7 +737,7 @@ git commit -m "feat(ui): drawer shell with refresh + 5 section placeholders"
 **Files:**
 - Rewrite: `frontend/src/components/drawer/SignalTrail.jsx`
 
-- [ ] **Step 1: Implement the colored-dot signal trail**
+- [x] **Step 1: Implement the colored-dot signal trail**
 
 Replace `frontend/src/components/drawer/SignalTrail.jsx`:
 
@@ -788,13 +788,13 @@ export default function SignalTrail({ signals }) {
 }
 ```
 
-- [ ] **Step 2: Build**
+- [x] **Step 2: Build**
 
 Run: `cd frontend && npm run build`
 
 Expected: build succeeds.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add frontend/src/components/drawer/SignalTrail.jsx
@@ -808,7 +808,7 @@ git commit -m "feat(ui): signal trail with colored dots + latest match summary"
 **Files:**
 - Rewrite: `frontend/src/components/drawer/OrdersTable.jsx`
 
-- [ ] **Step 1: Implement the table**
+- [x] **Step 1: Implement the table**
 
 Replace `frontend/src/components/drawer/OrdersTable.jsx`:
 
@@ -869,13 +869,13 @@ export default function OrdersTable({ title, trades, mode }) {
 }
 ```
 
-- [ ] **Step 2: Build**
+- [x] **Step 2: Build**
 
 Run: `cd frontend && npm run build`
 
 Expected: build succeeds.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add frontend/src/components/drawer/OrdersTable.jsx
@@ -889,7 +889,7 @@ git commit -m "feat(ui): orders table with active + scrollable history modes"
 **Files:**
 - Rewrite: `frontend/src/components/drawer/PatternConditions.jsx`
 
-- [ ] **Step 1: Implement**
+- [x] **Step 1: Implement**
 
 Replace `frontend/src/components/drawer/PatternConditions.jsx`:
 
@@ -927,13 +927,13 @@ export default function PatternConditions({ rule, pattern }) {
 }
 ```
 
-- [ ] **Step 2: Build**
+- [x] **Step 2: Build**
 
 Run: `cd frontend && npm run build`
 
 Expected: build succeeds.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add frontend/src/components/drawer/PatternConditions.jsx
@@ -947,7 +947,7 @@ git commit -m "feat(ui): pattern conditions section (indicators + filters + weig
 **Files:**
 - Rewrite: `frontend/src/components/drawer/PromotionGates.jsx`
 
-- [ ] **Step 1: Implement**
+- [x] **Step 1: Implement**
 
 Replace `frontend/src/components/drawer/PromotionGates.jsx`:
 
@@ -986,13 +986,13 @@ export default function PromotionGates({ gates, ruleId }) {
 }
 ```
 
-- [ ] **Step 2: Build**
+- [x] **Step 2: Build**
 
 Run: `cd frontend && npm run build`
 
 Expected: build succeeds.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add frontend/src/components/drawer/PromotionGates.jsx
@@ -1006,7 +1006,7 @@ git commit -m "feat(ui): promotion gates breakdown (4 gates + tier + reason)"
 **Files:**
 - Rewrite: `frontend/src/components/drawer/ShadowsList.jsx`
 
-- [ ] **Step 1: Implement**
+- [x] **Step 1: Implement**
 
 Replace `frontend/src/components/drawer/ShadowsList.jsx`:
 
@@ -1056,13 +1056,13 @@ export default function ShadowsList({ shadows }) {
 }
 ```
 
-- [ ] **Step 2: Build**
+- [x] **Step 2: Build**
 
 Run: `cd frontend && npm run build`
 
 Expected: build succeeds.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add frontend/src/components/drawer/ShadowsList.jsx
@@ -1075,15 +1075,15 @@ git commit -m "feat(ui): shadows list with parent vs shadow winrate + delta"
 
 **Files:** none (manual verification)
 
-- [ ] **Step 1: Restart the API**
+- [x] **Step 1: Restart the API**
 
 Run: `docker compose restart api`
 
-- [ ] **Step 2: Build + serve frontend**
+- [x] **Step 2: Build + serve frontend**
 
 Run: `cd frontend && npm run build && npm run preview` (or rely on `npm run dev` if already running)
 
-- [ ] **Step 3: Verify in browser**
+- [x] **Step 3: Verify in browser**
 
 Open `http://localhost:3000` (or whichever port the dev server is on) and check:
 
@@ -1094,13 +1094,13 @@ Open `http://localhost:3000` (or whichever port the dev server is on) and check:
 - Closing the drawer (▴) does not refetch the list outside its 5s polling cadence
 - Shadow rules do not appear as standalone cards (existing `status !== 'shadow'` filter still applies)
 
-- [ ] **Step 4: Verify backend regression**
+- [x] **Step 4: Verify backend regression**
 
 Run: `docker compose run --rm -v "$(pwd)/tests:/app/tests" -e PYTHONPATH=/app api sh -c "cd /app && pytest tests/ -v --tb=short"`
 
 Expected: all tests pass.
 
-- [ ] **Step 5: Commit (only if any wiring tweaks were needed)**
+- [x] **Step 5: Commit (only if any wiring tweaks were needed)**
 
 ```bash
 git status
