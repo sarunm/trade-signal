@@ -9,3 +9,8 @@ venv/
 .superpowers/
 frontend/node_modules/
 frontend/dist/
+.antigravitycli/
+.claude/ralph-loop.local.md
+.claude/settings.local.json
+frontend/.claude/
+Obsidian-Dashboard.md
