@@ -141,3 +141,103 @@ async def test_spawn_shadow_is_idempotent_for_same_proposal(session):
         select(PaperTraderRule).where(PaperTraderRule.shadow_of_rule_id == rule.id)
     )).scalars().all()
     assert len(rules) == 1
+
+
+from datetime import timedelta
+
+from services.adaptive_tuner import (
+    ADAPTIVE_PROMOTE_DELTA,
+    ADAPTIVE_SHADOW_AGE_DAYS,
+    promote_shadow_if_outperforms,
+)
+
+
+def _trade_at(rule_id, *, profit, when: datetime) -> Trade:
+    return Trade(
+        ticket=uuid4().int & 0x7FFFFFFF, symbol="XAUUSD",
+        direction=Direction.buy,
+        order_type=OrderType.market, order_state=OrderState.filled,
+        open_time=when, close_time=when,
+        open_price=Decimal("1950"), close_price=Decimal("1960"),
+        volume=Decimal("0.10"),
+        profit=Decimal(str(profit)),
+        is_paper=True, paper_mode=PaperMode.independent,
+        recovery_plan={"paper_trader_rule_id": str(rule_id)},
+    )
+
+
+@pytest.mark.asyncio
+async def test_promotes_shadow_when_winrate_beats_parent(session):
+    parent = await _seed_rule(session)
+    proposal = FilterProposal(
+        feature="session", exclude="asia",
+        bucket_n=12, bucket_loss_rate=1.0, other_loss_rate=0.0,
+    )
+    shadow = await spawn_shadow_rule(session, parent, proposal)
+    shadow.spawned_at = datetime.now(timezone.utc) - timedelta(days=ADAPTIVE_SHADOW_AGE_DAYS + 1)
+    await session.commit()
+
+    base = datetime.now(timezone.utc) - timedelta(days=ADAPTIVE_SHADOW_AGE_DAYS)
+    for i in range(30):
+        session.add(_trade_at(parent.id, profit=+50 if i < 15 else -50, when=base + timedelta(hours=i)))
+    for i in range(30):
+        session.add(_trade_at(shadow.id, profit=+50 if i < 21 else -50, when=base + timedelta(hours=i)))
+    await session.commit()
+
+    promoted = await promote_shadow_if_outperforms(session, shadow)
+    assert promoted is True
+
+    await session.refresh(shadow)
+    await session.refresh(parent)
+    assert shadow.status == "active"
+    assert shadow.shadow_of_rule_id is None
+    assert parent.status == "retired"
+
+
+@pytest.mark.asyncio
+async def test_does_not_promote_shadow_when_delta_too_small(session):
+    parent = await _seed_rule(session)
+    proposal = FilterProposal(
+        feature="session", exclude="asia",
+        bucket_n=12, bucket_loss_rate=1.0, other_loss_rate=0.0,
+    )
+    shadow = await spawn_shadow_rule(session, parent, proposal)
+    shadow.spawned_at = datetime.now(timezone.utc) - timedelta(days=ADAPTIVE_SHADOW_AGE_DAYS + 1)
+    await session.commit()
+
+    base = datetime.now(timezone.utc) - timedelta(days=ADAPTIVE_SHADOW_AGE_DAYS)
+    for i in range(30):
+        session.add(_trade_at(parent.id, profit=+50 if i < 18 else -50, when=base + timedelta(hours=i)))  # 60%
+    for i in range(30):
+        session.add(_trade_at(shadow.id, profit=+50 if i < 19 else -50, when=base + timedelta(hours=i)))  # 63%
+    await session.commit()
+
+    promoted = await promote_shadow_if_outperforms(session, shadow)
+    assert promoted is False
+
+    await session.refresh(shadow)
+    await session.refresh(parent)
+    assert shadow.status == "shadow"
+    assert parent.status == "active"
+
+
+@pytest.mark.asyncio
+async def test_does_not_promote_shadow_below_min_trades(session):
+    parent = await _seed_rule(session)
+    proposal = FilterProposal(
+        feature="session", exclude="asia",
+        bucket_n=12, bucket_loss_rate=1.0, other_loss_rate=0.0,
+    )
+    shadow = await spawn_shadow_rule(session, parent, proposal)
+    shadow.spawned_at = datetime.now(timezone.utc) - timedelta(days=ADAPTIVE_SHADOW_AGE_DAYS + 1)
+    await session.commit()
+
+    base = datetime.now(timezone.utc) - timedelta(days=ADAPTIVE_SHADOW_AGE_DAYS)
+    for i in range(30):
+        session.add(_trade_at(parent.id, profit=+50 if i < 15 else -50, when=base + timedelta(hours=i)))
+    for i in range(5):
+        session.add(_trade_at(shadow.id, profit=+50, when=base + timedelta(hours=i)))
+    await session.commit()
+
+    promoted = await promote_shadow_if_outperforms(session, shadow)
+    assert promoted is False

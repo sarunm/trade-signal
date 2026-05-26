@@ -176,6 +176,68 @@ async def spawn_shadow_rule(
     return shadow
 
 
+def _winrate(trades: Iterable[Trade]) -> tuple[float, int]:
+    total = 0
+    wins = 0
+    for t in trades:
+        if t.profit is None:
+            continue
+        total += 1
+        if t.profit > 0:
+            wins += 1
+    return (wins / total if total else 0.0), total
+
+
+async def promote_shadow_if_outperforms(
+    session: AsyncSession, shadow: PaperTraderRule
+) -> bool:
+    """Promote shadow when it beats parent winrate by ADAPTIVE_PROMOTE_DELTA
+    over the apples-to-apples window since the shadow was spawned. Both sides
+    must have ≥ ADAPTIVE_MIN_TRADES."""
+    if shadow.shadow_of_rule_id is None:
+        return False
+    spawned = shadow.spawned_at
+    if spawned is not None and spawned.tzinfo is None:
+        spawned = spawned.replace(tzinfo=timezone.utc)
+    age = datetime.now(timezone.utc) - spawned
+    if age < timedelta(days=ADAPTIVE_SHADOW_AGE_DAYS):
+        return False
+
+    parent = await session.get(PaperTraderRule, shadow.shadow_of_rule_id)
+    if parent is None or parent.status != "active":
+        return False
+
+    shadow_trades = await _load_rule_trades(session, shadow, ADAPTIVE_LOOKBACK_TRADES)
+    parent_trades_all = await _load_rule_trades(session, parent, ADAPTIVE_LOOKBACK_TRADES)
+    parent_trades = []
+    for t in parent_trades_all:
+        ct = t.close_time
+        if ct is None:
+            continue
+        if ct.tzinfo is None:
+            ct = ct.replace(tzinfo=timezone.utc)
+        if ct >= spawned:
+            parent_trades.append(t)
+
+    shadow_wr, shadow_n = _winrate(shadow_trades)
+    parent_wr, parent_n = _winrate(parent_trades)
+
+    if shadow_n < ADAPTIVE_MIN_TRADES or parent_n < ADAPTIVE_MIN_TRADES:
+        return False
+    if shadow_wr - parent_wr < ADAPTIVE_PROMOTE_DELTA:
+        return False
+
+    parent.status = "retired"
+    shadow.status = "active"
+    shadow.shadow_of_rule_id = None
+    await session.commit()
+    logger.info(
+        "adaptive_tuner: promoted shadow %s (winrate %.3f) over parent %s (winrate %.3f)",
+        shadow.id, shadow_wr, parent.id, parent_wr,
+    )
+    return True
+
+
 async def propose_filters_for_rule(
     session: AsyncSession, rule: PaperTraderRule
 ) -> list[FilterProposal]:
