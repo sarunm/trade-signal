@@ -57,10 +57,14 @@ export function usePaperRuleDetail(ruleId, patternId) {
     gates: null,
   })
   const [error, setError] = useState(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(!!ruleId)
+  const cancelRef = useRef(null)
 
   const refetch = useCallback(async () => {
     if (!ruleId) return
+    if (cancelRef.current) cancelRef.current.cancelled = true
+    const token = { cancelled: false }
+    cancelRef.current = token
     setLoading(true)
     setError(null)
     try {
@@ -70,16 +74,19 @@ export function usePaperRuleDetail(ruleId, patternId) {
         get(`/api/paper-trader-rules/${ruleId}/shadows`),
         patternId ? get(`/api/patterns/${patternId}/gates`) : Promise.resolve(null),
       ])
-      setData({ trades, signals, shadows, gates })
+      if (!token.cancelled) setData({ trades, signals, shadows, gates })
     } catch (e) {
-      setError(e)
+      if (!token.cancelled) setError(e)
     } finally {
-      setLoading(false)
+      if (!token.cancelled) setLoading(false)
     }
   }, [ruleId, patternId])
 
   useEffect(() => {
     refetch()
+    return () => {
+      if (cancelRef.current) cancelRef.current.cancelled = true
+    }
   }, [refetch])
 
   return { data, error, loading, refetch }
