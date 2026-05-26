@@ -5,6 +5,7 @@ from uuid import uuid4
 import pytest
 
 from models.pattern import Pattern, PaperTraderRule
+from models.paper_signal import PaperSignal
 from models.trade import PaperMode, Trade
 
 
@@ -92,3 +93,43 @@ async def test_open_trades_count_per_rule(client, db_session):
     body = {row["id"]: row for row in res.json()}
     assert body[str(rule_a.id)]["open_trades_count"] == 2
     assert body[str(rule_b.id)]["open_trades_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_last_activity_at_uses_latest_paper_signal(client, db_session):
+    pattern = Pattern(
+        id=uuid4(),
+        indicator_slugs=["rsi_14"],
+        timeframe="M15",
+        win_rate=0.6,
+        sample_count=20,
+        consecutive_stable_days=3,
+        status="active",
+        discovered_at=datetime.now(timezone.utc),
+    )
+    rule = PaperTraderRule(
+        id=uuid4(), pattern_id=pattern.id, status="active",
+        spawned_at=datetime.now(timezone.utc),
+        total_trades=0, win_count=0,
+    )
+    older = datetime(2026, 5, 26, 10, 0, tzinfo=timezone.utc)
+    newer = datetime(2026, 5, 26, 12, 0, tzinfo=timezone.utc)
+    s1 = PaperSignal(
+        id=uuid4(), rule_id=rule.id, status="near",
+        match_pct=Decimal("0.80"),
+        matched_conditions=["a"], missing_conditions=["b"],
+        emitted_at=older,
+    )
+    s2 = PaperSignal(
+        id=uuid4(), rule_id=rule.id, status="active",
+        match_pct=Decimal("1.00"),
+        matched_conditions=["a", "b"], missing_conditions=[],
+        emitted_at=newer,
+    )
+    db_session.add_all([pattern, rule, s1, s2])
+    await db_session.commit()
+
+    res = await client.get("/api/paper-trader-rules")
+    row = next(r for r in res.json() if r["id"] == str(rule.id))
+    assert row["last_activity_at"] is not None
+    assert row["last_activity_at"].startswith("2026-05-26T12:00")

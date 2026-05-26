@@ -1,11 +1,13 @@
+from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_session
+from models.paper_signal import PaperSignal
 from models.pattern import PaperTraderRule, Pattern
 from models.trade import PaperMode, Trade
 from schemas.pattern import (
@@ -35,6 +37,16 @@ async def _open_trades_count_by_rule(session: AsyncSession) -> dict[str, int]:
     return counts
 
 
+async def _last_activity_by_rule(session: AsyncSession) -> dict[str, datetime]:
+    """Return {rule_id_str: latest emitted_at} from paper_signals."""
+    stmt = select(
+        PaperSignal.rule_id,
+        func.max(PaperSignal.emitted_at).label("last_at"),
+    ).group_by(PaperSignal.rule_id)
+    result = await session.execute(stmt)
+    return {str(rid): last_at for rid, last_at in result.all()}
+
+
 @router.get("/patterns", response_model=List[PatternResponse])
 async def list_patterns(
     status: Optional[str] = Query(None),
@@ -52,7 +64,7 @@ async def list_paper_trader_rules(
     status: Optional[str] = Query(None),
     session: AsyncSession = Depends(get_session),
 ):
-    from datetime import datetime, timezone
+    from datetime import timezone
 
     stmt = select(PaperTraderRule).order_by(PaperTraderRule.spawned_at.desc())
     if status:
@@ -61,6 +73,7 @@ async def list_paper_trader_rules(
     rules = result.scalars().all()
     now = datetime.now(timezone.utc)
     open_counts = await _open_trades_count_by_rule(session)
+    last_activity = await _last_activity_by_rule(session)
     out: list[PaperTraderRuleResponse] = []
     for r in rules:
         spawned = r.spawned_at
@@ -87,7 +100,7 @@ async def list_paper_trader_rules(
                 virtual_balance_start=getattr(r, "virtual_balance_start", None),
                 virtual_balance_current=getattr(r, "virtual_balance_current", None),
                 open_trades_count=open_counts.get(str(r.id), 0),
-                last_activity_at=None,
+                last_activity_at=last_activity.get(str(r.id)),
             )
         )
     return out
