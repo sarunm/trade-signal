@@ -141,6 +141,43 @@ exact commands
 
 ---
 
+### TASK: [BUG] Paper trades open without paper_trader_rule_id → orphan, exit logic skips them
+
+**assignee:** codex
+**priority:** high
+**status:** pending
+
+**Why:** Found 14 open paper trades in DB with `paper_trader_rule_id IS NULL` (1 independent + 13 mirror, opened 2026-05-18 to 2026-05-26). `paper_trader._check_exits` iterates `open_by_rule[rule_id]` so orphaned trades are never evaluated for TP/SL/momentum_flip. They sat open for 8 days. User force-closed all 14 at open_price (`paper_exit_reason='force_close_orphan'`) on 2026-05-26 to reset paper book.
+
+**Root cause hypotheses (verify which):**
+1. `paper_trader.spawn_trade` (or wherever `independent` mode opens trades) misses setting `paper_trader_rule_id` — check #779778800010 path
+2. `mirror_trader.open_mirror_trade` doesn't write `paper_trader_rule_id` — 13 mirror trades all have it NULL
+3. Migration 011 added the column but historical inserts didn't backfill — but these are NEW inserts post-migration
+4. Symbol mismatch (XAUUSD vs GOLD#) preventing tick-driven exits — separate bug, log if confirmed
+
+**Files to investigate:**
+- `api/services/paper_trader.py` — spawn path for `independent` mode
+- `api/services/mirror_trader.py` — `open_mirror_trade` rule_id assignment
+- `api/services/mirror_exit_manager.py` — does it require `paper_trader_rule_id` to look up rule, or work via pattern?
+- `api/models/trade.py` — is `paper_trader_rule_id` nullable=True in ORM (allowed) but should be NOT NULL for paper?
+
+**Acceptance criteria:**
+- [ ] Identify which spawn path drops `paper_trader_rule_id` (file:function)
+- [ ] Add NOT NULL invariant test: any new paper trade insertion without rule_id raises (or backfill from rule context)
+- [ ] Run test fixture that opens an `independent` paper trade and a mirror paper trade — both have `paper_trader_rule_id` populated
+- [ ] Add migration 021: backfill `paper_trader_rule_id` for any future orphans by joining via pattern_id + spawn_strategy (or document why this can't be done safely)
+
+**Verify:**
+```
+docker compose run --rm -e PYTHONPATH=/app api sh -c "cd /app && pytest tests/ -k 'paper_trader or mirror' -v"
+docker compose exec db psql -U tradesignal -d tradesignal -c "SELECT COUNT(*) FROM trades WHERE is_paper=true AND paper_trader_rule_id IS NULL AND close_time IS NULL;"
+# Expect: 0
+```
+
+**Remark:** Symptom appeared in dashboard browser smoke test 2026-05-26 — `basket_5k` rule drawer showed Active Order #779778800010 (BUY @3280.90, opened 2026-05-26 07:00 UTC) with no TP/SL/exit_strategy and no rule_id. Pattern (`indicator_slugs={}`, status=baseline) compounded the issue: even if rule_id were set, no momentum indicator means momentum_flip exit can't fire either. Look at why `basket_5k` rule got promoted/spawned with empty indicator_slugs.
+
+---
+
 <!-- [BUG] Cum PnL stuck at +฿0: shipped 2026-05-26 — cum_pnl_realized field derived from SUM(profit), close flow updates virtual_balance_current. Archived. -->
 
 <!-- 3 codex backlog tasks shipped 2026-05-26: migration 019 (legacy exit_strategy), test_market_tick integration test, migration 020 (NOT NULL filters/gate_status). Archived to task-done.md. -->
