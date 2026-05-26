@@ -175,3 +175,70 @@ async def test_arms_trail_when_unrealized_reaches_user_avg(db_session):
     assert "trail" in trade.recovery_plan
     assert Decimal(trade.recovery_plan["trail"]["peak_profit"]) == Decimal("500.00")
     assert Decimal(trade.recovery_plan["trail"]["peak_price"]) == Decimal("2000.00")
+
+
+@pytest.mark.asyncio
+async def test_peak_updates_on_higher_unrealized(db_session):
+    rule = _trail_rule()
+    db_session.add(rule)
+    trade = _trail_paper_trade(Direction.buy, "1950.00", rule.id, ticket=7110)
+    trade.recovery_plan = {"trail": {"peak_profit": "500.00", "peak_price": "2000.00"}}
+    db_session.add(trade)
+    await db_session.commit()
+
+    with patch(
+        "services.paper_exit_manager.compute_user_avg_profit",
+        new=AsyncMock(return_value=Decimal("500.00")),
+    ):
+        # Buy 1950, bid 2030 → unrealized = 80 * 0.10 * 100 = 800.00 > peak 500 → update.
+        closed = await close_paper_trades_on_tick(db_session, _tick("2030.00", "2030.10"))
+
+    assert closed == 0
+    await db_session.refresh(trade)
+    assert Decimal(trade.recovery_plan["trail"]["peak_profit"]) == Decimal("800.00")
+    assert Decimal(trade.recovery_plan["trail"]["peak_price"]) == Decimal("2030.00")
+
+
+@pytest.mark.asyncio
+async def test_closes_on_retrace_and_writes_shadow_profit(db_session):
+    rule = _trail_rule()
+    db_session.add(rule)
+    trade = _trail_paper_trade(Direction.buy, "1950.00", rule.id, ticket=7120)
+    trade.recovery_plan = {"trail": {"peak_profit": "100.00", "peak_price": "1960.00"}}
+    db_session.add(trade)
+    await db_session.commit()
+
+    with patch(
+        "services.paper_exit_manager.compute_user_avg_profit",
+        new=AsyncMock(return_value=Decimal("500.00")),
+    ):
+        # Buy 1950, bid 1958 → unrealized = 8 * 0.10 * 100 = 80.00 ≤ 80 (peak 100 * 0.80) → close.
+        closed = await close_paper_trades_on_tick(db_session, _tick("1958.00", "1958.10"))
+
+    assert closed == 1
+    await db_session.refresh(trade)
+    assert trade.close_price == Decimal("1958.00")
+    assert trade.profit == Decimal("80.00")
+    assert trade.paper_exit_reason == "user_avg_trail"
+    assert trade.shadow_profit == Decimal("80.00")
+
+
+@pytest.mark.asyncio
+async def test_does_not_close_when_retrace_under_threshold(db_session):
+    rule = _trail_rule()
+    db_session.add(rule)
+    trade = _trail_paper_trade(Direction.buy, "1950.00", rule.id, ticket=7130)
+    trade.recovery_plan = {"trail": {"peak_profit": "100.00", "peak_price": "1960.00"}}
+    db_session.add(trade)
+    await db_session.commit()
+
+    with patch(
+        "services.paper_exit_manager.compute_user_avg_profit",
+        new=AsyncMock(return_value=Decimal("500.00")),
+    ):
+        # Buy 1950, bid 1959 → unrealized = 9 * 0.10 * 100 = 90.00 > 80 → no close.
+        closed = await close_paper_trades_on_tick(db_session, _tick("1959.00", "1959.10"))
+
+    assert closed == 0
+    await db_session.refresh(trade)
+    assert trade.close_time is None
