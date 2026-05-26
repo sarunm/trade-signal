@@ -48,8 +48,10 @@ export default function PaperRuleCard({ rule, pattern }) {
     <div className="bg-gray-900 border border-gray-800 rounded p-3 space-y-2">
       <button
         type="button"
-        className="w-full flex items-center justify-between"
+        className="w-full flex items-center justify-between hover:bg-gray-800/50 -m-3 p-3 rounded-t transition-colors"
         onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-label={open ? 'Collapse rule details' : 'Expand rule details'}
       >
         <div className="flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full ${dot}`} />
@@ -58,7 +60,9 @@ export default function PaperRuleCard({ rule, pattern }) {
         </div>
         <div className="flex items-center gap-2">
           <TrustTierBadge tier={rule.trust_tier} />
-          <span className="text-gray-500 text-xs">{open ? '▴' : '▾'}</span>
+          <span className="inline-flex items-center justify-center w-7 h-7 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 text-base leading-none">
+            {open ? '▴' : '▾'}
+          </span>
         </div>
       </button>
       <div className="text-xs text-gray-400 text-left">
