@@ -175,8 +175,8 @@ async def get_pnl_history(
         rows = _group_pnl_weekly(trades, snapshots)
     elif granularity == "monthly":
         rows = _group_pnl_monthly(trades, snapshots)
-    else:
-        rows = []  # all — Task 4
+    else:  # all
+        rows = _group_pnl_all(trades)
 
     total_count = len(rows)
     total_pages = max(1, ceil(total_count / page_size)) if total_count else 0
@@ -264,5 +264,18 @@ def _group_pnl_monthly(trades, snapshots):
             profit=profit,
             profit_pct=pct,
             trade_count=grouped[key]["trade_count"],
+        ))
+    return rows
+
+
+def _group_pnl_all(trades):
+    sorted_trades = sorted(trades, key=lambda t: _as_utc(t.close_time), reverse=True)
+    rows: list[PnlHistoryItem] = []
+    for t in sorted_trades:
+        rows.append(PnlHistoryItem(
+            period=_as_utc(t.close_time).isoformat(),
+            profit=t.profit.quantize(Decimal("0.01")) if t.profit is not None else Decimal("0.00"),
+            profit_pct=None,
+            trade_count=1,
         ))
     return rows

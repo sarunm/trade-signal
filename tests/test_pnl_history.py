@@ -126,3 +126,32 @@ async def test_pnl_history_monthly_groups_by_first_of_month(client, db_session):
     assert Decimal(body["items"][0]["profit"]) == Decimal("700.00")
     assert body["items"][1]["period"] == "2026-04-01"
     assert Decimal(body["items"][1]["profit"]) == Decimal("200.00")
+
+
+@pytest.mark.asyncio
+async def test_pnl_history_all_returns_row_per_trade(client, db_session):
+    db_session.add_all([
+        Trade(
+            id=uuid4(), ticket=4001, symbol="XAUUSD", direction=Direction.buy,
+            order_state=OrderState.filled, is_paper=False,
+            open_time=_bkk(2026, 5, 26, 10), close_time=_bkk(2026, 5, 26, 11),
+            open_price=Decimal("1955"), close_price=Decimal("1958"),
+            volume=Decimal("0.05"), profit=Decimal("150.00"),
+        ),
+        Trade(
+            id=uuid4(), ticket=4002, symbol="XAUUSD", direction=Direction.buy,
+            order_state=OrderState.filled, is_paper=False,
+            open_time=_bkk(2026, 5, 26, 14), close_time=_bkk(2026, 5, 26, 16),
+            open_price=Decimal("1958"), close_price=Decimal("1960"),
+            volume=Decimal("0.10"), profit=Decimal("200.00"),
+        ),
+    ])
+    await db_session.commit()
+
+    res = await client.get("/api/pnl-history?granularity=all")
+    body = res.json()
+    assert body["total_count"] == 2
+    assert all(item["trade_count"] == 1 for item in body["items"])
+    # newest first
+    assert body["items"][0]["period"].startswith("2026-05-26")
+    assert Decimal(body["items"][0]["profit"]) == Decimal("200.00")
