@@ -123,6 +123,59 @@ def _propose_for_feature(
     return proposals
 
 
+async def _existing_shadow_with_filter(
+    session: AsyncSession,
+    parent_rule_id: UUID,
+    filter_clause: dict,
+) -> Optional[PaperTraderRule]:
+    result = await session.execute(
+        select(PaperTraderRule).where(
+            PaperTraderRule.shadow_of_rule_id == parent_rule_id,
+            PaperTraderRule.status == "shadow",
+        )
+    )
+    for rule in result.scalars().all():
+        existing = rule.filters or []
+        if filter_clause in existing:
+            return rule
+    return None
+
+
+async def spawn_shadow_rule(
+    session: AsyncSession,
+    parent: PaperTraderRule,
+    proposal: FilterProposal,
+) -> PaperTraderRule:
+    """Create or return a shadow rule that copies the parent and appends the
+    proposed filter clause. Idempotent on (parent_id, filter_clause)."""
+    clause = proposal.to_filter()
+    existing = await _existing_shadow_with_filter(session, parent.id, clause)
+    if existing is not None:
+        return existing
+
+    parent_filters = list(parent.filters or [])
+    shadow_filters = parent_filters + [clause]
+
+    shadow = PaperTraderRule(
+        pattern_id=parent.pattern_id,
+        status="shadow",
+        mode=parent.mode,
+        virtual_balance_start=parent.virtual_balance_start,
+        virtual_balance_current=parent.virtual_balance_start,
+        score_weights=dict(parent.score_weights or {}) or None,
+        filters=shadow_filters,
+        shadow_of_rule_id=parent.id,
+    )
+    session.add(shadow)
+    await session.flush()
+    await session.commit()
+    logger.info(
+        "adaptive_tuner: spawned shadow %s from parent %s with filter %s",
+        shadow.id, parent.id, clause,
+    )
+    return shadow
+
+
 async def propose_filters_for_rule(
     session: AsyncSession, rule: PaperTraderRule
 ) -> list[FilterProposal]:

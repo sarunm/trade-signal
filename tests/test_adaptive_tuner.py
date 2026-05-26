@@ -16,6 +16,7 @@ from services.adaptive_tuner import (
     ADAPTIVE_MIN_BUCKET,
     FilterProposal,
     propose_filters_for_rule,
+    spawn_shadow_rule,
 )
 
 
@@ -107,3 +108,36 @@ async def test_propose_filters_skips_when_delta_below_threshold(session):
     await session.commit()
     proposals = await propose_filters_for_rule(session, rule)
     assert not any(p.feature == "session" for p in proposals)
+
+
+@pytest.mark.asyncio
+async def test_spawn_shadow_creates_rule_with_filter_and_parent_link(session):
+    rule = await _seed_rule(session)
+    proposal = FilterProposal(
+        feature="session", exclude="asia",
+        bucket_n=12, bucket_loss_rate=1.0, other_loss_rate=0.0,
+    )
+    shadow = await spawn_shadow_rule(session, rule, proposal)
+    assert shadow.id != rule.id
+    assert shadow.status == "shadow"
+    assert shadow.shadow_of_rule_id == rule.id
+    assert shadow.pattern_id == rule.pattern_id
+    assert shadow.mode == rule.mode
+    assert shadow.filters == [{"feature": "session", "exclude": "asia"}]
+
+
+@pytest.mark.asyncio
+async def test_spawn_shadow_is_idempotent_for_same_proposal(session):
+    rule = await _seed_rule(session)
+    proposal = FilterProposal(
+        feature="session", exclude="asia",
+        bucket_n=12, bucket_loss_rate=1.0, other_loss_rate=0.0,
+    )
+    a = await spawn_shadow_rule(session, rule, proposal)
+    b = await spawn_shadow_rule(session, rule, proposal)
+    assert a.id == b.id
+
+    rules = (await session.execute(
+        select(PaperTraderRule).where(PaperTraderRule.shadow_of_rule_id == rule.id)
+    )).scalars().all()
+    assert len(rules) == 1
