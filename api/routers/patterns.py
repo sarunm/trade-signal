@@ -68,6 +68,33 @@ async def _realized_pnl_by_rule(session: AsyncSession) -> dict[str, Decimal]:
     return totals
 
 
+async def _realized_pnl_window_by_rule(
+    session: AsyncSession, since: datetime
+) -> dict[str, Decimal]:
+    stmt = select(Trade).where(
+        Trade.is_paper.is_(True),
+        Trade.close_time.is_not(None),
+        Trade.close_time >= since,
+    )
+    result = await session.execute(stmt)
+    totals: dict[str, Decimal] = {}
+    for trade in result.scalars().all():
+        if trade.profit is None:
+            continue
+        rid: Optional[str] = None
+        if trade.paper_trader_rule_id is not None:
+            rid = str(trade.paper_trader_rule_id)
+        else:
+            plan = trade.recovery_plan or {}
+            if isinstance(plan, dict):
+                raw = plan.get("paper_trader_rule_id")
+                rid = str(raw) if raw else None
+        if not rid:
+            continue
+        totals[rid] = totals.get(rid, Decimal("0")) + trade.profit
+    return totals
+
+
 async def _last_activity_by_rule(session: AsyncSession) -> dict[str, datetime]:
     """Return {rule_id_str: latest emitted_at} from paper_signals."""
     stmt = select(
@@ -106,6 +133,14 @@ async def list_paper_trader_rules(
     open_counts = await _open_trades_count_by_rule(session)
     last_activity = await _last_activity_by_rule(session)
     realized_pnl = await _realized_pnl_by_rule(session)
+    from datetime import timedelta
+    _BKK = timezone(timedelta(hours=7))
+    today_bkk = datetime.now(_BKK).date()
+    today_start_utc = datetime(today_bkk.year, today_bkk.month, today_bkk.day, tzinfo=_BKK).astimezone(timezone.utc)
+    week_monday = today_bkk - timedelta(days=today_bkk.isoweekday() - 1)
+    week_start_utc = datetime(week_monday.year, week_monday.month, week_monday.day, tzinfo=_BKK).astimezone(timezone.utc)
+    pnl_today = await _realized_pnl_window_by_rule(session, today_start_utc)
+    pnl_week = await _realized_pnl_window_by_rule(session, week_start_utc)
     out: list[PaperTraderRuleResponse] = []
     for r in rules:
         spawned = r.spawned_at
@@ -134,6 +169,8 @@ async def list_paper_trader_rules(
                 open_trades_count=open_counts.get(str(r.id), 0),
                 last_activity_at=last_activity.get(str(r.id)),
                 cum_pnl_realized=realized_pnl.get(str(r.id), Decimal("0")),
+                paper_pnl_today=pnl_today.get(str(r.id), Decimal("0")),
+                paper_pnl_week=pnl_week.get(str(r.id), Decimal("0")),
             )
         )
     return out

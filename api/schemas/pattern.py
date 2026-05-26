@@ -41,6 +41,8 @@ class PaperTraderRuleResponse(BaseModel):
     open_trades_count: int = 0
     last_activity_at: Optional[datetime] = None
     cum_pnl_realized: Decimal = Decimal("0")
+    paper_pnl_today: Decimal = Decimal("0")
+    paper_pnl_week: Decimal = Decimal("0")
 
     @computed_field
     @property
