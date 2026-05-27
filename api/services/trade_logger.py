@@ -11,6 +11,18 @@ from services.trade_advisor import compute_entry_score, compute_recovery_plan
 
 
 async def upsert_trade(session: AsyncSession, event: TradeEventSchema) -> Trade:
+    if event.pending_ticket is not None:
+        stale = await session.execute(
+            select(Trade).where(
+                Trade.ticket == event.pending_ticket,
+                Trade.is_paper == False,
+                Trade.order_state == OrderState.pending,
+            )
+        )
+        for row in stale.scalars().all():
+            await session.delete(row)
+        await session.flush()
+
     result = await session.execute(
         select(Trade).where(
             Trade.ticket == event.ticket,

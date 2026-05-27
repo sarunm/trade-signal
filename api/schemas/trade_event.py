@@ -9,6 +9,7 @@ from services.symbol_normalizer import normalize_symbol
 class TradeEventSchema(BaseModel):
     transaction_type: str
     ticket: int
+    pending_ticket: Optional[int] = None
     symbol: str
 
     @field_validator("symbol")

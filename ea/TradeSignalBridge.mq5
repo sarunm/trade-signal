@@ -367,6 +367,7 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
    datetime open_time = 0, fill_time = 0, close_time = 0;
    ENUM_ORDER_TYPE order_type_enum = ORDER_TYPE_BUY;
    ulong ticket = trans.order;
+   ulong pending_ticket = 0;
    bool is_closing_deal = false;
 
    if(trans.type == TRADE_TRANSACTION_DEAL_ADD && trans.deal > 0) {
@@ -387,6 +388,12 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
             close_time  = fill_time;
             open_price  = 0;
             is_closing_deal = true;
+         } else if(deal_entry == DEAL_ENTRY_IN) {
+            // For pending→filled promotion: deal's DEAL_ORDER points back to the
+            // original pending order ticket. Backend uses this to drop the stale
+            // pending row before upserting the filled row under position_id.
+            ulong order_ref = (ulong)HistoryDealGetInteger(trans.deal, DEAL_ORDER);
+            if(order_ref > 0 && order_ref != ticket) pending_ticket = order_ref;
          }
       }
    }
@@ -405,11 +412,14 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
    // preserves the correct direction set by the original ENTRY_IN deal
    string direction_json = is_closing_deal ? "null" : "\"" + DirectionStr(order_type_enum) + "\"";
 
+   string pending_ticket_json = (pending_ticket > 0) ? StringFormat("%I64u", pending_ticket) : "null";
+
    string body = StringFormat(
       "{"
       "\"transaction_type\":\"%s\","
       "\"account_id\":%I64d,"
       "\"ticket\":%I64u,"
+      "\"pending_ticket\":%s,"
       "\"symbol\":\"%s\","
       "\"direction\":%s,"
       "\"order_type\":\"%s\","
@@ -427,7 +437,9 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
       "\"swap\":%.2f,"
       "\"commission\":%.2f"
       "}",
-      trans_type, AccountInfoInteger(ACCOUNT_LOGIN), ticket, InpSymbol,
+      trans_type, AccountInfoInteger(ACCOUNT_LOGIN), ticket,
+      pending_ticket_json,
+      InpSymbol,
       direction_json,
       OrderTypeStr(order_type_enum),
       order_state,

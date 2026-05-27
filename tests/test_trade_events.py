@@ -194,3 +194,49 @@ async def test_entry_out_catchup_closes_existing_open_trade(client, db_session):
     assert float(trade.profit) == 45.0
     assert trade.direction.value == "buy"  # preserved from open
     assert float(trade.open_price) == 1950.50  # preserved from open
+
+
+@pytest.mark.asyncio
+async def test_pending_promoted_to_filled_removes_stale_pending_row(client, db_session):
+    """Regression: pending order trigger fires DEAL_ADD with new position_id.
+    EA passes original order_ticket as `pending_ticket` so backend can remove
+    the stale pending row that's keyed under order_ticket."""
+    pending = {
+        "transaction_type": "ORDER_ADD",
+        "ticket": 753764157,
+        "symbol": "XAUUSD",
+        "direction": "buy",
+        "order_type": "buy_limit",
+        "order_state": "pending",
+        "pending_price": 4496.14,
+        "volume": 0.01,
+        "tp": 4520.0,
+        "sl": None,
+        "open_time": "2026-05-20T13:40:38Z",
+    }
+    await client.post("/api/trade-events", json=pending)
+
+    filled = {
+        "transaction_type": "DEAL_ADD",
+        "ticket": 999888777,
+        "pending_ticket": 753764157,
+        "symbol": "XAUUSD",
+        "direction": "buy",
+        "order_type": "market",
+        "order_state": "filled",
+        "open_price": 4496.14,
+        "volume": 0.01,
+        "fill_time": "2026-05-20T14:00:00Z",
+    }
+    response = await client.post("/api/trade-events", json=filled)
+    assert response.status_code == 201
+
+    from sqlalchemy import select
+    from models.trade import Trade, OrderState
+    result = await db_session.execute(
+        select(Trade).where(Trade.is_paper == False, Trade.ticket.in_([753764157, 999888777]))
+    )
+    trades = result.scalars().all()
+    assert len(trades) == 1, f"expected single filled row, got {len(trades)}"
+    assert trades[0].ticket == 999888777
+    assert trades[0].order_state == OrderState.filled
