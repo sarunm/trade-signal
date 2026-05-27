@@ -274,6 +274,27 @@ async def test_basket_zone_baht_uses_current_price_as_reference(client, db_sessi
 
 
 @pytest.mark.asyncio
+async def test_basket_backfills_recovery_plan_for_open_trade_missing_plan(client, db_session):
+    from models.fib_level import FibLevel
+    db_session.add(FibLevel(
+        symbol="GOLD#",
+        period="2026-W21",
+        prev_high=4500.0, prev_low=4400.0, prev_close=4450.0, pp=4450.0,
+        resistance={"R1": 4470.0, "R2": 4490.0, "R3": 4510.0},
+        support={"S1": 4430.0, "S2": 4410.0, "S3": 4390.0, "S4": 4370.0},
+        computed_at=datetime.now(timezone.utc),
+    ))
+    promoted = _t(9701, Direction.buy, "0.10", "4450.00")
+    promoted.recovery_plan = None
+    db_session.add(promoted)
+    await db_session.commit()
+
+    b = (await client.get("/api/trade-advisor")).json()["basket"]
+    assert b["tp_targets"], "TP targets should be present after backfill"
+    assert b["cut"] is not None
+
+
+@pytest.mark.asyncio
 async def test_basket_zone_baht_falls_back_to_deepest_entry_when_no_current(client, db_session):
     plan = {
         "entry_price": 1955.0,

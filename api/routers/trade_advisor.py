@@ -11,6 +11,7 @@ from database import get_session
 from models.account_snapshot import AccountSnapshot
 from models.price_bar import PriceBar
 from models.trade import Direction, OrderState, Trade
+from services.trade_advisor import compute_recovery_plan
 
 router = APIRouter(prefix="/api", tags=["trade-advisor"])
 
@@ -82,6 +83,14 @@ async def get_trade_advisor(session: AsyncSession = Depends(get_session)):
         )
     )
     trades = result.scalars().all()
+    backfilled = False
+    for t in trades:
+        if t.recovery_plan is None and t.open_price is not None and t.direction is not None:
+            await compute_recovery_plan(session, t)
+            if t.recovery_plan is not None:
+                backfilled = True
+    if backfilled:
+        await session.flush()
     pending_result = await session.execute(
         select(Trade).where(
             Trade.is_paper == False,
