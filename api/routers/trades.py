@@ -32,7 +32,7 @@ def _as_utc(dt: datetime) -> datetime:
 
 @router.get("/trades", response_model=List[TradeResponse])
 async def list_trades(
-    state: Literal["open", "closed"] = Query("open"),
+    state: Literal["open", "closed", "pending"] = Query("open"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     session: AsyncSession = Depends(get_session),
@@ -48,6 +48,16 @@ async def list_trades(
             query.where(
                 Trade.order_state == OrderState.filled,
                 Trade.open_price.isnot(None),
+                Trade.close_price.is_(None),
+            )
+            .limit(limit)
+            .offset(offset)
+        )
+    elif state == "pending":
+        query = (
+            query.where(
+                Trade.order_state == OrderState.pending,
+                Trade.pending_price.isnot(None),
                 Trade.close_price.is_(None),
             )
             .limit(limit)

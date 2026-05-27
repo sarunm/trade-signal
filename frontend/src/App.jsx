@@ -7,6 +7,7 @@ import AlertsPanel from './components/AlertsPanel'
 import InsightsPanel from './components/InsightsPanel'
 import TraderProfile from './components/TraderProfile'
 import OpenPositions from './components/OpenPositions'
+import PendingOrders from './components/PendingOrders'
 import ClosedTrades from './components/ClosedTrades'
 import PnlChart from './components/PnlChart'
 import TradeAdvisor from './components/TradeAdvisor'
@@ -29,6 +30,7 @@ export default function App() {
   const fetchAlerts = useCallback(() => get('/api/alerts'), [])
   const fetchInsights = useCallback(() => get('/api/insights'), [])
   const fetchOpen = useCallback(() => get('/api/trades?state=open'), [])
+  const fetchPending = useCallback(() => get('/api/trades?state=pending'), [])
   const fetchClosed = useCallback(
     () => get(`/api/trades?state=closed&limit=${closedLimit}&offset=${closedOffset}`),
     [closedLimit, closedOffset]
@@ -42,6 +44,7 @@ export default function App() {
   const alerts = usePolling(fetchAlerts)
   const insights = usePolling(fetchInsights)
   const openTrades = usePolling(fetchOpen)
+  const pendingTrades = usePolling(fetchPending, 30000)
   const closedTrades = usePolling(fetchClosed)
   const pnlHistory = usePolling(fetchPnl)
   const traderProfile = usePolling(fetchTraderProfile, 60000)
@@ -91,11 +94,16 @@ export default function App() {
       <main className="px-4 pb-8">
         <SectionDivider label="Real Trading" />
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-          <div className="lg:col-span-7">
+          <div className="lg:col-span-7 space-y-4">
             <OpenPositions
               data={openTrades.data}
               error={openTrades.error}
               onTradeTagged={handleTradeTagged}
+            />
+            <PendingOrders
+              data={pendingTrades.data}
+              error={pendingTrades.error}
+              currentPrice={header.data?.xau_price}
             />
           </div>
           <div className="lg:col-span-5">

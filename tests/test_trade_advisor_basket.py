@@ -228,6 +228,64 @@ async def test_basket_tp_targets_and_zones_use_deepest_trade(client, db_session)
     assert b["cut"]["label"] == "S3"
 
 
+def _pending_trade(ticket, direction, vol, pending_price, order_type):
+    from models.trade import OrderType
+    return Trade(
+        id=uuid4(),
+        ticket=ticket,
+        symbol="GOLD#",
+        direction=direction,
+        order_type=order_type,
+        order_state=OrderState.pending,
+        is_paper=False,
+        open_time=datetime.now(timezone.utc),
+        open_price=None,
+        pending_price=Decimal(str(pending_price)),
+        volume=Decimal(str(vol)),
+    )
+
+
+@pytest.mark.asyncio
+async def test_basket_with_pending_excluded_from_main_basket(client, db_session):
+    from models.trade import OrderType
+    db_session.add(_t(8201, Direction.buy, "0.10", "4500.00"))
+    db_session.add(_pending_trade(8202, Direction.buy, "0.20", "4400.00", OrderType.buy_limit))
+    await db_session.commit()
+
+    res = await client.get("/api/trade-advisor")
+    body = res.json()
+    b = body["basket"]
+    assert Decimal(str(b["lot_total"])) == Decimal("0.10")
+    assert Decimal(str(b["mean_entry"])) == Decimal("4500.00")
+
+
+@pytest.mark.asyncio
+async def test_basket_with_pending_projects_if_all_fill(client, db_session):
+    from models.trade import OrderType
+    db_session.add(_t(8301, Direction.buy, "0.10", "4500.00"))
+    db_session.add(_pending_trade(8302, Direction.buy, "0.20", "4400.00", OrderType.buy_limit))
+    await db_session.commit()
+
+    res = await client.get("/api/trade-advisor")
+    body = res.json()
+    bp = body["basket_with_pending"]
+    # mean_entry weighted by |volume|: (4500*0.10 + 4400*0.20)/0.30 = 4433.33
+    assert Decimal(str(bp["lot_total"])) == Decimal("0.30")
+    assert Decimal(str(bp["mean_entry"])) == Decimal("4433.33")
+    assert bp["order_count"] == 2
+    assert bp["direction"] == "buy"
+
+
+@pytest.mark.asyncio
+async def test_basket_with_pending_null_when_no_pending(client, db_session):
+    db_session.add(_t(8401, Direction.buy, "0.10", "4500.00"))
+    await db_session.commit()
+
+    res = await client.get("/api/trade-advisor")
+    body = res.json()
+    assert body["basket_with_pending"] is None
+
+
 @pytest.mark.asyncio
 async def test_basket_pnl_summary_buckets_today_week_month(client, db_session, monkeypatch):
     today_close = datetime(2026, 5, 26, 12, tzinfo=_BKK).astimezone(timezone.utc)

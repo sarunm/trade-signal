@@ -115,51 +115,7 @@ exact commands
 
 ## Queue
 
-### TASK: Pending Orders panel — แสดง buy_limit/sell_limit ที่ยังไม่ fill
-
-**assignee:** claude
-**priority:** normal
-**status:** ready
-
-**Why:** ตอนนี้ `/api/trades?state=open` filter เฉพาะ `OrderState.filled + open_price IS NOT NULL + close_price IS NULL` (api/routers/trades.py:46-55) ทำให้ pending orders (buy_limit / sell_limit / buy_stop / sell_stop ที่ยังไม่ trigger) ตกหล่นจาก Open Positions panel ทั้งหมด — user ตั้ง limit order ค้างไว้แต่ไม่เห็นบน dashboard
-
-**Side effect (สำคัญ):** `/api/trade-advisor` ก็ใช้ filter เดียวกัน (`OrderState.filled + close_time IS NULL`) → BasketExitPlan คำนวน lot_total / mean_entry / basket_be / TP targets / Add zones / Cut / Ruin **โดยไม่นับ pending orders** ทำให้:
-- จุดรวบ (TP targets) ผิด — ไม่รวม volume ของ limit orders ที่กำลังจะ fill
-- basket_be / mean_entry คำนวนจาก filled positions เท่านั้น → ถ้า limit order fill กลายเป็น lot ใหม่กระทันหัน BE จะ shift เยอะ
-- Ruin margin ประเมินต่ำกว่าจริง — ถ้า limit fill ทั้งหมด exposure จะใหญ่กว่าที่ panel แสดง
-
-**Decision needed:** BasketExitPlan ควร include pending orders (worst-case projection) หรือแยกเป็น "Projected Basket if all pending fill" panel?
-
-**Decision (จะ design ก่อน impl):** ทำ panel แยก "Pending Orders" ใต้ Open Positions row (Real Trading section) เพราะ schema ต่างกัน:
-- Open Positions: real entry, paper SL/TP, entry score
-- Pending Orders: pending_price, order_type (limit/stop), placed_time
-
-**Files to touch:**
-- `api/routers/trades.py` — add `state=pending` branch (filter `order_state=pending` + `pending_price IS NOT NULL` + `close_price IS NULL`) หรือ add new endpoint `/api/pending-orders`
-- `frontend/src/components/PendingOrders.jsx` — new component, table: Ticket / Type (BUY LIMIT/SELL LIMIT/...) / Pending price / Placed time / Distance from current
-- `frontend/src/App.jsx` — fetch + place under Open Positions in Real Trading section
-
-**Open questions:**
-1. Layout: ใส่ใต้ OpenPositions card (col-7) เป็น separate card หรือ merge เป็น tab toggle ใน OpenPositions เลย?
-2. Refresh interval: pending = 30s? (เปลี่ยนน้อย — แค่ user เพิ่ม/ยกเลิก order)
-3. แสดง buy_stop/sell_stop ด้วยมั้ย? (ตอนนี้ EA ส่ง state ทุก type อยู่แล้ว)
-4. BasketExitPlan: แยก field "with_pending" เพิ่ม (mean_entry_with_pending, basket_be_with_pending, ruin_with_pending) หรือ toggle ทั้ง basket?
-
-**Acceptance criteria:**
-- [ ] Pending order ที่ user ตั้งใน MT5 (e.g. buy_limit @4500) ปรากฏใน dashboard ภายใน 30s
-- [ ] หลัง pending fill แล้ว → ย้ายไป Open Positions อัตโนมัติ (filter ทำงานถูก)
-- [ ] หลัง pending cancelled → หายจาก panel
-- [ ] Distance column ใช้ XAU live price จาก header.xau_price
-- [ ] BasketExitPlan แสดง projection รวม pending (เลือก approach จาก open question #4)
-
-**Verify:**
-```
-cd frontend && npm run build
-docker compose run --rm -e PYTHONPATH=/app api sh -c "cd /app && pytest tests/ -k 'trades or pending' -v"
-# manual: ตั้ง buy_limit ใน MT5, รอ 30s ดู dashboard
-```
-
-**Remark:** Found 2026-05-26 ตอนถาม Claude "buy_limit/sell_limit แสดงบน open position มั้ย" — backend filter ตัด pending ออกตั้งแต่ query แรก
+<!-- Pending Orders panel: shipped 2026-05-27 — /api/trades?state=pending + basket_with_pending projection in /api/trade-advisor + PendingOrders.jsx card under OpenPositions + WithPendingProjection row in BasketExitPlan; 366/366 tests pass. -->
 
 ---
 

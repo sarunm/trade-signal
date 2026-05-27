@@ -149,6 +149,60 @@ async def test_invalid_state_returns_422(client):
     assert response.status_code == 422
 
 
+def _pending(ticket: int, order_type: OrderType, pending_price: str, direction: Direction = Direction.buy) -> Trade:
+    return Trade(
+        id=uuid.uuid4(),
+        ticket=ticket,
+        symbol="GOLD#",
+        direction=direction,
+        order_type=order_type,
+        order_state=OrderState.pending,
+        open_price=None,
+        pending_price=Decimal(pending_price),
+        volume=Decimal("0.10"),
+        is_paper=False,
+        open_time=datetime(2026, 5, 27, 10, 0, tzinfo=timezone.utc),
+    )
+
+
+@pytest.mark.asyncio
+async def test_list_pending_returns_all_pending_types(client, db_session):
+    db_session.add_all([
+        _pending(5001, OrderType.buy_limit, "4500.00"),
+        _pending(5002, OrderType.sell_limit, "4600.00", direction=Direction.sell),
+        _pending(5003, OrderType.buy_stop, "4650.00"),
+        _pending(5004, OrderType.sell_stop, "4400.00", direction=Direction.sell),
+    ])
+    db_session.add(make_trade(1001))
+    await db_session.commit()
+
+    response = await client.get("/api/trades?state=pending")
+    assert response.status_code == 200
+    data = response.json()
+    tickets = {row["ticket"] for row in data}
+    assert tickets == {5001, 5002, 5003, 5004}
+    for row in data:
+        assert row["order_state"] == "pending"
+        assert row["pending_price"] is not None
+        assert row["close_price"] is None
+
+
+@pytest.mark.asyncio
+async def test_list_pending_excludes_filled_and_cancelled(client, db_session):
+    pending = _pending(5001, OrderType.buy_limit, "4500.00")
+    cancelled = _pending(5002, OrderType.buy_limit, "4400.00")
+    cancelled.order_state = OrderState.cancelled
+    cancelled.close_time = datetime(2026, 5, 27, 11, 0, tzinfo=timezone.utc)
+    cancelled.close_price = Decimal("4400.00")
+    db_session.add_all([pending, cancelled, make_trade(1001)])
+    await db_session.commit()
+
+    response = await client.get("/api/trades?state=pending")
+    assert response.status_code == 200
+    tickets = {row["ticket"] for row in response.json()}
+    assert tickets == {5001}
+
+
 @pytest.mark.asyncio
 async def test_trade_response_includes_entry_context_fields(client, db_session):
     trade = Trade(

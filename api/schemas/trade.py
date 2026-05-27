@@ -54,6 +54,7 @@ class TradeResponse(BaseModel):
     paper_exit_reason: Optional[str] = None
     open_price: Optional[Decimal] = None
     close_price: Optional[Decimal] = None
+    pending_price: Optional[Decimal] = None
     tp: Optional[Decimal] = None
     sl: Optional[Decimal] = None
     volume: Optional[Decimal] = None

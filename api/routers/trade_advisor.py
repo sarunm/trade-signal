@@ -82,6 +82,15 @@ async def get_trade_advisor(session: AsyncSession = Depends(get_session)):
         )
     )
     trades = result.scalars().all()
+    pending_result = await session.execute(
+        select(Trade).where(
+            Trade.is_paper == False,
+            Trade.order_state == OrderState.pending,
+            Trade.pending_price.isnot(None),
+            Trade.close_time.is_(None),
+        )
+    )
+    pending = pending_result.scalars().all()
     snap_result = await session.execute(
         select(AccountSnapshot).order_by(AccountSnapshot.timestamp.desc()).limit(1)
     )
@@ -109,7 +118,33 @@ async def get_trade_advisor(session: AsyncSession = Depends(get_session)):
     latest_close = price_result.scalar_one_or_none()
     basket = _aggregate_basket(trades, snapshot, latest_close)
     basket["pnl_summary"] = await _compute_pnl_summary(session, snapshot)
-    return {"per_trade": per_trade, "basket": basket}
+    basket_with_pending = None
+    if pending:
+        projected = list(trades) + [_pending_as_filled(p) for p in pending]
+        basket_with_pending = _aggregate_basket(projected, snapshot, latest_close)
+        basket_with_pending["pnl_summary"] = None
+    return {
+        "per_trade": per_trade,
+        "basket": basket,
+        "basket_with_pending": basket_with_pending,
+    }
+
+
+def _pending_as_filled(p: Trade) -> Trade:
+    proxy = Trade(
+        id=p.id,
+        ticket=p.ticket,
+        symbol=p.symbol,
+        direction=p.direction,
+        order_type=p.order_type,
+        order_state=OrderState.filled,
+        is_paper=p.is_paper,
+        open_time=p.open_time,
+        open_price=p.pending_price,
+        volume=p.volume,
+        recovery_plan=p.recovery_plan,
+    )
+    return proxy
 
 
 def _aggregate_basket(

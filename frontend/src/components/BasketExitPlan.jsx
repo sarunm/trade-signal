@@ -22,12 +22,13 @@ const TIER_BG = {
 }
 const TIER_DOT = { safe: '🟢', warning: '🟡', danger: '🔴' }
 
-export default function BasketExitPlan({ basket }) {
+export default function BasketExitPlan({ basket, basketWithPending }) {
   const [pnlOpen, setPnlOpen] = useState(false)
   if (!basket || basket.direction === 'flat') {
     return (
-      <div className="bg-card border border-border-default rounded-lg p-4 text-text-dim text-sm h-full">
+      <div className="bg-card border border-border-default rounded-lg p-4 text-text-dim text-sm h-full space-y-3">
         No open positions
+        {basketWithPending && <WithPendingProjection projection={basketWithPending} />}
         {basket?.pnl_summary && (
           <PnlSummaryBox summary={basket.pnl_summary} onClick={() => setPnlOpen(true)} />
         )}
@@ -66,6 +67,7 @@ export default function BasketExitPlan({ basket }) {
           <span className={floatTone}>Net float: {fmtBaht(basket.net_float)}</span>
         </div>
       </div>
+      {basketWithPending && <WithPendingProjection projection={basketWithPending} />}
       {basket.pnl_summary && (
         <PnlSummaryBox summary={basket.pnl_summary} onClick={() => setPnlOpen(true)} />
       )}
@@ -102,6 +104,30 @@ export default function BasketExitPlan({ basket }) {
         </div>
       )}
       <PnlHistoryModal open={pnlOpen} onClose={() => setPnlOpen(false)} />
+    </div>
+  )
+}
+
+function WithPendingProjection({ projection }) {
+  if (!projection || projection.direction === 'flat') return null
+  const dirTone = projection.direction === 'buy' ? 'text-profit' : 'text-loss'
+  const meanEntry = projection.mean_entry ?? projection.avg_entry
+  return (
+    <div
+      className="bg-surface border border-warning/40 rounded p-3 text-sm space-y-1"
+      title="Projection if all pending orders fill at their pending price"
+    >
+      <div className="text-warning text-xs font-semibold uppercase tracking-wide">
+        ⏳ If all pending fill
+      </div>
+      <div className="text-xs">
+        Direction: <span className={`font-semibold ${dirTone}`}>{projection.direction.toUpperCase()}</span>
+        <span className="text-text-dim"> ({projection.lot_total} lot, {projection.order_count} orders)</span>
+      </div>
+      <div className="grid grid-cols-2 gap-x-4 font-mono text-xs">
+        <span>Avg entry: {meanEntry != null ? Number(meanEntry).toFixed(2) : '—'}</span>
+        <span>Basket BE: {projection.basket_be?.toFixed(2) ?? '—'}</span>
+      </div>
     </div>
   )
 }
