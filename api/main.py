@@ -23,6 +23,7 @@ from routers.patterns import router as patterns_router
 from routers.price_bars import router as price_bars_router
 from routers.ea_status import router as ea_status_router
 from routers.paper_signals import router as paper_signals_router
+from routers.ml import router as ml_router
 from services.adaptive_tuner import run_adaptive_tuner
 from services.baseline_runner import BASELINE_ENABLED, open_baseline_trade
 from services.cost_model import refresh_cost_cache
@@ -169,6 +170,7 @@ app.include_router(patterns_router)
 app.include_router(price_bars_router)
 app.include_router(ea_status_router)
 app.include_router(paper_signals_router)
+app.include_router(ml_router)
 
 
 @app.get("/health")
