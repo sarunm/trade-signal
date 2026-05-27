@@ -228,6 +228,73 @@ async def test_basket_tp_targets_and_zones_use_deepest_trade(client, db_session)
     assert b["cut"]["label"] == "S3"
 
 
+@pytest.mark.asyncio
+async def test_basket_zone_baht_uses_current_price_as_reference(client, db_session):
+    plan = {
+        "entry_price": 1955.0,
+        "tp": [
+            {"label": "R1", "price": 1965.00, "pts": 100.0},
+            {"label": "R2", "price": 1975.00, "pts": 200.0},
+        ],
+        "add": [
+            {"label": "S1", "price": 1950.00, "pts": -50.0},
+        ],
+        "cut": {"label": "S2", "price": 1940.00, "pts": -150.0},
+    }
+    deepest = _t(9501, Direction.buy, "0.10", "1955.00")
+    deepest.recovery_plan = plan
+    db_session.add(deepest)
+    db_session.add(_t(9502, Direction.buy, "0.10", "1957.00"))
+    db_session.add(PriceBar(
+        time=datetime.now(timezone.utc), symbol="GOLD#", timeframe="M5",
+        open=Decimal("1960"), high=Decimal("1960"),
+        low=Decimal("1960"), close=Decimal("1960.00"),
+        volume=Decimal("100"),
+    ))
+    db_session.add(AccountSnapshot(
+        timestamp=datetime.now(timezone.utc),
+        equity=Decimal("100000"), balance=Decimal("100000"),
+        margin=Decimal("3000"), free_margin=Decimal("97000"),
+        floating_pl=Decimal("0"),
+    ))
+    await db_session.commit()
+
+    b = (await client.get("/api/trade-advisor")).json()["basket"]
+    # abs_lot = 0.20, current = 1960
+    # R1: (1965 - 1960) * 0.20 * 100 = 100
+    # R2: (1975 - 1960) * 0.20 * 100 = 300
+    tp_by_label = {tp["label"]: Decimal(str(tp["baht"])) for tp in b["tp_targets"]}
+    assert tp_by_label["R1"] == Decimal("100.00")
+    assert tp_by_label["R2"] == Decimal("300.00")
+    # S1 (add): (1950 - 1960) * 0.20 * 100 = -200
+    add_by_label = {z["label"]: Decimal(str(z["baht"])) for z in b["add_zones"]}
+    assert add_by_label["S1"] == Decimal("-200.00")
+    # S2 (cut): (1940 - 1960) * 0.20 * 100 = -400
+    assert Decimal(str(b["cut"]["baht"])) == Decimal("-400.00")
+
+
+@pytest.mark.asyncio
+async def test_basket_zone_baht_falls_back_to_deepest_entry_when_no_current(client, db_session):
+    plan = {
+        "entry_price": 1955.0,
+        "tp": [
+            {"label": "R1", "price": 1965.00, "pts": 100.0},
+        ],
+        "add": [],
+        "cut": None,
+    }
+    deepest = _t(9601, Direction.buy, "0.10", "1955.00")
+    deepest.recovery_plan = plan
+    db_session.add(deepest)
+    # no PriceBar -> current is None
+    await db_session.commit()
+
+    b = (await client.get("/api/trade-advisor")).json()["basket"]
+    tp_by_label = {tp["label"]: Decimal(str(tp["baht"])) for tp in b["tp_targets"]}
+    # falls back to deepest entry 1955: (1965-1955)*0.10*100 = 100
+    assert tp_by_label["R1"] == Decimal("100.00")
+
+
 def _pending_trade(ticket, direction, vol, pending_price, order_type):
     from models.trade import OrderType
     return Trade(

@@ -182,7 +182,7 @@ def _aggregate_basket(
     if current is not None and basket_be is not None:
         net_float = ((current - basket_be) * sign * abs(net) * CONTRACT_SIZE_XAUUSD).quantize(Decimal("0.01"))
 
-    tp_targets, add_zones, cut = _select_basket_zones(open_trades, direction, abs(net))
+    tp_targets, add_zones, cut = _select_basket_zones(open_trades, direction, abs(net), current)
 
     return {
         "direction": direction,
@@ -202,7 +202,12 @@ def _aggregate_basket(
     }
 
 
-def _select_basket_zones(open_trades: list[Trade], direction: str, abs_lot: Decimal) -> tuple[list, list, Optional[dict]]:
+def _select_basket_zones(
+    open_trades: list[Trade],
+    direction: str,
+    abs_lot: Decimal,
+    current: Optional[Decimal] = None,
+) -> tuple[list, list, Optional[dict]]:
     candidates = [t for t in open_trades if t.recovery_plan and t.direction]
     if not candidates:
         return [], [], None
@@ -212,7 +217,8 @@ def _select_basket_zones(open_trades: list[Trade], direction: str, abs_lot: Deci
         deepest = max(candidates, key=lambda t: t.open_price)
     plan = deepest.recovery_plan or {}
     contract = CONTRACT_SIZE_XAUUSD
-    entry = Decimal(str(plan.get("entry_price") or deepest.open_price))
+    reference = current if current is not None else Decimal(str(plan.get("entry_price") or deepest.open_price))
+    entry = Decimal(str(reference))
     sign = Decimal("1") if direction == "buy" else Decimal("-1")
 
     def _baht(price):
