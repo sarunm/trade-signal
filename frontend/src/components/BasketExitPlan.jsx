@@ -164,7 +164,9 @@ function RuinZone({ ruin }) {
       <div className="grid grid-cols-2 gap-x-4 font-mono">
         <span>Stop-out price:</span><span>{Number(ruin.price).toFixed(2)}</span>
         <span>Safety margin:</span>
-        <span>{Number(ruin.pts).toFixed(0)} pts ({fmtBaht(ruin.baht_buffer)})</span>
+        <span title="1 pts = $1 ในราคา · 1 pip = 0.01 ในราคา (4504.27 → 4504.28)">
+          {Number(ruin.pts).toFixed(0)} pts / {(Number(ruin.pts) * 100).toFixed(0)} pips ({fmtBaht(ruin.baht_buffer)})
+        </span>
         <span>Buffer:</span>
         <span>{Number(ruin.pct_buffer).toFixed(1)}% {TIER_DOT[ruin.tier] || ''}</span>
       </div>
