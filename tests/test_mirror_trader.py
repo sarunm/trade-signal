@@ -13,7 +13,7 @@ def _entry_event(ticket: int = 1001, direction: str = "buy") -> TradeEventSchema
     return TradeEventSchema(
         transaction_type="DEAL_ADD",
         ticket=ticket,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=direction,
         order_type="market",
         order_state="filled",
@@ -27,7 +27,7 @@ def _exit_event(ticket: int = 1001) -> TradeEventSchema:
     return TradeEventSchema(
         transaction_type="DEAL_ADD",
         ticket=ticket,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction="buy",
         order_type="market",
         order_state="filled",

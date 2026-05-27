@@ -30,7 +30,7 @@ async def session():
 def _baseline_trade(rule_id, close_time: datetime, profit: float, ticket: int) -> Trade:
     return Trade(
         ticket=ticket,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=Direction.buy,
         order_type=OrderType.market,
         order_state=OrderState.filled,

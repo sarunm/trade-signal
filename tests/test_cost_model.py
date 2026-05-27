@@ -69,7 +69,7 @@ async def test_refresh_writes_calibration_when_samples_present(db_session, monke
     now = datetime.now(timezone.utc)
     db_session.add_all([
         Trade(
-            id=uuid.uuid4(), ticket=i, symbol="XAUUSD",
+            id=uuid.uuid4(), ticket=i, symbol="GOLD#",
             direction=Direction.buy, order_state=OrderState.filled,
             open_time=now - timedelta(days=1), close_time=now - timedelta(days=1),
             open_price=Decimal("1900"), close_price=Decimal("1910"),

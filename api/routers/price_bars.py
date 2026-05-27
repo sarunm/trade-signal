@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database import get_session
 from models.price_bar import PriceBar, Timeframe
 from schemas.price_bar import PriceBarResponse
+from services.symbol_normalizer import normalize_symbol
 
 router = APIRouter(prefix="/api", tags=["price-bars"])
 
@@ -18,9 +19,10 @@ async def list_price_bars(
     limit: int = Query(50, ge=1, le=500),
     session: AsyncSession = Depends(get_session),
 ):
+    canonical = normalize_symbol(symbol)
     result = await session.execute(
         select(PriceBar)
-        .where(PriceBar.symbol == symbol, PriceBar.timeframe == tf)
+        .where(PriceBar.symbol == canonical, PriceBar.timeframe == tf)
         .order_by(PriceBar.time.desc())
         .limit(limit)
     )

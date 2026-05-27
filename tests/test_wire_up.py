@@ -10,7 +10,7 @@ from models.alert import Alert
 ENTRY_EVENT = {
     "transaction_type": "DEAL_ADD",
     "ticket": 5001,
-    "symbol": "XAUUSD",
+    "symbol": "GOLD#",
     "direction": "buy",
     "order_type": "market",
     "order_state": "filled",
@@ -21,7 +21,7 @@ ENTRY_EVENT = {
 
 PRICE_TICK = {
     "timestamp": "2026-05-17T10:00:00Z",
-    "symbol": "XAUUSD",
+    "symbol": "GOLD#",
     "account": {
         "equity": 10000.0,
         "balance": 10000.0,

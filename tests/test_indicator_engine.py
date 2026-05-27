@@ -14,7 +14,7 @@ def _trade(**overrides):
     defaults = dict(
         id=uuid.uuid4(),
         ticket=12001,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=Direction.buy,
         order_state=OrderState.filled,
         open_price=Decimal("3300.00"),
@@ -119,7 +119,7 @@ async def test_trade_logger_schedules_indicator_compute_on_entry_only(db_session
     close_event = TradeEventSchema(
         transaction_type="DEAL_ADD",
         ticket=12002,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=Direction.buy,
         order_state=OrderState.filled,
         open_price=Decimal("3300.00"),
@@ -128,7 +128,7 @@ async def test_trade_logger_schedules_indicator_compute_on_entry_only(db_session
     entry_event = TradeEventSchema(
         transaction_type="DEAL_ADD",
         ticket=12003,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=Direction.buy,
         order_state=OrderState.filled,
         open_price=Decimal("3300.00"),
@@ -161,7 +161,7 @@ async def test_recompute_fetches_bars_at_trade_open_time(db_session):
         [
             PriceBar(
                 time=open_time - timedelta(minutes=15),
-                symbol="XAUUSD",
+                symbol="GOLD#",
                 timeframe=Timeframe.M15,
                 open=Decimal("3290.00"),
                 high=Decimal("3295.00"),
@@ -170,7 +170,7 @@ async def test_recompute_fetches_bars_at_trade_open_time(db_session):
             ),
             PriceBar(
                 time=open_time,
-                symbol="XAUUSD",
+                symbol="GOLD#",
                 timeframe=Timeframe.M15,
                 open=Decimal("3300.00"),
                 high=Decimal("3305.00"),
@@ -179,7 +179,7 @@ async def test_recompute_fetches_bars_at_trade_open_time(db_session):
             ),
             PriceBar(
                 time=open_time + timedelta(minutes=15),
-                symbol="XAUUSD",
+                symbol="GOLD#",
                 timeframe=Timeframe.M15,
                 open=Decimal("3310.00"),
                 high=Decimal("3315.00"),

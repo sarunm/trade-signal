@@ -56,7 +56,7 @@ async def _seed_rule(session) -> PaperTraderRule:
 def _trade(rule_id, *, profit: float, hour: int, dow: int = 0) -> Trade:
     open_t = datetime(2026, 4, 6 + dow, hour, 0, tzinfo=timezone.utc)  # 2026-04-06 = Mon
     return Trade(
-        ticket=uuid4().int & 0x7FFFFFFF, symbol="XAUUSD",
+        ticket=uuid4().int & 0x7FFFFFFF, symbol="GOLD#",
         direction=Direction.buy,
         order_type=OrderType.market, order_state=OrderState.filled,
         open_time=open_t,
@@ -154,7 +154,7 @@ from services.adaptive_tuner import (
 
 def _trade_at(rule_id, *, profit, when: datetime) -> Trade:
     return Trade(
-        ticket=uuid4().int & 0x7FFFFFFF, symbol="XAUUSD",
+        ticket=uuid4().int & 0x7FFFFFFF, symbol="GOLD#",
         direction=Direction.buy,
         order_type=OrderType.market, order_state=OrderState.filled,
         open_time=when, close_time=when,

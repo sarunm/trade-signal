@@ -26,7 +26,7 @@ def _trade(direction=Direction.buy):
     return Trade(
         id=uuid.uuid4(),
         ticket=94001,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=direction,
         order_state=OrderState.filled,
         open_price=Decimal("3300.00"),
@@ -43,7 +43,7 @@ def _bars(trend=1, count=120):
         bars.append(
             PriceBar(
                 time=start + timedelta(hours=i),
-                symbol="XAUUSD",
+                symbol="GOLD#",
                 timeframe=Timeframe.H1,
                 open=base - Decimal("0.40") if trend > 0 else base + Decimal("0.40"),
                 high=base + Decimal("1.20"),
@@ -66,7 +66,7 @@ def _bars_with_engulfing(direction="bullish", count=120):
             bars.append(
                 PriceBar(
                     time=start + timedelta(hours=i),
-                    symbol="XAUUSD",
+                    symbol="GOLD#",
                     timeframe=Timeframe.H1,
                     open=base + Decimal("0.40"),
                     high=base + Decimal("0.60"),
@@ -82,7 +82,7 @@ def _bars_with_engulfing(direction="bullish", count=120):
         bars.append(
             PriceBar(
                 time=start + timedelta(hours=count - 2),
-                symbol="XAUUSD",
+                symbol="GOLD#",
                 timeframe=Timeframe.H1,
                 open=prev_open,
                 high=prev_open + Decimal("0.20"),
@@ -97,7 +97,7 @@ def _bars_with_engulfing(direction="bullish", count=120):
         bars.append(
             PriceBar(
                 time=start + timedelta(hours=count - 1),
-                symbol="XAUUSD",
+                symbol="GOLD#",
                 timeframe=Timeframe.H1,
                 open=last_open,
                 high=last_close + Decimal("0.30"),
@@ -113,7 +113,7 @@ def _bars_with_engulfing(direction="bullish", count=120):
             bars.append(
                 PriceBar(
                     time=start + timedelta(hours=i),
-                    symbol="XAUUSD",
+                    symbol="GOLD#",
                     timeframe=Timeframe.H1,
                     open=base - Decimal("0.40"),
                     high=base + Decimal("0.60"),
@@ -128,7 +128,7 @@ def _bars_with_engulfing(direction="bullish", count=120):
         bars.append(
             PriceBar(
                 time=start + timedelta(hours=count - 2),
-                symbol="XAUUSD",
+                symbol="GOLD#",
                 timeframe=Timeframe.H1,
                 open=prev_open,
                 high=prev_close + Decimal("0.20"),
@@ -142,7 +142,7 @@ def _bars_with_engulfing(direction="bullish", count=120):
         bars.append(
             PriceBar(
                 time=start + timedelta(hours=count - 1),
-                symbol="XAUUSD",
+                symbol="GOLD#",
                 timeframe=Timeframe.H1,
                 open=last_open,
                 high=last_open + Decimal("0.30"),

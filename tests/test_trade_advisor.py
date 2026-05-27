@@ -13,7 +13,7 @@ def _make_trade(**kwargs) -> Trade:
     defaults = dict(
         id=uuid.uuid4(),
         ticket=9001,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=Direction.buy,
         order_state=OrderState.filled,
         open_price=Decimal("4700.00"),
@@ -28,7 +28,7 @@ def _make_trade(**kwargs) -> Trade:
 
 async def _make_fib(db_session, **kwargs):
     defaults = dict(
-        symbol="XAUUSD",
+        symbol="GOLD#",
         period="W",
         prev_high=4870.0,
         prev_low=4608.0,
@@ -296,7 +296,7 @@ from sqlalchemy import select
 from models.alert import Alert
 
 
-def _make_tick(bid: str, symbol: str = "XAUUSD") -> MarketTickSchema:
+def _make_tick(bid: str, symbol: str = "GOLD#") -> MarketTickSchema:
     return MarketTickSchema(
         timestamp=datetime(2026, 5, 20, 10, 0, tzinfo=timezone.utc),
         symbol=symbol,

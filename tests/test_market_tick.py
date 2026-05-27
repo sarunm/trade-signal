@@ -11,7 +11,7 @@ from models.trade import Direction, OrderState, PaperMode, Trade
 
 MARKET_TICK = {
     "timestamp": "2026-05-18T10:05:00Z",
-    "symbol": "XAUUSD",
+    "symbol": "GOLD#",
     "bid": 1960.10,
     "ask": 1960.30,
 }
@@ -22,7 +22,7 @@ async def test_market_tick_closes_matching_paper_trade_without_storing_tick(clie
     paper = Trade(
         id=uuid.uuid4(),
         ticket=8001,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=Direction.buy,
         order_state=OrderState.filled,
         open_price=Decimal("1950.00"),
@@ -70,13 +70,13 @@ async def test_market_tick_closes_open_mirror_via_pivot_tp(
 
     tick_time = datetime(2026, 5, 18, 10, 5, tzinfo=timezone.utc)
     db_session.add(PriceBar(
-        symbol="XAUUSD", timeframe=Timeframe.D,
+        symbol="GOLD#", timeframe=Timeframe.D,
         time=tick_time - timedelta(days=2),
         open=Decimal("1900"), high=Decimal("1920"),
         low=Decimal("1880"), close=Decimal("1910"), volume=Decimal("100"),
     ))
     db_session.add(PriceBar(
-        symbol="XAUUSD", timeframe=Timeframe.D,
+        symbol="GOLD#", timeframe=Timeframe.D,
         time=tick_time - timedelta(days=1),
         open=Decimal("1910"), high=Decimal("1955"),
         low=Decimal("1905"), close=Decimal("1950"), volume=Decimal("100"),
@@ -84,7 +84,7 @@ async def test_market_tick_closes_open_mirror_via_pivot_tp(
     h1_anchor = tick_time - timedelta(hours=250)
     for i in range(250):
         db_session.add(PriceBar(
-            symbol="XAUUSD", timeframe=Timeframe.H1,
+            symbol="GOLD#", timeframe=Timeframe.H1,
             time=h1_anchor + timedelta(hours=i),
             open=Decimal("1950"), high=Decimal("1955"),
             low=Decimal("1948"),
@@ -95,7 +95,7 @@ async def test_market_tick_closes_open_mirror_via_pivot_tp(
     mirror = Trade(
         id=uuid.uuid4(),
         ticket=9001,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=Direction.buy,
         order_state=OrderState.filled,
         open_price=Decimal("1920.00"),
@@ -111,7 +111,7 @@ async def test_market_tick_closes_open_mirror_via_pivot_tp(
     # R1 = 2*PP - L = 2*((1955+1905+1950)/3) - 1905 ≈ 1968.33
     response = await client.post("/api/market-tick", json={
         "timestamp": tick_time.isoformat().replace("+00:00", "Z"),
-        "symbol": "XAUUSD",
+        "symbol": "GOLD#",
         "bid": 1968.50,
         "ask": 1968.55,
     })

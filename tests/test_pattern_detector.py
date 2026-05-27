@@ -9,7 +9,7 @@ from services.pattern_detector import detect_pin_bar, detect_engulfing, run_patt
 from schemas.price_tick import PriceTickSchema, AccountStateSchema
 
 
-def make_tick(symbol="XAUUSD"):
+def make_tick(symbol="GOLD#"):
     return PriceTickSchema(
         timestamp=datetime.now(timezone.utc),
         symbol=symbol,
@@ -79,7 +79,7 @@ def test_detect_engulfing_requires_two_bars():
 async def test_run_pattern_detector_creates_alert_for_pin_bar(db_session):
     t = datetime(2026, 5, 18, 10, 0, tzinfo=timezone.utc)
     db_session.add(PriceBar(
-        time=t, symbol="XAUUSD", timeframe=Timeframe.H1,
+        time=t, symbol="GOLD#", timeframe=Timeframe.H1,
         open=Decimal("1920.0"), high=Decimal("1921.0"),
         low=Decimal("1915.0"), close=Decimal("1920.5"),
     ))
@@ -93,21 +93,21 @@ async def test_run_pattern_detector_creates_alert_for_pin_bar(db_session):
     assert alerts[0].trigger_data["pattern"] == "pin_bar"
     assert alerts[0].trigger_data["direction"] == "bullish"
     assert alerts[0].trigger_data["timeframe"] == "H1"
-    assert alerts[0].trigger_data["symbol"] == "XAUUSD"
+    assert alerts[0].trigger_data["symbol"] == "GOLD#"
 
 
 @pytest.mark.asyncio
 async def test_run_pattern_detector_deduplicates_within_4_hours(db_session):
     t = datetime(2026, 5, 18, 10, 0, tzinfo=timezone.utc)
     db_session.add(PriceBar(
-        time=t, symbol="XAUUSD", timeframe=Timeframe.H1,
+        time=t, symbol="GOLD#", timeframe=Timeframe.H1,
         open=Decimal("1920.0"), high=Decimal("1921.0"),
         low=Decimal("1915.0"), close=Decimal("1920.5"),
     ))
     db_session.add(Alert(
         type="pattern_alert",
         message="Pin Bar (bullish) detected on H1",
-        trigger_data={"pattern": "pin_bar", "direction": "bullish", "timeframe": "H1", "symbol": "XAUUSD"},
+        trigger_data={"pattern": "pin_bar", "direction": "bullish", "timeframe": "H1", "symbol": "GOLD#"},
         sent_at=datetime.now(timezone.utc) - timedelta(hours=1),
         acknowledged=False,
     ))

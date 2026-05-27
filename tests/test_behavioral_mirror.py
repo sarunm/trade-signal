@@ -18,7 +18,7 @@ def _real_winning_trade(
     return Trade(
         id=uuid.uuid4(),
         ticket=ticket,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=Direction.buy,
         order_state=OrderState.filled,
         open_price=Decimal("1950.00"),

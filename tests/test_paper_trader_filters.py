@@ -134,7 +134,7 @@ async def _seed_bars_at(session, anchor: datetime, count=30, base=1900.0):
         session.add(
             PriceBar(
                 time=anchor - timedelta(hours=count - i),
-                symbol="XAUUSD", timeframe=Timeframe.H1,
+                symbol="GOLD#", timeframe=Timeframe.H1,
                 open=Decimal(str(base + i * 0.1)),
                 high=Decimal(str(base + i * 0.1 + 1)),
                 low=Decimal(str(base + i * 0.1 - 1)),
@@ -146,7 +146,7 @@ async def _seed_bars_at(session, anchor: datetime, count=30, base=1900.0):
 
 
 def _tick(now: datetime, bid=1900.0, ask=1900.5) -> MarketTickSchema:
-    return MarketTickSchema(timestamp=now, symbol="XAUUSD",
+    return MarketTickSchema(timestamp=now, symbol="GOLD#",
                             bid=Decimal(str(bid)), ask=Decimal(str(ask)))
 
 

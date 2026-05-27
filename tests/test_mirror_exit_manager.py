@@ -15,7 +15,7 @@ from services.mirror_exit_manager import (
 
 def _bar(time, open_, high, low, close, volume=100):
     return PriceBar(
-        symbol="XAUUSD",
+        symbol="GOLD#",
         timeframe=Timeframe.D,
         time=time,
         open=Decimal(str(open_)),
@@ -33,7 +33,7 @@ async def _seed_daily(db_session, anchor):
     h1_anchor = anchor - timedelta(hours=250)
     for i in range(250):
         db_session.add(PriceBar(
-            symbol="XAUUSD",
+            symbol="GOLD#",
             timeframe=Timeframe.H1,
             time=h1_anchor + timedelta(hours=i),
             open=Decimal("1950"),
@@ -49,7 +49,7 @@ def _mirror(direction, open_price, volume="0.10"):
     return Trade(
         id=uuid.uuid4(),
         ticket=int(datetime.now().timestamp()) % 1_000_000,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=Direction[direction],
         order_type=None,
         order_state=OrderState.filled,
@@ -77,7 +77,7 @@ async def test_tp_pivot_buy_exits_at_r1(db_session, monkeypatch):
     # Pivot from prev day (H+L+C)/3 = (1955+1905+1950)/3 = 1936.667
     # R1 = 2*PP - L = 2*1936.667 - 1905 = 1968.333
     tick = MarketTickSchema(
-        symbol="XAUUSD",
+        symbol="GOLD#",
         bid=Decimal("1968.50"),
         ask=Decimal("1968.55"),
         timestamp=now,
@@ -102,7 +102,7 @@ async def test_tp_pivot_skipped_when_momentum_strong(db_session, monkeypatch):
     await db_session.commit()
 
     tick = MarketTickSchema(
-        symbol="XAUUSD",
+        symbol="GOLD#",
         bid=Decimal("1968.50"),
         ask=Decimal("1968.55"),
         timestamp=now,
@@ -127,7 +127,7 @@ async def test_momentum_flip_triggers_exit(db_session, monkeypatch):
     await db_session.commit()
 
     tick = MarketTickSchema(
-        symbol="XAUUSD",
+        symbol="GOLD#",
         bid=Decimal("1932.00"),
         ask=Decimal("1932.10"),
         timestamp=now,
@@ -155,7 +155,7 @@ async def test_hard_stop_at_floating_loss_2500(db_session, monkeypatch):
     await db_session.commit()
 
     tick = MarketTickSchema(
-        symbol="XAUUSD",
+        symbol="GOLD#",
         bid=Decimal("1670.00"),
         ask=Decimal("1670.10"),
         timestamp=now,
@@ -184,7 +184,7 @@ async def test_no_exit_when_below_thresholds(db_session, monkeypatch):
     await db_session.commit()
 
     tick = MarketTickSchema(
-        symbol="XAUUSD",
+        symbol="GOLD#",
         bid=Decimal("1922.00"),
         ask=Decimal("1922.10"),
         timestamp=now,

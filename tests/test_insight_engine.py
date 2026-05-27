@@ -14,7 +14,7 @@ def _make_trade(hour: int, profit: float, direction: str = "buy", minute: int = 
     return Trade(
         id=uuid.uuid4(),
         ticket=int(t.timestamp()),
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=Direction(direction),
         order_state=OrderState.filled,
         open_price=Decimal("1950.00"),
@@ -131,7 +131,7 @@ def _make_trade_with_adverse_bar(
     trade = Trade(
         id=uuid.uuid4(),
         ticket=90000 + i,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=Direction.buy,
         order_state=OrderState.filled,
         open_price=Decimal(str(open_price)),
@@ -144,7 +144,7 @@ def _make_trade_with_adverse_bar(
     )
     bar = PriceBar(
         time=t,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         timeframe=Timeframe.H1,
         open=Decimal(str(open_price)),
         high=Decimal(str(open_price + 2)),
@@ -350,7 +350,7 @@ async def test_post_close_run_backfills_trade(db_session):
 
     # H1 bar after close: high = 1975.00, run = 1975 - 1960 = 15
     db_session.add(PriceBar(
-        symbol="XAUUSD",
+        symbol="GOLD#",
         timeframe=Timeframe.H1,
         time=datetime(2026, 5, 19, 12, 0, tzinfo=timezone.utc),
         open=Decimal("1960.00"),

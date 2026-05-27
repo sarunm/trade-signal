@@ -68,19 +68,19 @@ async def test_open_trades_count_per_rule(client, db_session):
         total_trades=0, win_count=0,
     )
     open1 = Trade(
-        id=uuid4(), ticket=1001, symbol="XAUUSD",
+        id=uuid4(), ticket=1001, symbol="GOLD#",
         is_paper=True, paper_mode=PaperMode.independent,
         open_time=datetime.now(timezone.utc),
         recovery_plan={"paper_trader_rule_id": str(rule_a.id)},
     )
     open2 = Trade(
-        id=uuid4(), ticket=1002, symbol="XAUUSD",
+        id=uuid4(), ticket=1002, symbol="GOLD#",
         is_paper=True, paper_mode=PaperMode.independent,
         open_time=datetime.now(timezone.utc),
         recovery_plan={"paper_trader_rule_id": str(rule_a.id)},
     )
     closed = Trade(
-        id=uuid4(), ticket=1003, symbol="XAUUSD",
+        id=uuid4(), ticket=1003, symbol="GOLD#",
         is_paper=True, paper_mode=PaperMode.independent,
         open_time=datetime.now(timezone.utc),
         close_time=datetime.now(timezone.utc),
@@ -157,7 +157,7 @@ async def test_cum_pnl_realized_sums_closed_trade_profit(client, db_session):
         virtual_balance_current=Decimal("5000.00"),
     )
     win = Trade(
-        id=uuid4(), ticket=2001, symbol="XAUUSD",
+        id=uuid4(), ticket=2001, symbol="GOLD#",
         is_paper=True, paper_mode=PaperMode.independent,
         open_time=datetime.now(timezone.utc),
         close_time=datetime.now(timezone.utc),
@@ -165,7 +165,7 @@ async def test_cum_pnl_realized_sums_closed_trade_profit(client, db_session):
         paper_trader_rule_id=rule.id,
     )
     loss = Trade(
-        id=uuid4(), ticket=2002, symbol="XAUUSD",
+        id=uuid4(), ticket=2002, symbol="GOLD#",
         is_paper=True, paper_mode=PaperMode.independent,
         open_time=datetime.now(timezone.utc),
         close_time=datetime.now(timezone.utc),
@@ -173,7 +173,7 @@ async def test_cum_pnl_realized_sums_closed_trade_profit(client, db_session):
         paper_trader_rule_id=rule.id,
     )
     open_trade = Trade(
-        id=uuid4(), ticket=2003, symbol="XAUUSD",
+        id=uuid4(), ticket=2003, symbol="GOLD#",
         is_paper=True, paper_mode=PaperMode.independent,
         open_time=datetime.now(timezone.utc),
         paper_trader_rule_id=rule.id,

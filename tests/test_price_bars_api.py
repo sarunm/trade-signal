@@ -6,7 +6,7 @@ import pytest
 from models.price_bar import PriceBar, Timeframe
 
 
-def _bar(time, symbol="XAUUSD", tf=Timeframe.M15, close="1900.0"):
+def _bar(time, symbol="GOLD#", tf=Timeframe.M15, close="1900.0"):
     return PriceBar(
         time=time,
         symbol=symbol,
@@ -45,9 +45,9 @@ async def test_price_bars_returns_ascending_within_limit(client, db_session):
 async def test_price_bars_filters_by_symbol_and_timeframe(client, db_session):
     base = datetime(2026, 5, 25, 12, tzinfo=timezone.utc)
     db_session.add_all([
-        _bar(base, symbol="XAUUSD", tf=Timeframe.M15, close="1900"),
+        _bar(base, symbol="GOLD#", tf=Timeframe.M15, close="1900"),
         _bar(base, symbol="EURUSD", tf=Timeframe.M15, close="1.10"),
-        _bar(base, symbol="XAUUSD", tf=Timeframe.H1, close="1905"),
+        _bar(base, symbol="GOLD#", tf=Timeframe.H1, close="1905"),
     ])
     await db_session.commit()
 
@@ -55,5 +55,5 @@ async def test_price_bars_filters_by_symbol_and_timeframe(client, db_session):
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 1
-    assert data[0]["symbol"] == "XAUUSD"
+    assert data[0]["symbol"] == "GOLD#"
     assert data[0]["timeframe"] == "M15"

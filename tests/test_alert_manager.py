@@ -24,7 +24,7 @@ def _filled_buy(
     t = Trade(
         id=uuid.uuid4(),
         ticket=ticket,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=Direction.buy,
         order_state=OrderState.filled,
         open_price=Decimal("1950.00"),
@@ -44,7 +44,7 @@ def _event(ticket: int, order_state: str = "filled", direction: str = "buy",
     return TradeEventSchema(
         transaction_type="DEAL_ADD",
         ticket=ticket,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=direction,
         order_type="market",
         order_state=order_state,
@@ -60,7 +60,7 @@ def _event(ticket: int, order_state: str = "filled", direction: str = "buy",
 def _tick(free_margin: float, total_volume: float = 0.0) -> PriceTickSchema:
     return PriceTickSchema(
         timestamp=datetime.now(timezone.utc),
-        symbol="XAUUSD",
+        symbol="GOLD#",
         account=AccountStateSchema(
             equity=Decimal("10500.00"),
             balance=Decimal("10000.00"),
@@ -320,7 +320,7 @@ from schemas.market_tick import MarketTickSchema
 from services.alert_manager import check_large_adverse_move
 
 
-def _market_tick(bid: float, ask: float, symbol: str = "XAUUSD") -> MarketTickSchema:
+def _market_tick(bid: float, ask: float, symbol: str = "GOLD#") -> MarketTickSchema:
     return MarketTickSchema(
         timestamp=datetime.now(timezone.utc),
         symbol=symbol,
@@ -353,7 +353,7 @@ async def test_large_adverse_move_alert_fires_for_sell(db_session):
     trade = Trade(
         id=uuid.uuid4(),
         ticket=2002,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=Direction.sell,
         order_state=OrderState.filled,
         open_price=Decimal("2000.00"),
@@ -412,7 +412,7 @@ async def test_low_winrate_setup_alert_fires(db_session):
         trade = Trade(
             id=uuid.uuid4(),
             ticket=8000 + i,
-            symbol="XAUUSD",
+            symbol="GOLD#",
             direction=Direction.buy,
             order_state=OrderState.filled,
             open_price=Decimal("2000.00"),
@@ -445,7 +445,7 @@ async def test_low_winrate_setup_no_alert_when_good_winrate(db_session):
         trade = Trade(
             id=uuid.uuid4(),
             ticket=8100 + i,
-            symbol="XAUUSD",
+            symbol="GOLD#",
             direction=Direction.buy,
             order_state=OrderState.filled,
             open_price=Decimal("2000.00"),
@@ -479,7 +479,7 @@ async def test_rescue_ineffective_alert_fires(db_session):
         trade = Trade(
             id=uuid.uuid4(),
             ticket=9000 + i,
-            symbol="XAUUSD",
+            symbol="GOLD#",
             direction=Direction.buy,
             order_state=OrderState.filled,
             open_price=Decimal("2000.00"),
@@ -493,7 +493,7 @@ async def test_rescue_ineffective_alert_fires(db_session):
     trade = Trade(
         id=uuid.uuid4(),
         ticket=9004,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=Direction.buy,
         order_state=OrderState.filled,
         open_price=Decimal("2000.00"),
@@ -510,7 +510,7 @@ async def test_rescue_ineffective_alert_fires(db_session):
         trade = Trade(
             id=uuid.uuid4(),
             ticket=9100 + i,
-            symbol="XAUUSD",
+            symbol="GOLD#",
             direction=Direction.buy,
             order_state=OrderState.filled,
             open_price=Decimal("2000.00"),

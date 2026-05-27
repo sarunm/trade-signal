@@ -101,7 +101,7 @@ async def _seed_bars(session, *, count=30, base=1900.0):
         session.add(
             PriceBar(
                 time=now - timedelta(hours=count - i),
-                symbol="XAUUSD",
+                symbol="GOLD#",
                 timeframe=Timeframe.H1,
                 open=Decimal(str(base + i * 0.1)),
                 high=Decimal(str(base + i * 0.1 + 1)),
@@ -115,7 +115,7 @@ async def _seed_bars(session, *, count=30, base=1900.0):
 
 def _tick(now: datetime, bid: float = 1900.0, ask: float = 1900.5) -> MarketTickSchema:
     return MarketTickSchema(
-        timestamp=now, symbol="XAUUSD", bid=Decimal(str(bid)), ask=Decimal(str(ask))
+        timestamp=now, symbol="GOLD#", bid=Decimal(str(bid)), ask=Decimal(str(ask))
     )
 
 
@@ -321,7 +321,7 @@ async def session():
 
 def _bar_local(t: datetime, close: float = 1950.0, tf: Timeframe = Timeframe.H1) -> PriceBar:
     return PriceBar(
-        symbol="XAUUSD",
+        symbol="GOLD#",
         timeframe=tf,
         time=t,
         open=Decimal(str(close)),
@@ -358,7 +358,7 @@ async def test_shared_cache_computes_each_slug_once(session):
     await session.commit()
 
     tick = MarketTickSchema(
-        symbol="XAUUSD",
+        symbol="GOLD#",
         bid=Decimal("1955.0"),
         ask=Decimal("1955.30"),
         timestamp=datetime(2026, 5, 25, 12, 5, tzinfo=timezone.utc),
@@ -420,7 +420,7 @@ async def test_entry_uses_score_based_lot(session):
     await session.commit()
 
     tick = MarketTickSchema(
-        symbol="XAUUSD",
+        symbol="GOLD#",
         bid=Decimal("1955.0"),
         ask=Decimal("1955.30"),
         timestamp=datetime(2026, 5, 25, 12, 5, tzinfo=timezone.utc),
@@ -462,7 +462,7 @@ async def test_basket_recovery_opens_second_trade(db_session, fake_specs):
 
     open_time = datetime(2026, 5, 25, 11, 0, tzinfo=timezone.utc)  # 1.5h ago
     existing = Trade(
-        ticket=999, symbol="XAUUSD",
+        ticket=999, symbol="GOLD#",
         direction=Direction.buy,
         order_type=OrderType.market, order_state=OrderState.filled,
         open_time=open_time, open_price=Decimal("1950.0"),
@@ -476,7 +476,7 @@ async def test_basket_recovery_opens_second_trade(db_session, fake_specs):
     await db_session.commit()
 
     tick = MarketTickSchema(
-        symbol="XAUUSD",
+        symbol="GOLD#",
         bid=Decimal("1750.0"),  # huge loss
         ask=Decimal("1750.30"),
         timestamp=datetime(2026, 5, 25, 12, 30, tzinfo=timezone.utc),

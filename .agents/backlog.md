@@ -119,6 +119,8 @@ exact commands
 
 ---
 
+<!-- [BUG] Orphan trades root-caused 2026-05-27 — broker symbol rename GOLD → GOLD# broke upsert key (ticket, symbol, is_paper); EA SyncHistoryDeals also filtered by InpSymbol so legacy 'GOLD' deals were dropped. Fix: schema-level normalize_symbol() at all ingestion points (trade_event/price_tick/market_tick + price_bars query param) + alembic 022 backfill GOLD/XAUUSD aliases → GOLD#. 374/374 tests; 14 orphan rows force-closed manually. -->
+
 ### TASK: Explore ML to assist pattern discovery / signal scoring
 
 **assignee:** claude

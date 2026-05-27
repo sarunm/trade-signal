@@ -18,7 +18,7 @@ PRICE_TICK_PAYLOAD = {
         "D":   {"open": 1930.0, "high": 1960.0, "low": 1928.0, "close": 1950.9, "volume": 86400},
         "W1":  {"open": 1920.0, "high": 1965.0, "low": 1918.0, "close": 1950.9, "volume": 604800},
     },
-    "symbol": "XAUUSD",
+    "symbol": "GOLD#",
 }
 
 

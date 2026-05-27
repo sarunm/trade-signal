@@ -12,7 +12,7 @@ def make_trade(ticket, is_paper=False, close_price=None, profit=None):
     return Trade(
         id=uuid.uuid4(),
         ticket=ticket,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=Direction.buy,
         order_type=OrderType.market,
         order_state=OrderState.filled,
@@ -208,7 +208,7 @@ async def test_trade_response_includes_entry_context_fields(client, db_session):
     trade = Trade(
         id=uuid.uuid4(),
         ticket=1001,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=Direction.buy,
         order_state=OrderState.filled,
         open_price=Decimal("2000.00"),
@@ -245,7 +245,7 @@ async def test_patch_tag_updates_setup_pattern(client, db_session):
     trade = Trade(
         id=uuid.uuid4(),
         ticket=3001,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=Direction.buy,
         order_state=OrderState.filled,
         open_price=Decimal("2000.00"),
@@ -270,7 +270,7 @@ async def test_patch_tag_rejects_invalid_pattern(client, db_session):
     trade = Trade(
         id=uuid.uuid4(),
         ticket=3002,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=Direction.buy,
         order_state=OrderState.filled,
         open_price=Decimal("2000.00"),
@@ -302,7 +302,7 @@ async def test_list_trades_respects_offset(client, db_session):
         trade = Trade(
             id=uuid.uuid4(),
             ticket=5000 + i,
-            symbol="XAUUSD",
+            symbol="GOLD#",
             direction=Direction.buy,
             order_state=OrderState.filled,
             open_price=Decimal("2000.00"),

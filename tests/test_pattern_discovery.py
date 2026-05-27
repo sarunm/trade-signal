@@ -21,7 +21,7 @@ from services.pattern_discovery import (
 def _real_trade(close_time, profit, volume="0.10", ticket=None):
     return Trade(
         ticket=ticket or int(close_time.timestamp() * 1000) % 10**9,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=Direction.buy,
         order_type=OrderType.market,
         order_state=OrderState.filled,
@@ -66,7 +66,7 @@ def test_group_into_baskets_max_size():
 def _trade(profit: float, close_time: datetime, ticket: int = 0) -> Trade:
     return Trade(
         ticket=ticket or int(close_time.timestamp()),
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=Direction.buy,
         is_paper=False,
         open_price=Decimal("1900"),

@@ -13,7 +13,7 @@ def _make_trade(**kwargs) -> Trade:
     defaults = dict(
         id=uuid.uuid4(),
         ticket=1001,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=Direction.buy,
         order_state=OrderState.filled,
         open_price=Decimal("2000.00"),
@@ -27,7 +27,7 @@ def _make_trade(**kwargs) -> Trade:
 @pytest.mark.asyncio
 async def test_fill_fib_proximity_finds_nearest_level(db_session):
     fib = FibLevel(
-        symbol="XAUUSD",
+        symbol="GOLD#",
         period="W",
         prev_high=2050.0,
         prev_low=1950.0,
@@ -54,7 +54,7 @@ async def test_fill_fib_proximity_finds_nearest_level(db_session):
 @pytest.mark.asyncio
 async def test_fill_fib_proximity_labels_pp_correctly(db_session):
     fib = FibLevel(
-        symbol="XAUUSD",
+        symbol="GOLD#",
         period="W",
         prev_high=2050.0,
         prev_low=1950.0,
@@ -106,7 +106,7 @@ async def test_fill_entry_candle_detects_pin_bar_on_h4(db_session):
     bar_start = datetime(2026, 5, 19, 8, 0, tzinfo=timezone.utc)
 
     prev = _make_bar(
-        "XAUUSD",
+        "GOLD#",
         Timeframe.H4,
         datetime(2026, 5, 19, 4, 0, tzinfo=timezone.utc),
         2010,
@@ -114,7 +114,7 @@ async def test_fill_entry_candle_detects_pin_bar_on_h4(db_session):
         2005,
         2012,
     )
-    bar = _make_bar("XAUUSD", Timeframe.H4, bar_start, 2010, 2015, 1990, 2013)
+    bar = _make_bar("GOLD#", Timeframe.H4, bar_start, 2010, 2015, 1990, 2013)
     db_session.add(prev)
     db_session.add(bar)
     await db_session.commit()
@@ -139,7 +139,7 @@ async def test_fill_entry_candle_detects_pin_bar_on_h4(db_session):
 async def test_fill_entry_candle_falls_back_to_h1_when_no_h4_bar(db_session):
     open_time = datetime(2026, 5, 19, 10, 30, tzinfo=timezone.utc)
     h1_bar_start = datetime(2026, 5, 19, 10, 0, tzinfo=timezone.utc)
-    bar = _make_bar("XAUUSD", Timeframe.H1, h1_bar_start, 2010, 2015, 1990, 2013)
+    bar = _make_bar("GOLD#", Timeframe.H1, h1_bar_start, 2010, 2015, 1990, 2013)
     db_session.add(bar)
     await db_session.commit()
 
@@ -197,8 +197,10 @@ async def test_fill_is_rescue_false_when_no_existing(db_session):
 
 @pytest.mark.asyncio
 async def test_entry_context_auto_filled_on_trade_event(client, db_session):
+    # FibLevel stored under canonical 'GOLD#' so it matches the trade after
+    # symbol normalization on ingestion.
     fib = FibLevel(
-        symbol="XAUUSD",
+        symbol="GOLD#",
         period="W",
         prev_high=2050.0,
         prev_low=1950.0,
@@ -214,7 +216,7 @@ async def test_entry_context_auto_filled_on_trade_event(client, db_session):
     payload = {
         "transaction_type": "ENTRY_IN",
         "ticket": 2001,
-        "symbol": "XAUUSD",
+        "symbol": "GOLD#",  # incoming alias — normalized to GOLD# on save
         "direction": "buy",
         "order_type": "market",
         "order_state": "filled",

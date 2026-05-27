@@ -1,14 +1,20 @@
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from models.trade import Direction, OrderType, OrderState
+from services.symbol_normalizer import normalize_symbol
 
 
 class TradeEventSchema(BaseModel):
     transaction_type: str
     ticket: int
     symbol: str
+
+    @field_validator("symbol")
+    @classmethod
+    def _normalize_symbol(cls, v: str) -> str:
+        return normalize_symbol(v)
     account_id: Optional[int] = None
     direction: Optional[Direction] = None
     order_type: Optional[OrderType] = None

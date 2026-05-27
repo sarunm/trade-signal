@@ -57,7 +57,7 @@ async def _seed_baseline_with_winrate(session, winrate: float, trades: int = 50)
         is_win = (i / trades) < winrate
         session.add(Trade(
             ticket=10_000 + i,
-            symbol="XAUUSD",
+            symbol="GOLD#",
             direction=Direction.buy,
             order_type=OrderType.market, order_state=OrderState.filled,
             open_time=base + timedelta(hours=i),
@@ -82,7 +82,7 @@ async def _seed_paper_history(
         is_win = (i / total) < winrate
         session.add(Trade(
             ticket=ticket_base + i,
-            symbol="XAUUSD",
+            symbol="GOLD#",
             direction=Direction.buy,
             order_type=OrderType.market, order_state=OrderState.filled,
             open_time=base + timedelta(hours=i),
@@ -209,7 +209,7 @@ async def test_walk_forward_passes_with_held_out_window(session):
         is_win = (i / 40) < 0.7
         session.add(Trade(
             ticket=30_000 + i,
-            symbol="XAUUSD",
+            symbol="GOLD#",
             direction=Direction.buy,
             order_type=OrderType.market, order_state=OrderState.filled,
             open_time=base + timedelta(hours=i),

@@ -31,7 +31,7 @@ def _trade(direction=Direction.buy):
     return Trade(
         id=uuid.uuid4(),
         ticket=94001,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=direction,
         order_state=OrderState.filled,
         open_price=Decimal("3300.00"),
@@ -49,7 +49,7 @@ def _bars(trend=1, count=320):
         bars.append(
             PriceBar(
                 time=start + timedelta(hours=i),
-                symbol="XAUUSD",
+                symbol="GOLD#",
                 timeframe=Timeframe.H1,
                 open=base - (Decimal("0.40") if trend > 0 else Decimal("-0.40")),
                 high=base + Decimal("1.20"),
@@ -71,7 +71,7 @@ def _flat_bars(count=320, base_price=3300.0):
         bars.append(
             PriceBar(
                 time=start + timedelta(hours=i),
-                symbol="XAUUSD",
+                symbol="GOLD#",
                 timeframe=Timeframe.H1,
                 open=close,
                 high=close + Decimal("0.20"),

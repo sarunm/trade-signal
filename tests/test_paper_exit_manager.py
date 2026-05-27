@@ -24,7 +24,7 @@ def _paper_trade(
     return Trade(
         id=uuid.uuid4(),
         ticket=ticket,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=direction,
         order_state=OrderState.filled,
         open_price=Decimal(open_price),
@@ -40,7 +40,7 @@ def _paper_trade(
 def _tick(bid: str, ask: str) -> MarketTickSchema:
     return MarketTickSchema(
         timestamp=datetime(2026, 5, 18, 10, 5, tzinfo=timezone.utc),
-        symbol="XAUUSD",
+        symbol="GOLD#",
         bid=Decimal(bid),
         ask=Decimal(ask),
     )
@@ -128,7 +128,7 @@ def _trail_paper_trade(
     return Trade(
         id=uuid.uuid4(),
         ticket=ticket,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=direction,
         order_state=OrderState.filled,
         open_price=Decimal(open_price),
@@ -328,7 +328,7 @@ def _h1_bar(high: str, low: str, t: Optional[datetime] = None) -> PriceBar:
     t = t or datetime(2026, 5, 18, 9, 0, tzinfo=timezone.utc)
     return PriceBar(
         time=t,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         timeframe=Timeframe.H1,
         open=Decimal(low),
         high=Decimal(high),

@@ -81,7 +81,7 @@ async def test_post_trade_event_saves_to_db(client, db_session):
     )
     trade = result.scalar_one_or_none()
     assert trade is not None
-    assert str(trade.symbol) == "XAUUSD"
+    assert str(trade.symbol) == "GOLD#"  # normalized from XAUUSD
     assert float(trade.open_price) == 1950.50
 
 
@@ -116,3 +116,81 @@ async def test_post_pending_order(client, db_session):
 async def test_invalid_payload_returns_422(client):
     response = await client.post("/api/trade-events", json={"ticket": "not_a_number"})
     assert response.status_code == 422
+
+
+# Mirror what EA actually sends from SyncHistoryDeals when ENTRY_OUT deal is replayed:
+# direction=null, open_price=null, open_time=null, fill_time=null — only close fields set.
+ENTRY_OUT_CATCHUP_PAYLOAD = {
+    "transaction_type": "DEAL_ADD",
+    "ticket": 123456,
+    "symbol": "XAUUSD",
+    "direction": None,
+    "order_type": "market",
+    "order_state": "filled",
+    "pending_price": None,
+    "open_price": None,
+    "close_price": 1955.0,
+    "volume": 0.01,
+    "tp": None,
+    "sl": None,
+    "open_time": None,
+    "fill_time": None,
+    "close_time": "2026-05-17T09:30:00Z",
+    "profit": 45.0,
+    "swap": 0.0,
+    "commission": -0.5,
+}
+
+
+@pytest.mark.asyncio
+async def test_symbol_alias_close_merges_into_existing_open(client, db_session):
+    """Regression: trade opened under 'GOLD' (broker rename) must merge with
+    close event that arrives under 'GOLD#' — not create an orphan row."""
+    open_payload = {**DEAL_OPEN_PAYLOAD, "symbol": "GOLD", "ticket": 999777}
+    close_payload = {
+        **DEAL_CLOSE_PAYLOAD,
+        "symbol": "GOLD#",
+        "ticket": 999777,
+        "open_price": None,
+        "direction": None,
+        "open_time": None,
+        "fill_time": None,
+    }
+    await client.post("/api/trade-events", json=open_payload)
+    await client.post("/api/trade-events", json=close_payload)
+
+    from sqlalchemy import select
+    from models.trade import Trade
+    result = await db_session.execute(
+        select(Trade).where(Trade.ticket == 999777, Trade.is_paper == False)
+    )
+    trades = result.scalars().all()
+    assert len(trades) == 1, f"expected single row after alias merge, got {len(trades)}"
+    trade = trades[0]
+    assert trade.close_time is not None
+    assert float(trade.close_price) == 1955.0
+    assert float(trade.open_price) == 1950.50
+    assert trade.symbol == "GOLD#"  # canonical
+
+
+@pytest.mark.asyncio
+async def test_entry_out_catchup_closes_existing_open_trade(client, db_session):
+    """Regression: EA SyncHistoryDeals replays ENTRY_OUT with most fields null.
+    Existing open row must get close_time + close_price merged onto it."""
+    await client.post("/api/trade-events", json=DEAL_OPEN_PAYLOAD)
+    response = await client.post("/api/trade-events", json=ENTRY_OUT_CATCHUP_PAYLOAD)
+    assert response.status_code == 201
+
+    from sqlalchemy import select
+    from models.trade import Trade
+    result = await db_session.execute(
+        select(Trade).where(Trade.ticket == 123456, Trade.is_paper == False)
+    )
+    trades = result.scalars().all()
+    assert len(trades) == 1
+    trade = trades[0]
+    assert trade.close_time is not None
+    assert float(trade.close_price) == 1955.0
+    assert float(trade.profit) == 45.0
+    assert trade.direction.value == "buy"  # preserved from open
+    assert float(trade.open_price) == 1950.50  # preserved from open

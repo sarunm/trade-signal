@@ -1,7 +1,8 @@
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional, Dict
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+from services.symbol_normalizer import normalize_symbol
 
 
 class OHLCVSchema(BaseModel):
@@ -26,3 +27,8 @@ class PriceTickSchema(BaseModel):
     account_id: Optional[int] = None
     account: AccountStateSchema
     bars: Dict[str, OHLCVSchema]
+
+    @field_validator("symbol")
+    @classmethod
+    def _normalize_symbol(cls, v: str) -> str:
+        return normalize_symbol(v)

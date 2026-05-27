@@ -38,7 +38,7 @@ def test_trader_profile_response_structure():
 def _tagged_trade(ticket: int, profit: str, setup_pattern="support", trade_bias="bullish"):
     return Trade(
         ticket=ticket,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=Direction.buy,
         order_state=OrderState.filled,
         is_paper=False,

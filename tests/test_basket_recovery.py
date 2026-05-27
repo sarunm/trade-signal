@@ -14,7 +14,7 @@ from services.basket_recovery import (
 def _open_paper(open_time: datetime, open_price: float, volume: float) -> Trade:
     return Trade(
         ticket=1,
-        symbol="XAUUSD",
+        symbol="GOLD#",
         direction=Direction.buy,
         order_type=OrderType.market,
         order_state=OrderState.filled,

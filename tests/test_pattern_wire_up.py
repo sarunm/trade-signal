@@ -12,7 +12,7 @@ from models.trade import Trade, Direction, OrderState, OrderType
 # bullish pin bar OHLCV: lower_wick=5.0, body=0.5, range=6.0
 PIN_BAR_TICK = {
     "timestamp": "2026-05-18T10:00:00Z",
-    "symbol": "XAUUSD",
+    "symbol": "GOLD#",
     "account": {
         "equity": 10000, "balance": 10000,
         "margin": 0, "free_margin": 10000, "floating_pl": 0,
@@ -43,12 +43,12 @@ async def test_pattern_win_rate_insight_created(db_session):
     for i in range(10):
         t = datetime(2026, 5, i + 1, 10, 0, tzinfo=timezone.utc)
         db_session.add(PriceBar(
-            time=t, symbol="XAUUSD", timeframe=Timeframe.H1,
+            time=t, symbol="GOLD#", timeframe=Timeframe.H1,
             open=Decimal("1920.0"), high=Decimal("1921.0"),
             low=Decimal("1915.0"), close=Decimal("1920.5"),
         ))
         db_session.add(Trade(
-            id=uuid.uuid4(), ticket=1000 + i, symbol="XAUUSD",
+            id=uuid.uuid4(), ticket=1000 + i, symbol="GOLD#",
             direction=Direction.buy, order_type=OrderType.market,
             order_state=OrderState.filled, is_paper=False,
             open_price=Decimal("1920.0"), close_price=Decimal("1921.0"),
