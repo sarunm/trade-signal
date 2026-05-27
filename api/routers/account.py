@@ -14,6 +14,7 @@ from models.account_snapshot import AccountSnapshot
 from models.ea_status import EAStatus
 from models.price_bar import PriceBar
 from models.trade import OrderState, Trade
+from services.live_account import get_live_account
 from schemas.account import (
     AccountResponse,
     AccountSnapshotResponse,
@@ -100,11 +101,15 @@ async def get_header_snapshot(session: AsyncSession = Depends(get_session)):
             seconds = (datetime.now(timezone.utc) - last).total_seconds()
             ea_online = seconds <= EA_DISCONNECT_UI_THRESHOLD_SEC
 
+    live = get_live_account(snapshot.account_id) if snapshot is not None else None
+    equity = live.equity if live else (snapshot.equity if snapshot else None)
+    floating_pl = live.floating_pl if live else (snapshot.floating_pl if snapshot else None)
+
     return HeaderSnapshotResponse(
         account_id=snapshot.account_id if snapshot else None,
         balance=snapshot.balance if snapshot else None,
-        equity=snapshot.equity if snapshot else None,
-        floating_pl=snapshot.floating_pl if snapshot else None,
+        equity=equity,
+        floating_pl=floating_pl,
         today_pnl_baht=today_baht,
         today_pnl_pct=today_pct,
         xau_price=xau_price.quantize(Decimal("0.01")) if xau_price is not None else None,

@@ -12,6 +12,8 @@ class MarketTickSchema(BaseModel):
     bid: Decimal
     ask: Decimal
     account_id: Optional[int] = None
+    equity: Optional[Decimal] = None
+    floating_pl: Optional[Decimal] = None
 
     @field_validator("symbol")
     @classmethod

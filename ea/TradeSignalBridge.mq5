@@ -465,19 +465,26 @@ void SendMarketTick()
    double ask = SymbolInfoDouble(InpSymbol, SYMBOL_ASK);
    if(bid <= 0 || ask <= 0) return;
 
+   double equity      = AccountInfoDouble(ACCOUNT_EQUITY);
+   double floating_pl = equity - AccountInfoDouble(ACCOUNT_BALANCE);
+
    string body = StringFormat(
       "{"
       "\"timestamp\":%s,"
       "\"symbol\":\"%s\","
       "\"account_id\":%I64d,"
       "\"bid\":%s,"
-      "\"ask\":%s"
+      "\"ask\":%s,"
+      "\"equity\":%.2f,"
+      "\"floating_pl\":%.2f"
       "}",
       now,
       InpSymbol,
       AccountInfoInteger(ACCOUNT_LOGIN),
       F(bid),
-      F(ask)
+      F(ask),
+      equity,
+      floating_pl
    );
 
    if(PostJSON("/api/market-tick", body))
