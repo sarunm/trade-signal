@@ -175,6 +175,7 @@ async def open_baseline_trade(
         volume=BASELINE_VOLUME,
         is_paper=True,
         paper_mode=PaperMode.independent,
+        paper_trader_rule_id=rule.id,
         recovery_plan={
             "paper_trader_rule_id": str(rule.id),
             "is_baseline": True,

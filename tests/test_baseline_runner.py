@@ -127,6 +127,23 @@ async def test_open_baseline_trade_inserts_paper(session):
     assert trade.direction == Direction.buy
     assert trade.recovery_plan["is_baseline"] is True
     assert trade.recovery_plan["paper_trader_rule_id"] == str(rule.id)
+    assert trade.paper_trader_rule_id == rule.id
+
+
+@pytest.mark.asyncio
+async def test_open_baseline_trade_populates_rule_id_column_not_only_recovery_plan(session):
+    """Regression: orphan paper trades had paper_trader_rule_id IS NULL because
+    baseline_runner only wrote rule_id into recovery_plan dict, leaving the
+    indexed column empty — _check_exits could never find them."""
+    now = datetime(2026, 5, 25, 7, 0, tzinfo=timezone.utc)
+    await _seed_h1_bar(session, now)
+    rule = await ensure_baseline_rule(session)
+    trade = await open_baseline_trade(session, account_id=1, now=now)
+    fetched = (await session.execute(
+        select(Trade).where(Trade.paper_trader_rule_id == rule.id)
+    )).scalars().first()
+    assert fetched is not None
+    assert fetched.id == trade.id
 
 
 @pytest.mark.asyncio

@@ -115,6 +115,54 @@ exact commands
 
 ## Queue
 
+### TASK: Pending Orders panel — แสดง buy_limit/sell_limit ที่ยังไม่ fill
+
+**assignee:** claude
+**priority:** normal
+**status:** ready
+
+**Why:** ตอนนี้ `/api/trades?state=open` filter เฉพาะ `OrderState.filled + open_price IS NOT NULL + close_price IS NULL` (api/routers/trades.py:46-55) ทำให้ pending orders (buy_limit / sell_limit / buy_stop / sell_stop ที่ยังไม่ trigger) ตกหล่นจาก Open Positions panel ทั้งหมด — user ตั้ง limit order ค้างไว้แต่ไม่เห็นบน dashboard
+
+**Side effect (สำคัญ):** `/api/trade-advisor` ก็ใช้ filter เดียวกัน (`OrderState.filled + close_time IS NULL`) → BasketExitPlan คำนวน lot_total / mean_entry / basket_be / TP targets / Add zones / Cut / Ruin **โดยไม่นับ pending orders** ทำให้:
+- จุดรวบ (TP targets) ผิด — ไม่รวม volume ของ limit orders ที่กำลังจะ fill
+- basket_be / mean_entry คำนวนจาก filled positions เท่านั้น → ถ้า limit order fill กลายเป็น lot ใหม่กระทันหัน BE จะ shift เยอะ
+- Ruin margin ประเมินต่ำกว่าจริง — ถ้า limit fill ทั้งหมด exposure จะใหญ่กว่าที่ panel แสดง
+
+**Decision needed:** BasketExitPlan ควร include pending orders (worst-case projection) หรือแยกเป็น "Projected Basket if all pending fill" panel?
+
+**Decision (จะ design ก่อน impl):** ทำ panel แยก "Pending Orders" ใต้ Open Positions row (Real Trading section) เพราะ schema ต่างกัน:
+- Open Positions: real entry, paper SL/TP, entry score
+- Pending Orders: pending_price, order_type (limit/stop), placed_time
+
+**Files to touch:**
+- `api/routers/trades.py` — add `state=pending` branch (filter `order_state=pending` + `pending_price IS NOT NULL` + `close_price IS NULL`) หรือ add new endpoint `/api/pending-orders`
+- `frontend/src/components/PendingOrders.jsx` — new component, table: Ticket / Type (BUY LIMIT/SELL LIMIT/...) / Pending price / Placed time / Distance from current
+- `frontend/src/App.jsx` — fetch + place under Open Positions in Real Trading section
+
+**Open questions:**
+1. Layout: ใส่ใต้ OpenPositions card (col-7) เป็น separate card หรือ merge เป็น tab toggle ใน OpenPositions เลย?
+2. Refresh interval: pending = 30s? (เปลี่ยนน้อย — แค่ user เพิ่ม/ยกเลิก order)
+3. แสดง buy_stop/sell_stop ด้วยมั้ย? (ตอนนี้ EA ส่ง state ทุก type อยู่แล้ว)
+4. BasketExitPlan: แยก field "with_pending" เพิ่ม (mean_entry_with_pending, basket_be_with_pending, ruin_with_pending) หรือ toggle ทั้ง basket?
+
+**Acceptance criteria:**
+- [ ] Pending order ที่ user ตั้งใน MT5 (e.g. buy_limit @4500) ปรากฏใน dashboard ภายใน 30s
+- [ ] หลัง pending fill แล้ว → ย้ายไป Open Positions อัตโนมัติ (filter ทำงานถูก)
+- [ ] หลัง pending cancelled → หายจาก panel
+- [ ] Distance column ใช้ XAU live price จาก header.xau_price
+- [ ] BasketExitPlan แสดง projection รวม pending (เลือก approach จาก open question #4)
+
+**Verify:**
+```
+cd frontend && npm run build
+docker compose run --rm -e PYTHONPATH=/app api sh -c "cd /app && pytest tests/ -k 'trades or pending' -v"
+# manual: ตั้ง buy_limit ใน MT5, รอ 30s ดู dashboard
+```
+
+**Remark:** Found 2026-05-26 ตอนถาม Claude "buy_limit/sell_limit แสดงบน open position มั้ย" — backend filter ตัด pending ออกตั้งแต่ query แรก
+
+---
+
 ### TASK: Explore ML to assist pattern discovery / signal scoring
 
 **assignee:** claude
@@ -228,40 +276,7 @@ cd frontend && npm run build
 
 ---
 
-### TASK: [BUG] Paper trades open without paper_trader_rule_id → orphan, exit logic skips them
-
-**assignee:** claude
-**priority:** high
-**status:** pending
-
-**Why:** Found 14 open paper trades in DB with `paper_trader_rule_id IS NULL` (1 independent + 13 mirror, opened 2026-05-18 to 2026-05-26). `paper_trader._check_exits` iterates `open_by_rule[rule_id]` so orphaned trades are never evaluated for TP/SL/momentum_flip. They sat open for 8 days. User force-closed all 14 at open_price (`paper_exit_reason='force_close_orphan'`) on 2026-05-26 to reset paper book.
-
-**Root cause hypotheses (verify which):**
-1. `paper_trader.spawn_trade` (or wherever `independent` mode opens trades) misses setting `paper_trader_rule_id` — check #779778800010 path
-2. `mirror_trader.open_mirror_trade` doesn't write `paper_trader_rule_id` — 13 mirror trades all have it NULL
-3. Migration 011 added the column but historical inserts didn't backfill — but these are NEW inserts post-migration
-4. Symbol mismatch (XAUUSD vs GOLD#) preventing tick-driven exits — separate bug, log if confirmed
-
-**Files to investigate:**
-- `api/services/paper_trader.py` — spawn path for `independent` mode
-- `api/services/mirror_trader.py` — `open_mirror_trade` rule_id assignment
-- `api/services/mirror_exit_manager.py` — does it require `paper_trader_rule_id` to look up rule, or work via pattern?
-- `api/models/trade.py` — is `paper_trader_rule_id` nullable=True in ORM (allowed) but should be NOT NULL for paper?
-
-**Acceptance criteria:**
-- [ ] Identify which spawn path drops `paper_trader_rule_id` (file:function)
-- [ ] Add NOT NULL invariant test: any new paper trade insertion without rule_id raises (or backfill from rule context)
-- [ ] Run test fixture that opens an `independent` paper trade and a mirror paper trade — both have `paper_trader_rule_id` populated
-- [ ] Add migration 021: backfill `paper_trader_rule_id` for any future orphans by joining via pattern_id + spawn_strategy (or document why this can't be done safely)
-
-**Verify:**
-```
-docker compose run --rm -e PYTHONPATH=/app api sh -c "cd /app && pytest tests/ -k 'paper_trader or mirror' -v"
-docker compose exec db psql -U tradesignal -d tradesignal -c "SELECT COUNT(*) FROM trades WHERE is_paper=true AND paper_trader_rule_id IS NULL AND close_time IS NULL;"
-# Expect: 0
-```
-
-**Remark:** Symptom appeared in dashboard browser smoke test 2026-05-26 — `basket_5k` rule drawer showed Active Order #779778800010 (BUY @3280.90, opened 2026-05-26 07:00 UTC) with no TP/SL/exit_strategy and no rule_id. Pattern (`indicator_slugs={}`, status=baseline) compounded the issue: even if rule_id were set, no momentum indicator means momentum_flip exit can't fire either. Look at why `basket_5k` rule got promoted/spawned with empty indicator_slugs.
+<!-- [BUG] Paper trades open without paper_trader_rule_id: shipped 2026-05-27 — root cause baseline_runner.open_baseline_trade only set rule_id in recovery_plan dict, not column; fix sets paper_trader_rule_id=rule.id; migration 021 backfills orphan independent rows from recovery_plan; mirror exempt by design; 361/361 tests pass. -->
 
 ---
 
