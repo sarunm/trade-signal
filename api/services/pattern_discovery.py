@@ -12,6 +12,7 @@ from database import SessionLocal
 from models.indicator_signal import TradeIndicatorSignal
 from models.pattern import PaperTraderRule, Pattern
 from models.trade import Trade
+from services.ml_shadow import log_shadow_decision
 
 logger = logging.getLogger(__name__)
 
@@ -236,6 +237,8 @@ async def _run(session: AsyncSession, now: datetime) -> None:
 
         if pattern.status == "candidate" and pattern.consecutive_stable_days >= DISCOVERY_STABLE_DAYS:
             if _is_duplicate(set(combo_key), active_rule_slugs):
+                await session.flush()
+                await log_shadow_decision(session, pattern, rule_based_decision="skip")
                 continue
             pattern.status = "active"
             pattern.promoted_at = now
@@ -251,6 +254,7 @@ async def _run(session: AsyncSession, now: datetime) -> None:
                     )
                 )
             active_rule_slugs.append(set(combo_key))
+            await log_shadow_decision(session, pattern, rule_based_decision="spawn")
 
     for key, pattern in existing.items():
         if key in passing_keys:
