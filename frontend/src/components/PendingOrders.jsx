@@ -30,7 +30,7 @@ export default function PendingOrders({ data, error, currentPrice }) {
   const pending = (data ?? []).filter(t => !t.is_paper)
 
   return (
-    <div className="bg-card border border-border-default rounded-lg p-4 h-full">
+    <div className="bg-card border border-border-default rounded-lg p-4">
       <div className="flex items-center gap-2 mb-3">
         <h2 className="text-xs font-semibold text-text-dim uppercase tracking-wider">
           Pending Orders
