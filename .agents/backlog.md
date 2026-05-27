@@ -123,29 +123,7 @@ exact commands
 
 <!-- [BUG] Pending → filled promotion: shipped 2026-05-27 — root cause: EA sent ticket=order_ticket on ORDER_ADD but ticket=position_id on DEAL_ADD; upsert key (ticket,symbol,is_paper) didn't match, leaving orphan pending row. Fix: TradeEventSchema gains optional `pending_ticket` field; EA copies DEAL_ORDER on ENTRY_IN deals; trade_logger drops stale pending row before upsert. 2 orphan rows (753764157, 753964207) deleted. 375/375 tests. -->
 
-### TASK: Explore ML to assist pattern discovery / signal scoring
-
-**assignee:** claude
-**priority:** low
-**status:** needs-design
-**remark:** idea ระหว่าง brainstorm dashboard re-design (2026-05-26) — เก็บไว้ก่อน ยังไม่ตัดสินใจ
-
-**Why:** ตอนนี้ Pattern Discovery Engine เป็น brute-force combinations + threshold (sample ≥ 10, win rate ≥ 0.60, stable ≥ 3 วัน) อยากดูว่า ML ช่วยอะไรได้บ้าง — จัด priority candidate combos / classify trade outcome / score live entries / predict ruin
-
-**Open questions (ต้อง brainstorm ก่อน scope):**
-- ใช้ ML แทนที่ pattern discovery หรือเป็น layer เสริม?
-- ใช้กับอะไร: (a) entry scoring, (b) exit timing, (c) basket size, (d) ranking pattern candidates, (e) anomaly detection (ruin warning)?
-- ต้อง training data เท่าไหร่ — trade history ตอนนี้ยังน้อย
-- Online learning vs batch retrain?
-- Model อะไร — XGBoost / LightGBM (tabular), หรือ logistic regression ก่อน
-- จะ deploy ยังไงใน Docker stack — joblib persistence? ONNX? FastAPI service แยก?
-- Explainability — pattern ปัจจุบันอ่านง่าย ("rsi+ema match → bullish") ML จะกลายเป็น black box?
-
-**Files to touch:** TBD ระหว่าง design
-
-**Acceptance criteria:** TBD ระหว่าง design
-
-**Verify:** TBD
+<!-- ML pattern scorer: shipped 2026-05-27 — Layer 1 LogisticRegression on 110 real trades + Layer 2 pattern aggregator with sample/stable_days confidence; ml_pattern_scores table (migration 023); 4 endpoints (/api/ml/{retrain,pattern-scores,training-status,score-pattern}); shadow-mode hook in pattern_discovery; 9 new tests, 394/394 passing; live train val_acc 0.682 (already above 0.62 active-mode bar). Spec: 2026-05-27-ml-pattern-scorer-design.md. Plan: 2026-05-27-ml-pattern-scorer.md. -->
 
 ---
 
