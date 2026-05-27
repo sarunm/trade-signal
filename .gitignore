@@ -14,3 +14,4 @@ frontend/dist/
 .claude/settings.local.json
 frontend/.claude/
 Obsidian-Dashboard.md
+api/ml/artifacts/
